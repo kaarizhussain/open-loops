@@ -1,0 +1,301 @@
+<title>Open Loops — Morning Digest</title>
+<style>
+@font-face{font-family:'Newsreader';src:url(data:font/woff2;base64,__NEWSREADER__) format('woff2');font-weight:100 900;font-style:normal;font-display:swap}
+@font-face{font-family:'PublicSans';src:url(data:font/woff2;base64,__PUBLICSANS__) format('woff2');font-weight:100 900;font-style:normal;font-display:swap}
+@font-face{font-family:'PlexMono';src:url(data:font/woff2;base64,__MONO400__) format('woff2');font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:'PlexMono';src:url(data:font/woff2;base64,__MONO600__) format('woff2');font-weight:600;font-style:normal;font-display:swap}
+
+:root{
+  --paper:#f4f3f0; --surface:#fff; --sunk:#eceae5;
+  --ink:#1b1a18; --ink2:#55534d; --ink3:#85827a;
+  --line:#e3e1db; --line2:#d2cfc7;
+  --accent:#43497e; --accent-wash:#e9eaf3;
+  --late:#a5302c; --late-wash:#f8e9e7;
+  --soon:#a8700d; --soon-wash:#faf0dd;
+  --done:#3d7a55; --done-wash:#e8f1eb;
+}
+@media (prefers-color-scheme:dark){:root{
+  --paper:#131316; --surface:#1b1b1f; --sunk:#171719;
+  --ink:#eceae5; --ink2:#a8a5a0; --ink3:#78756f;
+  --line:#2a2a30; --line2:#3a3a42;
+  --accent:#8f96d4; --accent-wash:#22243a;
+  --late:#e08078; --late-wash:#331d1b;
+  --soon:#d9a441; --soon-wash:#2e2415;
+  --done:#6fb98a; --done-wash:#17281d;
+}}
+:root[data-theme="dark"]{
+  --paper:#131316; --surface:#1b1b1f; --sunk:#171719;
+  --ink:#eceae5; --ink2:#a8a5a0; --ink3:#78756f;
+  --line:#2a2a30; --line2:#3a3a42;
+  --accent:#8f96d4; --accent-wash:#22243a;
+  --late:#e08078; --late-wash:#331d1b;
+  --soon:#d9a441; --soon-wash:#2e2415;
+  --done:#6fb98a; --done-wash:#17281d;
+}
+:root[data-theme="light"]{
+  --paper:#f4f3f0; --surface:#fff; --sunk:#eceae5;
+  --ink:#1b1a18; --ink2:#55534d; --ink3:#85827a;
+  --line:#e3e1db; --line2:#d2cfc7;
+  --accent:#43497e; --accent-wash:#e9eaf3;
+  --late:#a5302c; --late-wash:#f8e9e7;
+  --soon:#a8700d; --soon-wash:#faf0dd;
+  --done:#3d7a55; --done-wash:#e8f1eb;
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:'PublicSans',system-ui,sans-serif;font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.mono{font-family:'PlexMono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.wrap{max-width:760px;margin:0 auto;padding:0 24px 80px}
+
+/* masthead */
+.top{display:flex;justify-content:space-between;align-items:baseline;gap:16px;
+  padding:30px 0 0;flex-wrap:wrap}
+.wordmark{font-family:'Newsreader',Georgia,serif;font-weight:600;font-size:16px;letter-spacing:.01em;
+  display:flex;align-items:center;gap:8px}
+.wordmark i{width:7px;height:7px;border-radius:50%;background:var(--late);display:inline-block;font-style:normal}
+.runmeta{font-size:12px;color:var(--ink3)}
+
+.lede{padding:26px 0 22px;border-bottom:1px solid var(--line)}
+.lede h1{font-family:'Newsreader',Georgia,serif;font-weight:400;font-size:clamp(25px,4.2vw,33px);
+  line-height:1.28;letter-spacing:-.008em;margin:0;text-wrap:balance;max-width:30ch}
+.lede h1 b{font-weight:600}
+.lede h1 .r{color:var(--late);white-space:nowrap}
+.for{font-size:13px;color:var(--ink3);margin-top:12px}
+.for b{color:var(--ink2);font-weight:600}
+
+.tally{display:flex;flex-wrap:wrap;gap:0;margin-top:18px;border:1px solid var(--line);
+  border-radius:8px;overflow:hidden;background:var(--surface)}
+.tally div{flex:1 1 0;min-width:88px;padding:9px 12px;border-right:1px solid var(--line)}
+.tally div:last-child{border-right:0}
+.tally .n{font-size:19px;font-weight:600;line-height:1.1}
+.tally .l{font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
+.tally .late .n{color:var(--late)} .tally .soon .n{color:var(--soon)}
+
+/* bands */
+.band{margin-top:30px}
+.band-h{display:flex;align-items:baseline;gap:9px;margin-bottom:2px}
+.band-h h2{font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink3);margin:0}
+.band-h .c{font-size:11.5px;color:var(--ink3)}
+.band.late .band-h h2{color:var(--late)}
+
+.rowwrap{border-top:1px solid var(--line)}
+.row{display:flex;gap:11px;align-items:flex-start;width:100%;text-align:left;appearance:none;
+  background:none;border:0;padding:14px 2px 14px 0;cursor:pointer;font:inherit;color:inherit}
+.row:hover{background:var(--sunk)}
+.row:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;margin-top:6px;background:var(--ink3)}
+.dot.late{background:var(--late)} .dot.today{background:var(--soon)}
+.dot.soon{background:var(--soon);opacity:.5}
+.row-main{flex:1;min-width:0}
+.what{display:block;font-size:15px;font-weight:500;line-height:1.42}
+.meta{display:block;font-size:12.5px;color:var(--ink3);margin-top:3px}
+.meta .who{color:var(--ink2)}
+.due{flex:none;font-size:12px;font-weight:600;padding:3px 9px;border-radius:5px;
+  background:var(--sunk);color:var(--ink2);white-space:nowrap;margin-top:2px}
+.due.late{background:var(--late-wash);color:var(--late)}
+.due.today{background:var(--soon-wash);color:var(--soon)}
+.due.none{background:none;color:var(--ink3);font-weight:400}
+
+.detail{margin:0 0 16px 19px;padding:2px 0 0 13px;border-left:2px solid var(--line2)}
+.quote{display:block;font-size:14px;color:var(--ink2);line-height:1.6}
+.quote:before{content:'“'} .quote:after{content:'”'}
+.why{font-size:12.5px;color:var(--ink3);margin-top:8px}
+.why b{color:var(--ink2);font-weight:600}
+.acts{margin-top:11px;display:flex;gap:8px;flex-wrap:wrap}
+.acts button{appearance:none;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;
+  padding:5px 11px;border-radius:6px;border:1px solid var(--line2);background:var(--surface);color:var(--ink2)}
+.acts button:hover{border-color:var(--ink3);color:var(--ink)}
+.acts button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.acts button.ok{color:var(--done);border-color:var(--done)}
+
+/* cleared */
+.cleared{margin-top:40px;padding-top:20px;border-top:1px solid var(--line)}
+.cleared h2{font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--done);margin:0 0 10px}
+.cl{display:flex;gap:10px;align-items:flex-start;padding:8px 0;font-size:13.5px;color:var(--ink2)}
+.cl .tick{color:var(--done);flex:none;font-weight:700}
+.cl .d{color:var(--ink3);font-size:12.5px;margin-left:auto;white-space:nowrap;padding-left:12px}
+
+footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);
+  font-size:12.5px;color:var(--ink3);line-height:1.65}
+footer b{color:var(--ink2);font-weight:600}
+@media (max-width:560px){
+  .due{margin-left:19px;margin-top:6px}
+  .row-top{flex-wrap:wrap}
+  .cl .d{margin-left:19px;padding-left:0}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="wordmark"><i></i>Open&nbsp;Loops</div>
+    <div class="runmeta" id="runmeta"></div>
+  </header>
+
+  <section class="lede">
+    <h1 id="lede"></h1>
+    <div class="for" id="forwho"></div>
+    <div class="tally" id="tally"></div>
+  </section>
+
+  <div id="bands"></div>
+
+  <section class="cleared">
+    <h2>Closed itself this week</h2>
+    <div id="clearedList"></div>
+  </section>
+
+  <footer id="foot"></footer>
+</div>
+
+<script>
+__LOOPS_JS__
+__FIXTURE_JS__
+
+var R = detectLoops(MESSAGES, EVENTS, { exec: EXEC, today: TODAY });
+var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var DAYN=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+function D(iso){var p=iso.split('-');return MON[+p[1]-1]+' '+(+p[2]);}
+function dayName(iso){return DAYN[new Date(iso+'T00:00:00Z').getUTCDay()];}
+function ago(n){return n===0?'today':n===1?'yesterday':n+' days ago';}
+function nm(e){var s=e.split('@')[0].replace(/[._]/g,' ');
+  if(s.length<=3) return s.toUpperCase();            // hr@, ap@ — initialisms, not names
+  return s.replace(/\b\w/g,function(c){return c.toUpperCase()});}
+function org(e){var d=e.split('@')[1]||'';return d.replace(/\.(com|io|net|org)$/,'');}
+var WORDS=['no','one','two','three','four','five','six','seven','eight','nine','ten'];
+function w(n){return n<=10?WORDS[n]:String(n);}
+
+var WHY={
+  owed_by_us:'You committed to this in an outbound email, and nothing that looks like a delivery has gone out since.',
+  owed_to_us:'They committed to this in writing, and nothing has arrived.',
+  unanswered_ask:'An inbound request that has had no reply from your side.',
+  awaiting_reply:'You asked a question and no one has answered.',
+  agreed_unscheduled:'A call was agreed to, but no calendar hold exists for it.',
+  no_followup:'An external meeting ended and no email has gone to the attendees since.',
+  unprepped_meeting:'This meeting has external attendees and no agenda attached.'
+};
+/* A pasteable draft, not a summary — the subject sits on its own line like a real reply. */
+function note(l){
+  var who=nm(l.who).split(' ')[0];
+  if(l.type==='unprepped_meeting')
+    return 'Re: '+l.subject+'\n\nAgenda for '+dayName(l.due)+':\n1. \n2. \n3. \n\n'+
+      'Sending ahead so everyone can prep.';
+  var body={
+    owed_by_us:'I still owe you this'+(l.due?' (I had said '+D(l.due)+')':'')+
+      ' — getting it over to you today. Apologies for the lag.',
+    owed_to_us:'just checking in on this'+(l.due?', as you had mentioned it would come through by '+D(l.due):'')+
+      '. Anything holding it up on your side?',
+    unanswered_ask:'apologies for the slow reply here. Coming back to you with an answer today.',
+    awaiting_reply:'bumping this one — any thoughts when you get a moment?',
+    agreed_unscheduled:'putting time on the calendar for the call we agreed to. Invite coming across shortly.',
+    no_followup:'thanks again for the time earlier this week. Recapping what we agreed and the next steps below.'
+  }[l.type];
+  return 'Re: '+l.subject+'\n\nHi '+who+' — '+body;
+}
+
+var BANDS=[
+  {k:'late', title:'Past due', match:function(l){return l.status==='overdue'}},
+  {k:'today', title:'Due today', match:function(l){return l.status==='due_today'}},
+  {k:'soon', title:'Rest of the week', match:function(l){return l.status==='due_soon'}},
+  {k:'open', title:'Further out, or undated', match:function(l){return l.status==='open'}}
+];
+
+function dueChip(l){
+  if(!l.due) return '<span class="due none">no date</span>';
+  if(l.status==='overdue') return '<span class="due late">'+l.overdueDays+'d late · '+D(l.due)+'</span>';
+  if(l.status==='due_today') return '<span class="due today">today · '+D(l.due)+'</span>';
+  return '<span class="due">'+dayName(l.due)+' · '+D(l.due)+'</span>';
+}
+function dotCls(l){
+  return l.status==='overdue'?'late':l.status==='due_today'?'today':l.status==='due_soon'?'soon':'';
+}
+
+var counts={};
+BANDS.forEach(function(b){counts[b.k]=R.open.filter(b.match).length});
+
+document.getElementById('runmeta').textContent=
+  dayName(TODAY)+', '+D(TODAY)+' · assembled 6:45am from 25 threads and 5 meetings';
+
+var late=counts.late, tod=counts.today;
+document.getElementById('lede').innerHTML=
+  R.open.length===0 ? '<b>Nothing is open.</b> Enjoy it.' :
+  '<b>'+cap(w(R.open.length))+' open loops.</b> '+
+  (late? '<span class="r">'+cap(w(late))+' already past due</span>':'None past due')+
+  (tod? ', '+w(tod)+' land'+(tod===1?'s':'')+' today.':'.');
+function cap(s){return s.charAt(0).toUpperCase()+s.slice(1)}
+
+document.getElementById('forwho').innerHTML=
+  'For <b>Dana Whitfield</b>, Chief Revenue Officer · Northstar Systems';
+
+document.getElementById('tally').innerHTML=
+  '<div class="late"><div class="n mono">'+counts.late+'</div><div class="l">Past due</div></div>'+
+  '<div class="soon"><div class="n mono">'+counts.today+'</div><div class="l">Today</div></div>'+
+  '<div><div class="n mono">'+counts.soon+'</div><div class="l">This week</div></div>'+
+  '<div><div class="n mono">'+counts.open+'</div><div class="l">Undated</div></div>'+
+  '<div><div class="n mono">'+R.closed.length+'</div><div class="l">Cleared</div></div>';
+
+document.getElementById('bands').innerHTML=BANDS.map(function(b){
+  var items=R.open.filter(b.match);
+  if(!items.length) return '';
+  return '<section class="band '+b.k+'"><div class="band-h"><h2>'+b.title+'</h2>'+
+    '<span class="c">'+items.length+'</span></div>'+
+    items.map(function(l,i){
+      var id=b.k+'-'+i;
+      return '<div class="rowwrap">'+
+        '<button class="row" data-id="'+id+'" aria-expanded="false" aria-controls="d-'+id+'">'+
+          '<span class="dot '+dotCls(l)+'"></span>'+
+          '<span class="row-main">'+
+            '<span class="what">'+esc(l.what)+'</span>'+
+            '<span class="meta"><span class="who">'+nm(l.who)+'</span>'+
+              ' · '+org(l.who)+' · '+esc(l.subject)+' · '+ago(daysAgo(l.said))+'</span>'+
+          '</span>'+
+          dueChip(l)+
+        '</button>'+
+        '<div class="detail" hidden id="d-'+id+'">'+
+          '<span class="quote">'+esc(l.excerpt||l.what)+'</span>'+
+          '<div class="why"><b>'+LABEL[l.type]+'.</b> '+WHY[l.type]+'</div>'+
+          '<div class="acts"><button data-copy="'+id+'">Copy chase note</button></div>'+
+        '</div>'+
+      '</div>';
+    }).join('')+'</section>';
+}).join('');
+
+/* map row ids back to loops for the copy action */
+var BY_ID={};
+BANDS.forEach(function(b){ R.open.filter(b.match).forEach(function(l,i){ BY_ID[b.k+'-'+i]=l; }); });
+
+function daysAgo(iso){return Math.round((new Date(TODAY+'T00:00:00Z')-new Date(iso+'T00:00:00Z'))/86400000)}
+function esc(s){return String(s).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})}
+
+document.getElementById('bands').addEventListener('click',function(e){
+  var cp=e.target.closest('button[data-copy]');
+  if(cp){
+    e.stopPropagation();
+    navigator.clipboard.writeText(note(BY_ID[cp.dataset.copy])).then(function(){
+      cp.textContent='Copied'; cp.classList.add('ok');
+      setTimeout(function(){cp.textContent='Copy chase note';cp.classList.remove('ok')},1600);
+    },function(){ cp.textContent='Copy failed'; });
+    return;
+  }
+  var row=e.target.closest('.row'); if(!row) return;
+  var d=document.getElementById('d-'+row.dataset.id);
+  var open=row.getAttribute('aria-expanded')==='true';
+  row.setAttribute('aria-expanded',String(!open));
+  d.hidden=open;
+});
+
+document.getElementById('clearedList').innerHTML=R.closed.map(function(l){
+  return '<div class="cl"><span class="tick">✓</span><span>'+esc(l.what)+
+    '<br><span style="color:var(--ink3);font-size:12.5px">'+nm(l.who)+' · '+esc(l.subject)+'</span></span>'+
+    '<span class="d mono">'+D(l.closedOn)+'</span></div>';
+}).join('');
+
+document.getElementById('foot').innerHTML=
+  'Every line above was extracted from message text — commitment phrasing, deadline language, and whether a '+
+  'matching delivery followed. Nothing was tagged by hand. A promise clears itself when a later message in the same '+
+  'thread carries an attachment or delivery wording, which is why <b>'+R.closed.length+' items</b> dropped off without anyone '+
+  'touching them. Demonstration inbox; the same detector runs against a live Gmail and Calendar account unchanged.';
+</script>

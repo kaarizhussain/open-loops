@@ -1,0 +1,6 @@
+# Font binaries are a build cache — build.js re-downloads them on demand.
+# The built index.html embeds them, and fonts/OFL-*.txt carries their licenses.
+fonts/*.woff2
+
+node_modules/
+.DS_Store
