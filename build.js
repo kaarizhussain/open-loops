@@ -31,6 +31,30 @@ function source(f) {
   return fs.readFileSync(path.join(ROOT, 'src', f), 'utf8').replace(/if \(typeof module[\s\S]*$/, '');
 }
 
+var SITE = 'https://kaarizhussain.github.io/open-loops/';
+var BLURB = 'Finds every commitment in an executive’s inbox and calendar, ' +
+  'and tells their assistant which ones are about to slip.';
+
+/* The template is body content plus its own <title>/<style>; wrap it into a real
+ * document so the page is valid standalone on GitHub Pages — and so phones get a
+ * device-width viewport instead of the 980px default. */
+function wrap(inner) {
+  var cut = inner.indexOf('</style>') + '</style>'.length;
+  return '<!doctype html>\n<html lang="en">\n<head>\n' +
+    '<meta charset="utf-8">\n' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
+    '<meta name="color-scheme" content="light dark">\n' +
+    '<meta name="description" content="' + BLURB + '">\n' +
+    '<meta property="og:type" content="website">\n' +
+    '<meta property="og:url" content="' + SITE + '">\n' +
+    '<meta property="og:title" content="Open Loops — nothing slips through the cracks">\n' +
+    '<meta property="og:description" content="' + BLURB + '">\n' +
+    '<!-- For a link preview on LinkedIn, add a screenshot and uncomment:\n' +
+    '<meta property="og:image" content="' + SITE + 'docs/screenshot.png"> -->\n' +
+    inner.slice(0, cut) + '\n</head>\n<body>' +
+    inner.slice(cut) + '\n</body>\n</html>\n';
+}
+
 (async function () {
   var html = fs.readFileSync(path.join(ROOT, 'src', 'digest.tpl.html'), 'utf8');
   for (var key of Object.keys(FONTS)) html = html.replace('__' + key + '__', await font(key));
@@ -42,6 +66,6 @@ function source(f) {
   if (left) throw new Error('unsubstituted placeholder: ' + left[0]);
 
   var out = path.join(ROOT, 'index.html');
-  fs.writeFileSync(out, html);
+  fs.writeFileSync(out, wrap(html));
   console.log('built index.html (' + (html.length / 1024).toFixed(0) + ' KB) — open it in a browser');
 })();
