@@ -7,8 +7,7 @@ var ROOT = __dirname;
 var FONT_DIR = path.join(ROOT, 'fonts');
 
 var FONTS = {
-  NEWSREADER: 'https://fonts.gstatic.com/s/newsreader/v26/cY9AfjOCX1hbuyalUrK4397yjA.woff2',
-  PUBLICSANS: 'https://fonts.gstatic.com/s/publicsans/v21/ijwRs572Xtc6ZYQws9YVwnNGfJ4.woff2',
+  PLEXSANS: 'https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxeKYY.woff2',
   MONO400: 'https://fonts.gstatic.com/s/ibmplexmono/v20/-F63fjptAgt5VM-kVkqdyU8n1i8q1w.woff2',
   MONO600: 'https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3vAOwlBFgg.woff2'
 };
@@ -43,7 +42,7 @@ function wrap(inner) {
   return '<!doctype html>\n<html lang="en">\n<head>\n' +
     '<meta charset="utf-8">\n' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
-    '<meta name="color-scheme" content="light dark">\n' +
+    '<meta name="color-scheme" content="light">\n' +
     '<meta name="description" content="' + BLURB + '">\n' +
     '<meta property="og:type" content="website">\n' +
     '<meta property="og:url" content="' + SITE + '">\n' +

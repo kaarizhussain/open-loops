@@ -1,237 +1,195 @@
-<title>Open Loops — Morning Digest</title>
+<title>Open Loops</title>
 <style>
-@font-face{font-family:'Newsreader';src:url(data:font/woff2;base64,__NEWSREADER__) format('woff2');font-weight:100 900;font-style:normal;font-display:swap}
-@font-face{font-family:'PublicSans';src:url(data:font/woff2;base64,__PUBLICSANS__) format('woff2');font-weight:100 900;font-style:normal;font-display:swap}
+@font-face{font-family:'PlexSans';src:url(data:font/woff2;base64,__PLEXSANS__) format('woff2');font-weight:100 700;font-style:normal;font-display:swap}
 @font-face{font-family:'PlexMono';src:url(data:font/woff2;base64,__MONO400__) format('woff2');font-weight:400;font-style:normal;font-display:swap}
 @font-face{font-family:'PlexMono';src:url(data:font/woff2;base64,__MONO600__) format('woff2');font-weight:600;font-style:normal;font-display:swap}
 
 :root{
-  --paper:#f4f3f0; --surface:#fff; --sunk:#eceae5;
-  --ink:#1b1a18; --ink2:#55534d; --ink3:#6b6861;
-  --line:#e3e1db; --line2:#d2cfc7;
-  --accent:#43497e; --accent-wash:#e9eaf3;
-  --late:#a5302c; --late-wash:#f8e9e7;
-  --soon:#8e5e09; --soon-wash:#faf0dd;
-  --done:#3d7a55; --done-wash:#e8f1eb;
+  --canvas:#f3f4f6; --surface:#fff; --sel:#eaf0f7; --hover:#f7f8fa;
+  --line:#e0e4e8; --line2:#c9cfd6;
+  --ink:#101519; --ink2:#464e55; --ink3:#626a73;
+  --accent:#1f3f5e; --accent2:#2d6094;
+  --late:#a83410; --late-bg:#fceee9;
+  --soon:#84560a; --soon-bg:#fbf2df;
+  --done:#12613b; --done-bg:#e4f1ea;
 }
-@media (prefers-color-scheme:dark){:root{
-  --paper:#131316; --surface:#1b1b1f; --sunk:#171719;
-  --ink:#eceae5; --ink2:#a8a5a0; --ink3:#8d8a83;
-  --line:#2a2a30; --line2:#3a3a42;
-  --accent:#8f96d4; --accent-wash:#22243a;
-  --late:#e08078; --late-wash:#331d1b;
-  --soon:#d9a441; --soon-wash:#2e2415;
-  --done:#6fb98a; --done-wash:#17281d;
-}}
-:root[data-theme="dark"]{
-  --paper:#131316; --surface:#1b1b1f; --sunk:#171719;
-  --ink:#eceae5; --ink2:#a8a5a0; --ink3:#8d8a83;
-  --line:#2a2a30; --line2:#3a3a42;
-  --accent:#8f96d4; --accent-wash:#22243a;
-  --late:#e08078; --late-wash:#331d1b;
-  --soon:#d9a441; --soon-wash:#2e2415;
-  --done:#6fb98a; --done-wash:#17281d;
-}
-:root[data-theme="light"]{
-  --paper:#f4f3f0; --surface:#fff; --sunk:#eceae5;
-  --ink:#1b1a18; --ink2:#55534d; --ink3:#6b6861;
-  --line:#e3e1db; --line2:#d2cfc7;
-  --accent:#43497e; --accent-wash:#e9eaf3;
-  --late:#a5302c; --late-wash:#f8e9e7;
-  --soon:#8e5e09; --soon-wash:#faf0dd;
-  --done:#3d7a55; --done-wash:#e8f1eb;
-}
-
 *{box-sizing:border-box}
-body{margin:0;background:var(--paper);color:var(--ink);
-  font-family:'PublicSans',system-ui,sans-serif;font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+body{margin:0;background:var(--canvas);color:var(--ink);
+  font-family:'PlexSans',system-ui,sans-serif;font-size:13.5px;line-height:1.45;
+  -webkit-font-smoothing:antialiased}
 .mono{font-family:'PlexMono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
-.wrap{max-width:760px;margin:0 auto;padding:0 24px 80px}
+button{font:inherit;color:inherit}
 
-/* masthead */
-.top{display:flex;justify-content:space-between;align-items:baseline;gap:16px;
-  padding:30px 0 0;flex-wrap:wrap}
-.wordmark{font-family:'Newsreader',Georgia,serif;font-weight:600;font-size:16px;letter-spacing:.01em;
-  display:flex;align-items:center;gap:8px}
-.wordmark i{width:7px;height:7px;border-radius:50%;background:var(--late);display:inline-block;font-style:normal}
-.runmeta{font-size:12px;color:var(--ink3)}
+.app{max-width:1180px;margin:0 auto;padding:0 20px 56px}
 
-.lede{padding:26px 0 22px;border-bottom:1px solid var(--line)}
-.lede h1{font-family:'Newsreader',Georgia,serif;font-weight:400;font-size:clamp(25px,4.2vw,33px);
-  line-height:1.28;letter-spacing:-.008em;margin:0;text-wrap:balance;max-width:30ch}
-.lede h1 b{font-weight:600}
-.lede h1 .r{color:var(--late);white-space:nowrap}
-.split{margin-top:12px;font-size:14.5px;color:var(--ink2);line-height:1.6;max-width:52ch}
-.split b{color:var(--ink);font-weight:600}
-.for{font-size:13px;color:var(--ink3);margin-top:10px}
-.for b{color:var(--ink2);font-weight:600}
+.topbar{display:flex;align-items:center;gap:14px;padding:16px 0 14px;flex-wrap:wrap}
+.mark{display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:600;letter-spacing:-.01em}
+.mark i{width:9px;height:9px;border-radius:2px;background:var(--late);display:block}
+.ctx{font-size:12.5px;color:var(--ink3)}
+.ctx b{color:var(--ink2);font-weight:500}
+.topbar .sp{margin-left:auto}
+.ghost{appearance:none;background:var(--surface);border:1px solid var(--line2);
+  border-radius:5px;padding:5px 11px;font-size:12.5px;font-weight:500;color:var(--ink2);cursor:pointer}
+.ghost:hover{border-color:var(--ink3);color:var(--ink)}
+.ghost:focus-visible{outline:2px solid var(--accent2);outline-offset:1px}
 
-.tally{display:flex;flex-wrap:wrap;gap:0;margin-top:18px;border:1px solid var(--line);
-  border-radius:8px;overflow:hidden;background:var(--surface)}
-.tally div{flex:1 1 0;min-width:88px;padding:9px 12px;border-right:1px solid var(--line)}
-.tally div:last-child{border-right:0}
-.tally .n{font-size:19px;font-weight:600;line-height:1.1}
-.tally .l{font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
-.tally .late .n{color:var(--late)} .tally .soon .n{color:var(--soon)}
+.banner{background:var(--surface);border:1px solid var(--line);border-radius:6px;
+  padding:11px 14px;font-size:13px;color:var(--ink2);line-height:1.55;margin-bottom:14px}
+.banner b{color:var(--ink);font-weight:600}
 
-/* view toggle */
-.viewbar{display:flex;align-items:center;gap:10px;margin-top:26px}
-.viewbar-l{font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)}
-.seg{display:inline-flex;border:1px solid var(--line2);border-radius:7px;overflow:hidden}
-.seg button{appearance:none;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;
-  padding:5px 12px;border:0;border-right:1px solid var(--line2);background:var(--surface);color:var(--ink3)}
+.piles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.pile{appearance:none;text-align:left;background:var(--surface);border:1px solid var(--line);
+  border-radius:6px;padding:10px 12px;cursor:pointer;transition:border-color .12s,background .12s}
+.pile:hover{background:var(--hover)}
+.pile[aria-pressed="true"]{border-color:var(--accent);background:var(--sel);
+  box-shadow:inset 0 0 0 1px var(--accent)}
+.pile:focus-visible{outline:2px solid var(--accent2);outline-offset:1px}
+.pile .n{font-size:21px;font-weight:600;line-height:1.05;letter-spacing:-.02em;display:block}
+.pile .t{display:block;font-size:12.5px;font-weight:500;margin-top:3px}
+.pile .s{display:block;font-size:11.5px;color:var(--ink3);margin-top:1px;line-height:1.35}
+.pile.exec .n{color:var(--late)}
+
+.bar{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+.bar .lbl{font-size:12.5px;color:var(--ink3)}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:5px;overflow:hidden;background:var(--surface)}
+.seg button{appearance:none;border:0;border-right:1px solid var(--line2);background:none;
+  padding:4px 10px;font-size:12.5px;font-weight:500;color:var(--ink3);cursor:pointer}
 .seg button:last-child{border-right:0}
 .seg button.on{background:var(--accent);color:#fff}
-.seg button:not(.on):hover{color:var(--ink)}
-.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-@media (prefers-color-scheme:dark){.seg button.on{color:#14151c}}
-:root[data-theme="dark"] .seg button.on{color:#14151c}
-:root[data-theme="light"] .seg button.on{color:#fff}
+.seg button:not(.on):hover{background:var(--hover);color:var(--ink)}
+.seg button:focus-visible{outline:2px solid var(--accent2);outline-offset:-2px}
+.undo{margin-left:auto;font-size:12.5px;color:var(--ink3)}
+.undo button{appearance:none;background:none;border:0;padding:0 0 0 6px;color:var(--accent2);
+  font-weight:600;cursor:pointer;text-decoration:underline}
+.undo button:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
 
-/* relationship tier tag */
-.tier{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.04em;
-  padding:1px 6px;border-radius:4px;background:var(--sunk);color:var(--ink3);
-  text-transform:uppercase;vertical-align:1px}
-.tier.t-investor,.tier.t-exec{background:var(--accent-wash);color:var(--accent)}
-.tier.t-key_account{background:var(--soon-wash);color:var(--soon)}
+.panes{display:grid;grid-template-columns:minmax(0,1fr) 372px;gap:14px;align-items:start}
+.list{background:var(--surface);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.row{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;appearance:none;
+  background:none;border:0;border-bottom:1px solid var(--line);padding:9px 12px 9px 10px;
+  cursor:pointer;border-left:2px solid transparent}
+.row:last-child{border-bottom:0}
+.row:hover{background:var(--hover)}
+.row[aria-selected="true"]{background:var(--sel);border-left-color:var(--accent)}
+.row:focus-visible{outline:2px solid var(--accent2);outline-offset:-2px}
+.row .dot{width:7px;height:7px;border-radius:50%;flex:none;margin-top:5px;background:var(--line2)}
+.row .dot.late{background:var(--late)} .row .dot.today{background:var(--soon)}
+.row .dot.soon{background:var(--soon);opacity:.45}
+.row .main{flex:1;min-width:0}
+.row .what{display:block;font-size:13.5px;font-weight:500;line-height:1.4;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .sub{display:block;font-size:12px;color:var(--ink3);margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .sub b{color:var(--ink2);font-weight:500}
+.row .when{flex:none;font-size:11.5px;font-weight:500;padding:2px 7px;border-radius:4px;
+  background:var(--canvas);color:var(--ink2);white-space:nowrap;margin-top:1px}
+.row .when.late{background:var(--late-bg);color:var(--late)}
+.row .when.today{background:var(--soon-bg);color:var(--soon)}
+.row .when.none{background:none;color:var(--ink3);font-weight:400}
 
-/* bands */
-.band{margin-top:30px}
-.band-note{margin:2px 0 0;font-size:12.5px;color:var(--ink3);line-height:1.5}
-.band-h{display:flex;align-items:baseline;gap:9px;margin-bottom:2px}
-.band-h h2{font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--ink3);margin:0}
-.band-h .c{font-size:11.5px;color:var(--ink3)}
-.band.late .band-h h2{color:var(--late)}
+.tier{display:inline-block;font-size:10.5px;font-weight:600;padding:0 5px;border-radius:3px;
+  background:var(--canvas);color:var(--ink3)}
+.tier.t-investor,.tier.t-exec{background:var(--sel);color:var(--accent)}
+.tier.t-key_account{background:var(--soon-bg);color:var(--soon)}
 
-.rowwrap{border-top:1px solid var(--line)}
-.row{display:flex;gap:11px;align-items:flex-start;width:100%;text-align:left;appearance:none;
-  background:none;border:0;padding:14px 2px 14px 0;cursor:pointer;font:inherit;color:inherit}
-.row:hover{background:var(--sunk)}
-.row:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-.dot{width:8px;height:8px;border-radius:50%;flex:none;margin-top:6px;background:var(--ink3)}
-.dot.late{background:var(--late)} .dot.today{background:var(--soon)}
-.dot.soon{background:var(--soon);opacity:.5}
-.row-main{flex:1;min-width:0}
-.what{display:block;font-size:15px;font-weight:500;line-height:1.42}
-.meta{display:block;font-size:12.5px;color:var(--ink3);margin-top:3px}
-.meta .who{color:var(--ink2)}
-.due{flex:none;font-size:12px;font-weight:600;padding:3px 9px;border-radius:5px;
-  background:var(--sunk);color:var(--ink2);white-space:nowrap;margin-top:2px}
-.due.late{background:var(--late-wash);color:var(--late)}
-.due.today{background:var(--soon-wash);color:var(--soon)}
-.due.none{background:none;color:var(--ink3);font-weight:400}
+.empty{padding:34px 18px;text-align:center;color:var(--ink3);font-size:13px;line-height:1.55}
 
-.detail{margin:0 0 16px 19px;padding:2px 0 0 13px;border-left:2px solid var(--line2)}
-.quote{display:block;font-size:14px;color:var(--ink2);line-height:1.6}
-.quote:before{content:'“'} .quote:after{content:'”'}
-.why{font-size:12.5px;color:var(--ink3);margin-top:8px}
+.detail{background:var(--surface);border:1px solid var(--line);border-radius:6px;
+  position:sticky;top:14px;min-height:300px;display:flex;flex-direction:column}
+.dhead{padding:13px 15px 12px;border-bottom:1px solid var(--line)}
+.dkind{font-size:11.5px;font-weight:600;color:var(--accent);margin-bottom:5px}
+.dwhat{font-size:15px;font-weight:600;line-height:1.35;letter-spacing:-.01em}
+.dbody{padding:13px 15px;flex:1}
+.dbody dl{margin:0}
+.frow{display:flex;gap:10px;font-size:12.5px;padding:3px 0}
+.frow dt{width:74px;flex:none;color:var(--ink3)}
+.frow dd{margin:0;color:var(--ink2);min-width:0}
+.quote{margin-top:12px;padding:9px 11px;background:var(--canvas);border-radius:5px;
+  font-size:12.5px;color:var(--ink2);line-height:1.55}
+.why{margin-top:10px;font-size:12.5px;color:var(--ink3);line-height:1.5}
 .why b{color:var(--ink2);font-weight:600}
-.acts{margin-top:11px;display:flex;gap:8px;flex-wrap:wrap}
-.acts button{appearance:none;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;
-  padding:5px 11px;border-radius:6px;border:1px solid var(--line2);background:var(--surface);color:var(--ink2)}
-.acts button:hover{border-color:var(--ink3);color:var(--ink)}
-.acts button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-.acts button.ok{color:var(--done);border-color:var(--done)}
+.dfoot{padding:11px 15px;border-top:1px solid var(--line);display:flex;gap:7px;
+  align-items:center;flex-wrap:wrap}
+.btn{appearance:none;border:1px solid var(--line2);background:var(--surface);border-radius:5px;
+  padding:5px 11px;font-size:12.5px;font-weight:500;color:var(--ink2);cursor:pointer}
+.btn:hover{border-color:var(--ink3);color:var(--ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent2);border-color:var(--accent2)}
+.btn.ok{color:var(--done);border-color:var(--done);background:var(--done-bg)}
+.btn:focus-visible{outline:2px solid var(--accent2);outline-offset:1px}
+.keys{width:100%;font-size:11.5px;color:var(--ink3);padding-top:3px}
+kbd{font-family:'PlexMono',monospace;font-size:10.5px;background:var(--canvas);
+  border:1px solid var(--line);border-radius:3px;padding:0 4px;color:var(--ink2)}
 
-/* cleared */
-.cleared{margin-top:40px;padding-top:20px;border-top:1px solid var(--line)}
-.cleared h2{font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--done);margin:0 0 10px}
-.cl{display:flex;gap:10px;align-items:flex-start;padding:8px 0;font-size:13.5px;color:var(--ink2)}
+.cleared{margin-top:14px;background:var(--surface);border:1px solid var(--line);
+  border-radius:6px;padding:12px 14px}
+.cleared h2{margin:0 0 3px;font-size:12.5px;font-weight:600;color:var(--done)}
+.cleared p{margin:0 0 9px;font-size:12px;color:var(--ink3);line-height:1.5;max-width:70ch}
+.cl{display:flex;gap:8px;font-size:12.5px;color:var(--ink2);padding:6px 0;
+  border-top:1px solid var(--line);line-height:1.45}
 .cl .tick{color:var(--done);flex:none;font-weight:700}
-.cl .d{color:var(--ink3);font-size:12.5px;margin-left:auto;white-space:nowrap;padding-left:12px}
+.cl .d{margin-left:auto;color:var(--ink3);white-space:nowrap;padding-left:10px}
 
-footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);
-  font-size:12.5px;color:var(--ink3);line-height:1.65}
+footer{margin-top:16px;font-size:12px;color:var(--ink3);line-height:1.6;max-width:82ch}
 footer b{color:var(--ink2);font-weight:600}
 
-/* framing strip — the context anyone who skips the tour still needs */
-.frame{display:flex;gap:14px;align-items:flex-start;justify-content:space-between;
-  margin-top:16px;padding:11px 14px;background:var(--accent-wash);border-radius:8px;
-  font-size:13px;color:var(--ink2);line-height:1.5}
-.frame b{color:var(--ink);font-weight:600}
-.frame button{flex:none;appearance:none;font:inherit;font-size:12.5px;font-weight:600;
-  cursor:pointer;padding:5px 12px;border-radius:6px;border:1px solid var(--accent);
-  background:transparent;color:var(--accent)}
-.frame button:hover{background:var(--accent);color:var(--surface)}
-.frame button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-
-/* guided tour */
-.dim{position:fixed;inset:0;background:rgba(12,12,14,.42);z-index:60;
-  opacity:0;transition:opacity .22s;pointer-events:none}
-.dim.on{opacity:1;pointer-events:auto}
-.tour-on{position:relative;z-index:61;background:var(--surface);border-radius:10px;
-  box-shadow:0 0 0 4px var(--accent-wash),0 0 0 2px var(--accent);scroll-margin:96px 0 200px}
-.tcard{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:70;
-  width:min(460px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--line2);
-  border-radius:12px;padding:16px 18px 14px;box-shadow:0 12px 40px -8px rgba(0,0,0,.35);
-  display:none}
+.scrim{position:fixed;inset:0;background:rgba(16,21,25,.34);z-index:60;opacity:0;
+  transition:opacity .18s;pointer-events:none}
+.scrim.on{opacity:1;pointer-events:auto}
+.spot{position:relative;z-index:61;box-shadow:0 0 0 3px var(--accent2),0 0 0 9px rgba(45,96,148,.22);
+  border-radius:6px;scroll-margin:80px 0 210px}
+.tcard{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:70;
+  width:min(430px,calc(100vw - 28px));background:var(--surface);border:1px solid var(--line2);
+  border-radius:8px;padding:14px 16px 12px;box-shadow:0 14px 44px -10px rgba(16,21,25,.4);display:none}
 .tcard.on{display:block}
-.tcard h3{font-family:'Newsreader',Georgia,serif;font-weight:600;font-size:17px;margin:0 0 6px}
-.tcard p{margin:0;font-size:14px;line-height:1.55;color:var(--ink2)}
-.tnav{display:flex;align-items:center;gap:8px;margin-top:14px}
-.tnav .step{font-size:12px;color:var(--ink3);margin-right:auto;font-variant-numeric:tabular-nums}
-.tnav button{appearance:none;font:inherit;font-size:13px;font-weight:600;cursor:pointer;
-  padding:6px 14px;border-radius:7px;border:1px solid var(--line2);background:var(--surface);color:var(--ink2)}
-.tnav button.pri{background:var(--accent);border-color:var(--accent);color:#fff}
-.tnav button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-@media (prefers-color-scheme:dark){.tnav button.pri{color:#14151c}}
-:root[data-theme="dark"] .tnav button.pri{color:#14151c}
-:root[data-theme="light"] .tnav button.pri{color:#fff}
-@media (max-width:560px){
-  .due{margin-left:19px;margin-top:6px}
-  .row-top{flex-wrap:wrap}
-  .cl .d{margin-left:19px;padding-left:0}
-  .frame{flex-direction:column;gap:11px}
-  .frame button{align-self:flex-start}
+.tcard h3{margin:0 0 5px;font-size:14px;font-weight:600}
+.tcard p{margin:0;font-size:13px;line-height:1.55;color:var(--ink2)}
+.tnav{display:flex;align-items:center;gap:7px;margin-top:12px}
+.tnav .step{margin-right:auto;font-size:11.5px;color:var(--ink3)}
+
+@media (max-width:940px){
+  .panes{grid-template-columns:minmax(0,1fr)}
+  .detail{position:static}
+  .piles{grid-template-columns:repeat(2,1fr)}
 }
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
 
-<div class="wrap">
-  <header class="top">
-    <div class="wordmark"><i></i>Open&nbsp;Loops</div>
-    <div class="runmeta" id="runmeta"></div>
+<div class="app">
+  <header class="topbar">
+    <div class="mark"><i></i>Open Loops</div>
+    <div class="ctx" id="ctx"></div>
+    <div class="sp"></div>
+    <button class="ghost" id="tourBtn">Show me around</button>
   </header>
 
-  <div class="frame">
-    <span><b>A working demo.</b> You are the assistant to a Chief Revenue Officer. Everything below
-      was pulled out of her email and calendar automatically — no one tagged any of it by hand.</span>
-    <button id="tourBtn">Walk me through it</button>
+  <div class="banner" id="banner"></div>
+  <div class="piles" id="piles"></div>
+
+  <div class="bar">
+    <span class="lbl">Sort</span>
+    <div class="seg" id="sortSeg"></div>
+    <span class="undo" id="undo"></span>
   </div>
 
-  <section class="lede">
-    <h1 id="lede"></h1>
-    <div class="split" id="split"></div>
-    <div class="for" id="forwho"></div>
-    <div class="tally" id="tally"></div>
-  </section>
-
-  <div class="viewbar">
-    <span class="viewbar-l">Group by</span>
-    <div class="seg" id="viewToggle"></div>
+  <div class="panes">
+    <div class="list" id="list" role="listbox" aria-label="Open commitments"></div>
+    <aside class="detail" id="detail" aria-live="polite"></aside>
   </div>
 
-  <div id="bands"></div>
-
-  <section class="cleared">
-    <h2>Closed itself this week</h2>
-    <div id="clearedList"></div>
-  </section>
-
+  <section class="cleared" id="cleared"></section>
   <footer id="foot"></footer>
 </div>
 
-<div class="dim" id="dim"></div>
+<div class="scrim" id="scrim"></div>
 <div class="tcard" id="tcard" role="dialog" aria-modal="true" aria-labelledby="tcardH">
   <h3 id="tcardH"></h3>
   <p id="tcardP"></p>
   <div class="tnav">
-    <span class="step" id="tcardS"></span>
-    <button id="tSkip">Skip</button>
-    <button id="tBack">Back</button>
-    <button id="tNext" class="pri">Next</button>
+    <span class="step mono" id="tcardS"></span>
+    <button class="btn" id="tSkip">Skip</button>
+    <button class="btn" id="tBack">Back</button>
+    <button class="btn primary" id="tNext">Next</button>
   </div>
 </div>
 
@@ -240,38 +198,36 @@ __LOOPS_JS__
 __FIXTURE_JS__
 
 var R = detectLoops(MESSAGES, EVENTS, { exec: EXEC, today: TODAY, contacts: RELATIONSHIPS });
+var ITEMS = R.open.map(function(l,i){ l.id='L'+i; l.done=false; return l; });
+
 var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 var DAYN=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 function D(iso){var p=iso.split('-');return MON[+p[1]-1]+' '+(+p[2]);}
 function dayName(iso){return DAYN[new Date(iso+'T00:00:00Z').getUTCDay()];}
+function daysAgo(iso){return Math.round((new Date(TODAY+'T00:00:00Z')-new Date(iso+'T00:00:00Z'))/86400000);}
 function ago(n){return n===0?'today':n===1?'yesterday':n+' days ago';}
 function nm(e){var s=e.split('@')[0].replace(/[._]/g,' ');
-  if(s.length<=3) return s.toUpperCase();            // hr@, ap@ — initialisms, not names
+  if(s.length<=3) return s.toUpperCase();
   return s.replace(/\b\w/g,function(c){return c.toUpperCase()});}
-function org(e){var d=e.split('@')[1]||'';return d.replace(/\.(com|io|net|org)$/,'');}
-var WORDS=['no','one','two','three','four','five','six','seven','eight','nine','ten'];
-function w(n){return n<=10?WORDS[n]:String(n);}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]});}
 
 var WHY={
-  owed_by_us:'You committed to this in an outbound email, and nothing that looks like a delivery has gone out since.',
-  owed_to_us:'They committed to this in writing, and nothing has arrived.',
-  unanswered_ask:'An inbound request that has had no reply from your side.',
-  awaiting_reply:'You asked a question and no one has answered.',
+  owed_by_us:'An outbound message committed to this, and nothing resembling a delivery has gone out since.',
+  owed_to_us:'They committed to this in writing and nothing has arrived.',
+  unanswered_ask:'An inbound request with no reply from this side.',
+  awaiting_reply:'A question was asked and no one has answered.',
   agreed_unscheduled:'A call was agreed to, but no calendar hold exists for it.',
-  no_followup:'An external meeting ended and no email has gone to the attendees since.',
-  unprepped_meeting:'This meeting has external attendees and no agenda attached.'
+  no_followup:'An external meeting ended and no mail has gone to the attendees since.',
+  unprepped_meeting:'External attendees are invited and no agenda is attached.'
 };
-/* A pasteable draft, not a summary — the subject sits on its own line like a real reply. */
 function note(l){
   var who=nm(l.who).split(' ')[0];
   if(l.type==='unprepped_meeting')
-    return 'Re: '+l.subject+'\n\nAgenda for '+dayName(l.due)+':\n1. \n2. \n3. \n\n'+
-      'Sending ahead so everyone can prep.';
+    return 'Re: '+l.subject+'\n\nAgenda for '+dayName(l.due)+':\n1. \n2. \n3. \n\nSending ahead so everyone can prep.';
   var body={
-    owed_by_us:'I still owe you this'+(l.due?' (I had said '+D(l.due)+')':'')+
-      ' — getting it over to you today. Apologies for the lag.',
-    owed_to_us:'just checking in on this'+(l.due?', as you had mentioned it would come through by '+D(l.due):'')+
-      '. Anything holding it up on your side?',
+    owed_by_us:'I still owe you this'+(l.due?' (I had said '+D(l.due)+')':'')+' — getting it over to you today. Apologies for the lag.',
+    owed_to_us:'just checking in on this'+(l.due?', as you had mentioned it would come through by '+D(l.due):'')+'. Anything holding it up on your side?',
     unanswered_ask:'apologies for the slow reply here. Coming back to you with an answer today.',
     awaiting_reply:'bumping this one — any thoughts when you get a moment?',
     agreed_unscheduled:'putting time on the calendar for the call we agreed to. Invite coming across shortly.',
@@ -280,198 +236,219 @@ function note(l){
   return 'Re: '+l.subject+'\n\nHi '+who+' — '+body;
 }
 
-var BANDS=[
-  {k:'late', title:'Past due', match:function(l){return l.status==='overdue'}},
-  {k:'today', title:'Due today', match:function(l){return l.status==='due_today'}},
-  {k:'soon', title:'Rest of the week', match:function(l){return l.status==='due_soon'}},
-  {k:'open', title:'Further out, or undated', match:function(l){return l.status==='open'}}
+var FILTERS=[
+  {k:'all',  t:'Everything',     s:'open right now'},
+  {k:'them', t:OWNER.them.title, s:'someone else owes it'},
+  {k:'you',  t:OWNER.you.title,  s:'close these without her'},
+  {k:'exec', t:OWNER.exec.title, s:'only she can do these'}
 ];
+var SORTS=[{k:'risk',t:'Most at risk'},{k:'due',t:'Soonest due'}];
+var filter='all', sortBy='risk', selected=null, lastDone=null, ti=-1;
 
-/* Two ways to read the same list: the assistant sorts by who acts next,
-   the executive sorts by what is latest. */
-var PILES=['them','you','exec'].map(function(k){
-  return {k:k, title:OWNER[k].title, note:OWNER[k].note,
-          match:function(l){return l.owner===k}};
-});
-var VIEWS={owner:{label:'Who owns it', groups:PILES}, urgency:{label:'What’s latest', groups:BANDS}};
-var view='owner';
-
-function dueChip(l){
-  if(!l.due) return '<span class="due none">no date</span>';
-  if(l.status==='overdue') return '<span class="due late">'+l.overdueDays+'d late · '+D(l.due)+'</span>';
-  if(l.status==='due_today') return '<span class="due today">today · '+D(l.due)+'</span>';
-  return '<span class="due">'+dayName(l.due)+' · '+D(l.due)+'</span>';
+function live(){ return ITEMS.filter(function(l){return !l.done}); }
+function visible(){
+  return live().filter(function(l){return filter==='all'||l.owner===filter})
+    .sort(function(a,b){
+      if(sortBy==='due'){
+        if(a.due&&b.due&&a.due!==b.due) return a.due<b.due?-1:1;
+        if(a.due&&!b.due) return -1;
+        if(!a.due&&b.due) return 1;
+      }
+      return b.risk-a.risk;
+    });
+}
+function whenChip(l){
+  if(!l.due) return '<span class="when none">no date</span>';
+  if(l.status==='overdue') return '<span class="when late">'+l.overdueDays+'d late</span>';
+  if(l.status==='due_today') return '<span class="when today">today</span>';
+  return '<span class="when">'+dayName(l.due).slice(0,3)+' '+D(l.due).split(' ')[1]+'</span>';
 }
 function dotCls(l){
   return l.status==='overdue'?'late':l.status==='due_today'?'today':l.status==='due_soon'?'soon':'';
 }
 
-var counts={};
-BANDS.forEach(function(b){counts[b.k]=R.open.filter(b.match).length});
-
-document.getElementById('runmeta').textContent=
-  dayName(TODAY)+', '+D(TODAY)+' · assembled 6:45am from 25 threads and 5 meetings';
-
-var late=counts.late, tod=counts.today;
-document.getElementById('lede').innerHTML=
-  R.open.length===0 ? '<b>Nothing is open.</b> Enjoy it.' :
-  '<b>'+cap(w(R.open.length))+' open loops.</b> '+
-  (late? '<span class="r">'+cap(w(late))+' already past due</span>':'None past due')+
-  (tod? ', '+w(tod)+' land'+(tod===1?'s':'')+' today.':'.');
-function cap(s){return s.charAt(0).toUpperCase()+s.slice(1)}
-
-var byOwner={};
-['them','you','exec'].forEach(function(k){byOwner[k]=R.open.filter(function(l){return l.owner===k}).length});
-document.getElementById('split').innerHTML=
-  '<b>'+cap(w(byOwner.you))+'</b> you can close without her. '+
-  '<b>'+cap(w(byOwner.them))+'</b> are chases — someone else owes it. '+
-  'Only <b>'+w(byOwner.exec)+'</b> actually need Dana.';
-
-document.getElementById('forwho').innerHTML=
-  'For <b>Dana Whitfield</b>, Chief Revenue Officer · Northstar Systems';
-
-document.getElementById('tally').innerHTML=
-  '<div class="late"><div class="n mono">'+counts.late+'</div><div class="l">Past due</div></div>'+
-  '<div class="soon"><div class="n mono">'+counts.today+'</div><div class="l">Today</div></div>'+
-  '<div><div class="n mono">'+counts.soon+'</div><div class="l">This week</div></div>'+
-  '<div><div class="n mono">'+counts.open+'</div><div class="l">Undated</div></div>'+
-  '<div><div class="n mono">'+R.closed.length+'</div><div class="l">Cleared</div></div>';
-
-var BY_ID={};
-function renderBands(){
-  var groups=VIEWS[view].groups;
-  BY_ID={};
-  document.getElementById('bands').innerHTML=groups.map(function(b){
-    var items=R.open.filter(b.match);
-    if(!items.length) return '';
-    return '<section class="band '+b.k+'"><div class="band-h"><h2>'+b.title+'</h2>'+
-      '<span class="c">'+items.length+'</span></div>'+
-      (b.note?'<p class="band-note">'+b.note+'</p>':'')+
-      items.map(function(l,i){
-        var id=b.k+'-'+i;
-        BY_ID[id]=l;
-        return '<div class="rowwrap">'+
-          '<button class="row" data-id="'+id+'" aria-expanded="false" aria-controls="d-'+id+'">'+
-            '<span class="dot '+dotCls(l)+'"></span>'+
-            '<span class="row-main">'+
-              '<span class="what">'+esc(l.what)+'</span>'+
-              '<span class="meta"><span class="who">'+nm(l.who)+'</span>'+
-                (l.rel?' <span class="tier t-'+l.rel.tier+'">'+esc(l.rel.label)+'</span>':'')+
-                ' · '+esc(l.subject)+' · '+ago(daysAgo(l.said))+'</span>'+
-            '</span>'+
-            dueChip(l)+
-          '</button>'+
-          '<div class="detail" hidden id="d-'+id+'">'+
-            '<span class="quote">'+esc(l.excerpt||l.what)+'</span>'+
-            '<div class="why"><b>'+LABEL[l.type]+'.</b> '+WHY[l.type]+'</div>'+
-            '<div class="acts"><button data-copy="'+id+'">Copy chase note</button></div>'+
-          '</div>'+
-        '</div>';
-      }).join('')+'</section>';
+function renderPiles(){
+  var L=live();
+  document.getElementById('piles').innerHTML=FILTERS.map(function(f){
+    var n=f.k==='all'?L.length:L.filter(function(l){return l.owner===f.k}).length;
+    return '<button class="pile'+(f.k==='exec'?' exec':'')+'" data-f="'+f.k+'" aria-pressed="'+
+      (filter===f.k)+'"><span class="n mono">'+n+'</span>'+
+      '<span class="t">'+esc(f.t)+'</span><span class="s">'+esc(f.s)+'</span></button>';
   }).join('');
 }
+function renderList(){
+  var v=visible(), el=document.getElementById('list');
+  if(!v.length){ el.innerHTML='<div class="empty">Nothing left in this view.</div>'; return; }
+  el.innerHTML=v.map(function(l){
+    return '<button class="row" role="option" data-id="'+l.id+'" aria-selected="'+(selected===l.id)+'">'+
+      '<span class="dot '+dotCls(l)+'"></span>'+
+      '<span class="main"><span class="what">'+esc(l.what)+'</span>'+
+        '<span class="sub">'+(l.rel?'<span class="tier t-'+l.rel.tier+'">'+esc(l.rel.label)+'</span> ':'')+
+        '<b>'+esc(nm(l.who))+'</b> · '+esc(l.subject)+' · '+ago(daysAgo(l.said))+'</span></span>'+
+      whenChip(l)+'</button>';
+  }).join('');
+}
+function renderDetail(){
+  var l=ITEMS.filter(function(x){return x.id===selected&&!x.done})[0];
+  var el=document.getElementById('detail');
+  if(!l){ el.innerHTML='<div class="empty">Select an item to see the message it came from,'+
+    ' why it was flagged, and a drafted reply.</div>'; return; }
+  var dueTxt=l.due?D(l.due)+' · '+(l.status==='overdue'?l.overdueDays+' days late':
+    l.status==='due_today'?'today':dayName(l.due)):'none stated';
+  el.innerHTML=
+    '<div class="dhead"><div class="dkind">'+esc(LABEL[l.type])+'</div>'+
+      '<div class="dwhat">'+esc(l.what)+'</div></div>'+
+    '<div class="dbody"><dl>'+
+        '<div class="frow"><dt>Who</dt><dd>'+esc(nm(l.who))+
+          (l.rel?' <span class="tier t-'+l.rel.tier+'">'+esc(l.rel.label)+'</span>':'')+'</dd></div>'+
+        '<div class="frow"><dt>Thread</dt><dd>'+esc(l.subject)+'</dd></div>'+
+        '<div class="frow"><dt>Said</dt><dd>'+D(l.said)+' · '+ago(daysAgo(l.said))+'</dd></div>'+
+        '<div class="frow"><dt>Due</dt><dd>'+dueTxt+'</dd></div>'+
+        '<div class="frow"><dt>Next move</dt><dd>'+esc(OWNER[l.owner].title)+'</dd></div>'+
+      '</dl>'+
+      '<div class="quote">“'+esc(l.excerpt||l.what)+'”</div>'+
+      '<div class="why"><b>Why it surfaced.</b> '+WHY[l.type]+'</div>'+
+    '</div>'+
+    '<div class="dfoot">'+
+      '<button class="btn primary" id="copyBtn">Copy reply</button>'+
+      '<button class="btn" id="doneBtn">Mark handled</button>'+
+      '<span class="keys"><kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>C</kbd> copy · <kbd>H</kbd> handled</span>'+
+    '</div>';
+  document.getElementById('copyBtn').onclick=function(){copyNote(this)};
+  document.getElementById('doneBtn').onclick=markDone;
+}
+function renderUndo(){
+  var box=document.getElementById('undo');
+  box.innerHTML= lastDone ? 'Handled: '+esc(lastDone.short)+'<button id="undoBtn">Undo</button>' : '';
+  var u=document.getElementById('undoBtn');
+  if(u) u.onclick=function(){ lastDone.item.done=false; selected=lastDone.item.id; lastDone=null; renderAll(); };
+}
+function renderAll(){ renderPiles(); renderList(); renderDetail(); renderUndo(); }
 
-document.getElementById('viewToggle').innerHTML=Object.keys(VIEWS).map(function(k){
-  return '<button data-view="'+k+'"'+(k===view?' class="on" aria-pressed="true"':' aria-pressed="false"')+
-    '>'+VIEWS[k].label+'</button>';
-}).join('');
-document.getElementById('viewToggle').addEventListener('click',function(e){
-  var b=e.target.closest('button[data-view]'); if(!b||b.dataset.view===view) return;
-  view=b.dataset.view;
-  this.querySelectorAll('button').forEach(function(x){
-    var on=x.dataset.view===view;
-    x.classList.toggle('on',on); x.setAttribute('aria-pressed',String(on));
-  });
-  renderBands();
+function copyNote(btn){
+  var l=ITEMS.filter(function(x){return x.id===selected})[0]; if(!l) return;
+  navigator.clipboard.writeText(note(l)).then(function(){
+    btn.textContent='Copied'; btn.classList.add('ok'); btn.classList.remove('primary');
+    setTimeout(function(){btn.textContent='Copy reply';btn.classList.remove('ok');btn.classList.add('primary')},1500);
+  },function(){ btn.textContent='Copy failed'; });
+}
+function markDone(){
+  var v=visible(), i=-1;
+  v.forEach(function(x,n){ if(x.id===selected) i=n; });
+  if(i<0) return;
+  var l=v[i];
+  l.done=true;
+  lastDone={item:l, short:l.what.length>32?l.what.slice(0,31)+'…':l.what};
+  var next=visible();
+  selected = next.length ? (next[Math.min(i,next.length-1)]).id : null;
+  renderAll();
+}
+
+document.getElementById('piles').addEventListener('click',function(e){
+  var b=e.target.closest('[data-f]'); if(!b) return;
+  filter=b.dataset.f;
+  var v=visible();
+  if(!v.some(function(x){return x.id===selected})) selected=v.length?v[0].id:null;
+  renderAll();
 });
-renderBands();
-
-function daysAgo(iso){return Math.round((new Date(TODAY+'T00:00:00Z')-new Date(iso+'T00:00:00Z'))/86400000)}
-function esc(s){return String(s).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})}
-
-document.getElementById('bands').addEventListener('click',function(e){
-  var cp=e.target.closest('button[data-copy]');
-  if(cp){
-    e.stopPropagation();
-    navigator.clipboard.writeText(note(BY_ID[cp.dataset.copy])).then(function(){
-      cp.textContent='Copied'; cp.classList.add('ok');
-      setTimeout(function(){cp.textContent='Copy chase note';cp.classList.remove('ok')},1600);
-    },function(){ cp.textContent='Copy failed'; });
-    return;
-  }
-  var row=e.target.closest('.row'); if(!row) return;
-  var d=document.getElementById('d-'+row.dataset.id);
-  var open=row.getAttribute('aria-expanded')==='true';
-  row.setAttribute('aria-expanded',String(!open));
-  d.hidden=open;
+document.getElementById('sortSeg').innerHTML=SORTS.map(function(s){
+  return '<button data-s="'+s.k+'"'+(s.k===sortBy?' class="on"':'')+'>'+s.t+'</button>';
+}).join('');
+document.getElementById('sortSeg').addEventListener('click',function(e){
+  var b=e.target.closest('[data-s]'); if(!b||b.dataset.s===sortBy) return;
+  sortBy=b.dataset.s;
+  this.querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x.dataset.s===sortBy)});
+  renderList();
+});
+document.getElementById('list').addEventListener('click',function(e){
+  var r=e.target.closest('.row'); if(!r) return;
+  selected=r.dataset.id; renderList(); renderDetail();
+});
+document.addEventListener('keydown',function(e){
+  if(ti>=0) return;
+  if(/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+  var v=visible(), i=-1;
+  v.forEach(function(x,n){ if(x.id===selected) i=n; });
+  if(e.key==='ArrowDown'||e.key==='j'){ e.preventDefault();
+    if(v[i+1]) selected=v[i+1].id; renderList(); renderDetail(); }
+  else if(e.key==='ArrowUp'||e.key==='k'){ e.preventDefault();
+    if(i>0) selected=v[i-1].id; renderList(); renderDetail(); }
+  else if(e.key==='c'||e.key==='C'){ var b=document.getElementById('copyBtn'); if(b) copyNote(b); }
+  else if(e.key==='h'||e.key==='H'){ markDone(); }
 });
 
-document.getElementById('clearedList').innerHTML=R.closed.map(function(l){
-  return '<div class="cl"><span class="tick">✓</span><span>'+esc(l.what)+
-    '<br><span style="color:var(--ink3);font-size:12.5px">'+nm(l.who)+' · '+esc(l.subject)+'</span></span>'+
-    '<span class="d mono">'+D(l.closedOn)+'</span></div>';
-}).join('');
+document.getElementById('ctx').innerHTML=
+  dayName(TODAY)+', '+D(TODAY)+' · assembled <b>6:45am</b> from 25 threads and 5 meetings';
+document.getElementById('banner').innerHTML=
+  '<b>A working demo.</b> You are the assistant to a Chief Revenue Officer. Everything below was '+
+  'pulled out of her email and calendar automatically — nothing was tagged by hand. Click a row, '+
+  'or move through the list with <kbd>↑</kbd> <kbd>↓</kbd>.';
+document.getElementById('cleared').innerHTML=
+  '<h2>Closed itself this week — '+R.closed.length+'</h2>'+
+  '<p>A later reply arrived carrying the attachment, so these were marked delivered without '+
+  'anyone ticking them off.</p>'+
+  R.closed.map(function(l){
+    return '<div class="cl"><span class="tick">✓</span><span>'+esc(l.what)+
+      '<br><span style="color:var(--ink3)">'+esc(nm(l.who))+' · '+esc(l.subject)+'</span></span>'+
+      '<span class="d mono">'+D(l.closedOn)+'</span></div>';
+  }).join('');
+document.getElementById('foot').innerHTML=
+  'Commitments are extracted from message text — commitment phrasing, deadline language, and whether '+
+  'a matching delivery followed. Deadlines resolve against the date each message was sent, so '+
+  '“Thursday EOD” becomes a real date, and a promise answering an earlier request inherits that '+
+  'request’s deadline. <b>Demonstration data.</b> The same detector runs unchanged against a live '+
+  'Gmail and Calendar account.';
 
-/* ---------- guided tour ---------- */
 var TOUR=[
  {t:'Thursday, 6:45am',
-  p:'This ran before anyone was awake. It read every thread in the executive’s inbox and every meeting on her calendar, then worked out what she — or somebody else — still owes.'},
- {t:'What it found',
-  p:'25 email threads and 5 meetings went in. Fifteen open commitments came out, four of them already past the date they were promised for.',
-  el:function(){return document.querySelector('.lede')}},
+  p:'This ran before anyone was awake — every thread in the executive’s inbox and every meeting on her calendar, read and reconciled into what is still owed.'},
  {t:'Three piles, not one list',
-  p:'An assistant’s real question isn’t what’s late — it’s who moves next. Things to chase, things to close out yourself, and the short list only the executive can do. Most mornings that last pile is two or three items, and protecting it is the job.',
-  el:function(){return document.querySelector('.viewbar')},
-  before:function(){if(view!=='owner'){var b=document.querySelector('[data-view="owner"]'); if(b) b.click();}}},
+  p:'The useful question is not what is late, it is who moves next. Nine of these you can close without her. Four are chases. Only two genuinely need the executive, and protecting that short list is the job. Click a card to filter.',
+  el:function(){return document.getElementById('piles')}},
  {t:'Every row shows its receipts',
-  p:'A row is what someone committed to, in their own words, tagged with who they are to the business — a key account outranks a conference organiser. Open it and you get the sentence that triggered it, why it was flagged, and a drafted nudge to copy into a reply.',
-  el:function(){return document.querySelector('#bands .rowwrap')},
-  before:function(){var r=document.querySelector('#bands .row');
-    if(r&&r.getAttribute('aria-expanded')!=='true') r.click();}},
- {t:'It closes its own loops',
-  p:'Three promises dropped off this week without anyone touching them. When a reply arrives carrying the attachment, the item marks itself delivered — so this never turns into another list somebody has to tick off.',
-  el:function(){return document.querySelector('.cleared')}},
- {t:'That’s the whole idea',
-  p:'Nothing here was tagged, typed, or remembered by a person. The assistant opens one page and already knows what is about to fall through.'}
+  p:'A row is what someone committed to, in their own words, tagged with who they are to the business — a key account outranks a conference organiser.',
+  el:function(){return document.querySelector('#list .row')},
+  before:function(){ if(!selected&&visible().length){selected=visible()[0].id; renderList(); renderDetail();} }},
+ {t:'The evidence, and the reply',
+  p:'The panel gives you the sentence that triggered it, why it was flagged, and a drafted reply to paste. Mark it handled and it leaves the list — with an undo, because assistants misclick like everyone else.',
+  el:function(){return document.getElementById('detail')}},
+ {t:'Have a go',
+  p:'Move with ↑ and ↓, filter by pile, sort by risk or by date, mark things handled. Nothing here was tagged, typed, or remembered by a person.'}
 ];
-
-var ti=-1, dim=document.getElementById('dim'), tcard=document.getElementById('tcard'), focusedEl=null;
+var scrim=document.getElementById('scrim'), tcard=document.getElementById('tcard'), spot=null;
 var reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-function dropFocus(){ if(focusedEl){focusedEl.classList.remove('tour-on'); focusedEl=null;} }
+function unspot(){ if(spot){spot.classList.remove('spot'); spot=null;} }
 function tgo(i){
   if(i<0||i>=TOUR.length) return tEnd();
   ti=i; var s=TOUR[i];
   if(s.before) s.before();
-  dropFocus();
+  unspot();
   var el=s.el?s.el():null;
-  if(el){ el.classList.add('tour-on'); focusedEl=el;
+  if(el){ el.classList.add('spot'); spot=el;
     el.scrollIntoView({behavior:reduce?'auto':'smooth',block:'center'}); }
   else window.scrollTo({top:0,behavior:reduce?'auto':'smooth'});
   document.getElementById('tcardH').textContent=s.t;
   document.getElementById('tcardP').textContent=s.p;
-  document.getElementById('tcardS').textContent=(i+1)+' of '+TOUR.length;
+  document.getElementById('tcardS').textContent=(i+1)+' / '+TOUR.length;
   document.getElementById('tBack').style.visibility=i?'visible':'hidden';
   document.getElementById('tNext').textContent=(i===TOUR.length-1)?'Done':'Next';
-  dim.classList.add('on'); tcard.classList.add('on');
+  scrim.classList.add('on'); tcard.classList.add('on');
   document.getElementById('tNext').focus();
 }
-function tEnd(){ dropFocus(); dim.classList.remove('on'); tcard.classList.remove('on'); ti=-1; }
+function tEnd(){ unspot(); scrim.classList.remove('on'); tcard.classList.remove('on'); ti=-1; }
 document.getElementById('tNext').onclick=function(){tgo(ti+1)};
 document.getElementById('tBack').onclick=function(){tgo(ti-1)};
 document.getElementById('tSkip').onclick=tEnd;
 document.getElementById('tourBtn').onclick=function(){tgo(0)};
-dim.onclick=tEnd;
+scrim.onclick=tEnd;
 document.addEventListener('keydown',function(e){
   if(ti<0) return;
   if(e.key==='Escape') tEnd();
   else if(e.key==='ArrowRight') tgo(ti+1);
   else if(e.key==='ArrowLeft'&&ti) tgo(ti-1);
 });
-setTimeout(function(){tgo(0)},450);
 
-document.getElementById('foot').innerHTML=
-  'Every line above was extracted from message text — commitment phrasing, deadline language, and whether a '+
-  'matching delivery followed. Nothing was tagged by hand. A promise clears itself when a later message in the same '+
-  'thread carries an attachment or delivery wording, which is why <b>'+R.closed.length+' items</b> dropped off without anyone '+
-  'touching them. Demonstration inbox; the same detector runs against a live Gmail and Calendar account unchanged.';
+if(visible().length) selected=visible()[0].id;
+renderAll();
+setTimeout(function(){tgo(0)},400);
 </script>
