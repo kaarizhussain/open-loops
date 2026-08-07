@@ -107,4 +107,24 @@ var EVENTS = [
     attendees: [EXEC, 's.abioye@northwindlogistics.com'], agenda: true }
 ];
 
-if (typeof module !== 'undefined') module.exports = { EXEC: EXEC, TODAY: TODAY, MESSAGES: MESSAGES, EVENTS: EVENTS };
+/* Who matters, and how much. An assistant curates this — it is the judgment that
+ * separates a promise to the board from one to a conference organiser. Keyed by
+ * address for individuals, domain for whole accounts. */
+var RELATIONSHIPS = {
+  'marcus.bell@northstar.io':   { tier: 'exec',        label: 'CFO' },
+  'greg.tan@bridgepointvc.com': { tier: 'investor',    label: 'Investor' },
+  'meridianhealth.com':         { tier: 'key_account', label: 'Key account' },
+  'larkspurretail.com':         { tier: 'key_account', label: 'Key account' },
+  'vectorfreight.com':          { tier: 'customer',    label: 'Customer' },
+  'cedarline.com':              { tier: 'customer',    label: 'Customer' },
+  'northwindlogistics.com':     { tier: 'customer',    label: 'Customer' },
+  'cobaltmining.com':           { tier: 'customer',    label: 'Customer' },
+  'ironwoodmfg.com':            { tier: 'prospect',    label: 'Prospect' },
+  'arbordiagnostics.com':       { tier: 'prospect',    label: 'Prospect' },
+  'solsticemedia.com':          { tier: 'partner',     label: 'Partner' },
+  'northstar.io':               { tier: 'internal',    label: 'Internal' }
+};
+
+if (typeof module !== 'undefined') module.exports = {
+  EXEC: EXEC, TODAY: TODAY, MESSAGES: MESSAGES, EVENTS: EVENTS, RELATIONSHIPS: RELATIONSHIPS
+};

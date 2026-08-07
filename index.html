@@ -20,16 +20,16 @@
 
 :root{
   --paper:#f4f3f0; --surface:#fff; --sunk:#eceae5;
-  --ink:#1b1a18; --ink2:#55534d; --ink3:#85827a;
+  --ink:#1b1a18; --ink2:#55534d; --ink3:#6b6861;
   --line:#e3e1db; --line2:#d2cfc7;
   --accent:#43497e; --accent-wash:#e9eaf3;
   --late:#a5302c; --late-wash:#f8e9e7;
-  --soon:#a8700d; --soon-wash:#faf0dd;
+  --soon:#8e5e09; --soon-wash:#faf0dd;
   --done:#3d7a55; --done-wash:#e8f1eb;
 }
 @media (prefers-color-scheme:dark){:root{
   --paper:#131316; --surface:#1b1b1f; --sunk:#171719;
-  --ink:#eceae5; --ink2:#a8a5a0; --ink3:#78756f;
+  --ink:#eceae5; --ink2:#a8a5a0; --ink3:#8d8a83;
   --line:#2a2a30; --line2:#3a3a42;
   --accent:#8f96d4; --accent-wash:#22243a;
   --late:#e08078; --late-wash:#331d1b;
@@ -38,7 +38,7 @@
 }}
 :root[data-theme="dark"]{
   --paper:#131316; --surface:#1b1b1f; --sunk:#171719;
-  --ink:#eceae5; --ink2:#a8a5a0; --ink3:#78756f;
+  --ink:#eceae5; --ink2:#a8a5a0; --ink3:#8d8a83;
   --line:#2a2a30; --line2:#3a3a42;
   --accent:#8f96d4; --accent-wash:#22243a;
   --late:#e08078; --late-wash:#331d1b;
@@ -47,11 +47,11 @@
 }
 :root[data-theme="light"]{
   --paper:#f4f3f0; --surface:#fff; --sunk:#eceae5;
-  --ink:#1b1a18; --ink2:#55534d; --ink3:#85827a;
+  --ink:#1b1a18; --ink2:#55534d; --ink3:#6b6861;
   --line:#e3e1db; --line2:#d2cfc7;
   --accent:#43497e; --accent-wash:#e9eaf3;
   --late:#a5302c; --late-wash:#f8e9e7;
-  --soon:#a8700d; --soon-wash:#faf0dd;
+  --soon:#8e5e09; --soon-wash:#faf0dd;
   --done:#3d7a55; --done-wash:#e8f1eb;
 }
 
@@ -74,7 +74,9 @@ body{margin:0;background:var(--paper);color:var(--ink);
   line-height:1.28;letter-spacing:-.008em;margin:0;text-wrap:balance;max-width:30ch}
 .lede h1 b{font-weight:600}
 .lede h1 .r{color:var(--late);white-space:nowrap}
-.for{font-size:13px;color:var(--ink3);margin-top:12px}
+.split{margin-top:12px;font-size:14.5px;color:var(--ink2);line-height:1.6;max-width:52ch}
+.split b{color:var(--ink);font-weight:600}
+.for{font-size:13px;color:var(--ink3);margin-top:10px}
 .for b{color:var(--ink2);font-weight:600}
 
 .tally{display:flex;flex-wrap:wrap;gap:0;margin-top:18px;border:1px solid var(--line);
@@ -85,8 +87,30 @@ body{margin:0;background:var(--paper);color:var(--ink);
 .tally .l{font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
 .tally .late .n{color:var(--late)} .tally .soon .n{color:var(--soon)}
 
+/* view toggle */
+.viewbar{display:flex;align-items:center;gap:10px;margin-top:26px}
+.viewbar-l{font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:7px;overflow:hidden}
+.seg button{appearance:none;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;
+  padding:5px 12px;border:0;border-right:1px solid var(--line2);background:var(--surface);color:var(--ink3)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--accent);color:#fff}
+.seg button:not(.on):hover{color:var(--ink)}
+.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+@media (prefers-color-scheme:dark){.seg button.on{color:#14151c}}
+:root[data-theme="dark"] .seg button.on{color:#14151c}
+:root[data-theme="light"] .seg button.on{color:#fff}
+
+/* relationship tier tag */
+.tier{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+  padding:1px 6px;border-radius:4px;background:var(--sunk);color:var(--ink3);
+  text-transform:uppercase;vertical-align:1px}
+.tier.t-investor,.tier.t-exec{background:var(--accent-wash);color:var(--accent)}
+.tier.t-key_account{background:var(--soon-wash);color:var(--soon)}
+
 /* bands */
 .band{margin-top:30px}
+.band-note{margin:2px 0 0;font-size:12.5px;color:var(--ink3);line-height:1.5}
 .band-h{display:flex;align-items:baseline;gap:9px;margin-bottom:2px}
 .band-h h2{font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
   color:var(--ink3);margin:0}
@@ -194,9 +218,15 @@ footer b{color:var(--ink2);font-weight:600}
 
   <section class="lede">
     <h1 id="lede"></h1>
+    <div class="split" id="split"></div>
     <div class="for" id="forwho"></div>
     <div class="tally" id="tally"></div>
   </section>
+
+  <div class="viewbar">
+    <span class="viewbar-l">Group by</span>
+    <div class="seg" id="viewToggle"></div>
+  </div>
 
   <div id="bands"></div>
 
@@ -284,6 +314,36 @@ var STOPWORD = /^(the|and|for|with|from|call|meeting|sync|intro|next|steps|updat
 /* Distinctive words from a subject line, used to spot a matching calendar hold. */
 function keyTokens(subject) {
   return (subject.match(/\b[A-Z][A-Za-z]{3,}\b/g) || []).filter(function (w) { return !STOPWORD.test(w); });
+}
+
+/* Who takes the next action. An EA's list is really three lists: what I chase,
+ * what I handle myself, and what only the executive can do. The split is by the
+ * next action, not by who benefits — booking a call the exec will attend is
+ * still the assistant's move. */
+var EXEC_WORK = /\b(review|sign[- ]?off|approve|approval|decision|decide|feedback|pricing|redline|deck|section|reference call|weigh in)\b/i;
+var EA_WORK = /\b(agenda|invite|calendar|schedul\w*|book|venue|recap|notes|questionnaire|bio|talk title|itinerary|travel|circulate|forward|logistics|intro\w*|connect)\b/i;
+
+function assignOwner(type, what, subject) {
+  if (type === 'owed_to_us' || type === 'awaiting_reply') return 'them';
+  // These three are logistics by definition — the next move is always the assistant's.
+  if (type === 'agreed_unscheduled' || type === 'no_followup' || type === 'unprepped_meeting') return 'you';
+  var t = what + ' ' + subject;
+  if (EXEC_WORK.test(t)) return 'exec';
+  if (EA_WORK.test(t)) return 'you';
+  return 'exec';
+}
+
+/* Relationship tiers. Every assistant weights a promise to the board differently
+ * from one to a vendor; this is that judgment, written down. Keyed by address or
+ * domain, curated by the assistant — not inferred. */
+var TIER_WEIGHT = { investor: 26, exec: 22, key_account: 20, customer: 12, partner: 9, prospect: 8, internal: 4, other: 0 };
+
+function relationship(addr, contacts) {
+  if (!contacts) return null;
+  var a = addr.toLowerCase();
+  var hit = contacts[a] || contacts[domain(a)];
+  if (!hit) return null;
+  return { tier: hit.tier, label: hit.label, weight: TIER_WEIGHT[hit.tier] || 0 };
 }
 
 function sentences(body) {
@@ -408,6 +468,10 @@ function detectLoops(messages, events, opts) {
     else if (l.status === 'due_soon') r += 22;
     else r += Math.min(l.ageDays, 14) * 2;
     if (l.type === 'unprepped_meeting' && l.due === today) r += 20;
+
+    l.owner = assignOwner(l.type, l.what, l.subject);
+    l.rel = relationship(l.who, opts.contacts);
+    if (l.rel) r += l.rel.weight;
     l.risk = r;
   });
 
@@ -417,6 +481,12 @@ function detectLoops(messages, events, opts) {
     .sort(function (a, b) { return a.closedOn < b.closedOn ? 1 : -1; });
   return { open: open, closed: closed, today: today };
 }
+
+var OWNER = {
+  them: { title: 'Chase them', note: 'Someone else owes this. Your move is the nudge.' },
+  you:  { title: 'Yours to handle', note: 'Logistics you can close out without the executive.' },
+  exec: { title: 'Needs the executive', note: 'Only they can produce or decide this — protect the time for it.' }
+};
 
 var LABEL = {
   owed_by_us: 'You promised',
@@ -538,9 +608,27 @@ var EVENTS = [
     attendees: [EXEC, 's.abioye@northwindlogistics.com'], agenda: true }
 ];
 
+/* Who matters, and how much. An assistant curates this — it is the judgment that
+ * separates a promise to the board from one to a conference organiser. Keyed by
+ * address for individuals, domain for whole accounts. */
+var RELATIONSHIPS = {
+  'marcus.bell@northstar.io':   { tier: 'exec',        label: 'CFO' },
+  'greg.tan@bridgepointvc.com': { tier: 'investor',    label: 'Investor' },
+  'meridianhealth.com':         { tier: 'key_account', label: 'Key account' },
+  'larkspurretail.com':         { tier: 'key_account', label: 'Key account' },
+  'vectorfreight.com':          { tier: 'customer',    label: 'Customer' },
+  'cedarline.com':              { tier: 'customer',    label: 'Customer' },
+  'northwindlogistics.com':     { tier: 'customer',    label: 'Customer' },
+  'cobaltmining.com':           { tier: 'customer',    label: 'Customer' },
+  'ironwoodmfg.com':            { tier: 'prospect',    label: 'Prospect' },
+  'arbordiagnostics.com':       { tier: 'prospect',    label: 'Prospect' },
+  'solsticemedia.com':          { tier: 'partner',     label: 'Partner' },
+  'northstar.io':               { tier: 'internal',    label: 'Internal' }
+};
 
 
-var R = detectLoops(MESSAGES, EVENTS, { exec: EXEC, today: TODAY });
+
+var R = detectLoops(MESSAGES, EVENTS, { exec: EXEC, today: TODAY, contacts: RELATIONSHIPS });
 var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 var DAYN=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 function D(iso){var p=iso.split('-');return MON[+p[1]-1]+' '+(+p[2]);}
@@ -588,6 +676,15 @@ var BANDS=[
   {k:'open', title:'Further out, or undated', match:function(l){return l.status==='open'}}
 ];
 
+/* Two ways to read the same list: the assistant sorts by who acts next,
+   the executive sorts by what is latest. */
+var PILES=['them','you','exec'].map(function(k){
+  return {k:k, title:OWNER[k].title, note:OWNER[k].note,
+          match:function(l){return l.owner===k}};
+});
+var VIEWS={owner:{label:'Who owns it', groups:PILES}, urgency:{label:'What’s latest', groups:BANDS}};
+var view='owner';
+
 function dueChip(l){
   if(!l.due) return '<span class="due none">no date</span>';
   if(l.status==='overdue') return '<span class="due late">'+l.overdueDays+'d late · '+D(l.due)+'</span>';
@@ -612,6 +709,13 @@ document.getElementById('lede').innerHTML=
   (tod? ', '+w(tod)+' land'+(tod===1?'s':'')+' today.':'.');
 function cap(s){return s.charAt(0).toUpperCase()+s.slice(1)}
 
+var byOwner={};
+['them','you','exec'].forEach(function(k){byOwner[k]=R.open.filter(function(l){return l.owner===k}).length});
+document.getElementById('split').innerHTML=
+  '<b>'+cap(w(byOwner.you))+'</b> you can close without her. '+
+  '<b>'+cap(w(byOwner.them))+'</b> are chases — someone else owes it. '+
+  'Only <b>'+w(byOwner.exec)+'</b> actually need Dana.';
+
 document.getElementById('forwho').innerHTML=
   'For <b>Dana Whitfield</b>, Chief Revenue Officer · Northstar Systems';
 
@@ -622,35 +726,54 @@ document.getElementById('tally').innerHTML=
   '<div><div class="n mono">'+counts.open+'</div><div class="l">Undated</div></div>'+
   '<div><div class="n mono">'+R.closed.length+'</div><div class="l">Cleared</div></div>';
 
-document.getElementById('bands').innerHTML=BANDS.map(function(b){
-  var items=R.open.filter(b.match);
-  if(!items.length) return '';
-  return '<section class="band '+b.k+'"><div class="band-h"><h2>'+b.title+'</h2>'+
-    '<span class="c">'+items.length+'</span></div>'+
-    items.map(function(l,i){
-      var id=b.k+'-'+i;
-      return '<div class="rowwrap">'+
-        '<button class="row" data-id="'+id+'" aria-expanded="false" aria-controls="d-'+id+'">'+
-          '<span class="dot '+dotCls(l)+'"></span>'+
-          '<span class="row-main">'+
-            '<span class="what">'+esc(l.what)+'</span>'+
-            '<span class="meta"><span class="who">'+nm(l.who)+'</span>'+
-              ' · '+org(l.who)+' · '+esc(l.subject)+' · '+ago(daysAgo(l.said))+'</span>'+
-          '</span>'+
-          dueChip(l)+
-        '</button>'+
-        '<div class="detail" hidden id="d-'+id+'">'+
-          '<span class="quote">'+esc(l.excerpt||l.what)+'</span>'+
-          '<div class="why"><b>'+LABEL[l.type]+'.</b> '+WHY[l.type]+'</div>'+
-          '<div class="acts"><button data-copy="'+id+'">Copy chase note</button></div>'+
-        '</div>'+
-      '</div>';
-    }).join('')+'</section>';
-}).join('');
-
-/* map row ids back to loops for the copy action */
 var BY_ID={};
-BANDS.forEach(function(b){ R.open.filter(b.match).forEach(function(l,i){ BY_ID[b.k+'-'+i]=l; }); });
+function renderBands(){
+  var groups=VIEWS[view].groups;
+  BY_ID={};
+  document.getElementById('bands').innerHTML=groups.map(function(b){
+    var items=R.open.filter(b.match);
+    if(!items.length) return '';
+    return '<section class="band '+b.k+'"><div class="band-h"><h2>'+b.title+'</h2>'+
+      '<span class="c">'+items.length+'</span></div>'+
+      (b.note?'<p class="band-note">'+b.note+'</p>':'')+
+      items.map(function(l,i){
+        var id=b.k+'-'+i;
+        BY_ID[id]=l;
+        return '<div class="rowwrap">'+
+          '<button class="row" data-id="'+id+'" aria-expanded="false" aria-controls="d-'+id+'">'+
+            '<span class="dot '+dotCls(l)+'"></span>'+
+            '<span class="row-main">'+
+              '<span class="what">'+esc(l.what)+'</span>'+
+              '<span class="meta"><span class="who">'+nm(l.who)+'</span>'+
+                (l.rel?' <span class="tier t-'+l.rel.tier+'">'+esc(l.rel.label)+'</span>':'')+
+                ' · '+esc(l.subject)+' · '+ago(daysAgo(l.said))+'</span>'+
+            '</span>'+
+            dueChip(l)+
+          '</button>'+
+          '<div class="detail" hidden id="d-'+id+'">'+
+            '<span class="quote">'+esc(l.excerpt||l.what)+'</span>'+
+            '<div class="why"><b>'+LABEL[l.type]+'.</b> '+WHY[l.type]+'</div>'+
+            '<div class="acts"><button data-copy="'+id+'">Copy chase note</button></div>'+
+          '</div>'+
+        '</div>';
+      }).join('')+'</section>';
+  }).join('');
+}
+
+document.getElementById('viewToggle').innerHTML=Object.keys(VIEWS).map(function(k){
+  return '<button data-view="'+k+'"'+(k===view?' class="on" aria-pressed="true"':' aria-pressed="false"')+
+    '>'+VIEWS[k].label+'</button>';
+}).join('');
+document.getElementById('viewToggle').addEventListener('click',function(e){
+  var b=e.target.closest('button[data-view]'); if(!b||b.dataset.view===view) return;
+  view=b.dataset.view;
+  this.querySelectorAll('button').forEach(function(x){
+    var on=x.dataset.view===view;
+    x.classList.toggle('on',on); x.setAttribute('aria-pressed',String(on));
+  });
+  renderBands();
+});
+renderBands();
 
 function daysAgo(iso){return Math.round((new Date(TODAY+'T00:00:00Z')-new Date(iso+'T00:00:00Z'))/86400000)}
 function esc(s){return String(s).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})}
@@ -685,11 +808,12 @@ var TOUR=[
  {t:'What it found',
   p:'25 email threads and 5 meetings went in. Fifteen open commitments came out, four of them already past the date they were promised for.',
   el:function(){return document.querySelector('.lede')}},
- {t:'One line per promise',
-  p:'Every row is something a person committed to, quoted in their own words, with how overdue it is on the right. The ones closest to slipping sit at the top.',
-  el:function(){return document.querySelector('#bands .rowwrap')}},
- {t:'And where it came from',
-  p:'Open a row and you get the sentence that triggered it, the reason it was flagged, and a drafted nudge you can copy straight into a reply.',
+ {t:'Three piles, not one list',
+  p:'An assistant’s real question isn’t what’s late — it’s who moves next. Things to chase, things to close out yourself, and the short list only the executive can do. Most mornings that last pile is two or three items, and protecting it is the job.',
+  el:function(){return document.querySelector('.viewbar')},
+  before:function(){if(view!=='owner'){var b=document.querySelector('[data-view="owner"]'); if(b) b.click();}}},
+ {t:'Every row shows its receipts',
+  p:'A row is what someone committed to, in their own words, tagged with who they are to the business — a key account outranks a conference organiser. Open it and you get the sentence that triggered it, why it was flagged, and a drafted nudge to copy into a reply.',
   el:function(){return document.querySelector('#bands .rowwrap')},
   before:function(){var r=document.querySelector('#bands .row');
     if(r&&r.getAttribute('aria-expanded')!=='true') r.click();}},

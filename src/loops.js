@@ -63,6 +63,36 @@ function keyTokens(subject) {
   return (subject.match(/\b[A-Z][A-Za-z]{3,}\b/g) || []).filter(function (w) { return !STOPWORD.test(w); });
 }
 
+/* Who takes the next action. An EA's list is really three lists: what I chase,
+ * what I handle myself, and what only the executive can do. The split is by the
+ * next action, not by who benefits — booking a call the exec will attend is
+ * still the assistant's move. */
+var EXEC_WORK = /\b(review|sign[- ]?off|approve|approval|decision|decide|feedback|pricing|redline|deck|section|reference call|weigh in)\b/i;
+var EA_WORK = /\b(agenda|invite|calendar|schedul\w*|book|venue|recap|notes|questionnaire|bio|talk title|itinerary|travel|circulate|forward|logistics|intro\w*|connect)\b/i;
+
+function assignOwner(type, what, subject) {
+  if (type === 'owed_to_us' || type === 'awaiting_reply') return 'them';
+  // These three are logistics by definition — the next move is always the assistant's.
+  if (type === 'agreed_unscheduled' || type === 'no_followup' || type === 'unprepped_meeting') return 'you';
+  var t = what + ' ' + subject;
+  if (EXEC_WORK.test(t)) return 'exec';
+  if (EA_WORK.test(t)) return 'you';
+  return 'exec';
+}
+
+/* Relationship tiers. Every assistant weights a promise to the board differently
+ * from one to a vendor; this is that judgment, written down. Keyed by address or
+ * domain, curated by the assistant — not inferred. */
+var TIER_WEIGHT = { investor: 26, exec: 22, key_account: 20, customer: 12, partner: 9, prospect: 8, internal: 4, other: 0 };
+
+function relationship(addr, contacts) {
+  if (!contacts) return null;
+  var a = addr.toLowerCase();
+  var hit = contacts[a] || contacts[domain(a)];
+  if (!hit) return null;
+  return { tier: hit.tier, label: hit.label, weight: TIER_WEIGHT[hit.tier] || 0 };
+}
+
 function sentences(body) {
   return body.split(/(?<=[.!?])\s+|\n+/).map(function (s) { return s.trim(); }).filter(Boolean);
 }
@@ -185,6 +215,10 @@ function detectLoops(messages, events, opts) {
     else if (l.status === 'due_soon') r += 22;
     else r += Math.min(l.ageDays, 14) * 2;
     if (l.type === 'unprepped_meeting' && l.due === today) r += 20;
+
+    l.owner = assignOwner(l.type, l.what, l.subject);
+    l.rel = relationship(l.who, opts.contacts);
+    if (l.rel) r += l.rel.weight;
     l.risk = r;
   });
 
@@ -194,6 +228,12 @@ function detectLoops(messages, events, opts) {
     .sort(function (a, b) { return a.closedOn < b.closedOn ? 1 : -1; });
   return { open: open, closed: closed, today: today };
 }
+
+var OWNER = {
+  them: { title: 'Chase them', note: 'Someone else owes this. Your move is the nudge.' },
+  you:  { title: 'Yours to handle', note: 'Logistics you can close out without the executive.' },
+  exec: { title: 'Needs the executive', note: 'Only they can produce or decide this — protect the time for it.' }
+};
 
 var LABEL = {
   owed_by_us: 'You promised',
@@ -205,4 +245,6 @@ var LABEL = {
   unprepped_meeting: 'Meeting unprepped'
 };
 
-if (typeof module !== 'undefined') module.exports = { detectLoops: detectLoops, parseDue: parseDue, LABEL: LABEL };
+if (typeof module !== 'undefined') module.exports = {
+  detectLoops: detectLoops, parseDue: parseDue, LABEL: LABEL, OWNER: OWNER, TIER_WEIGHT: TIER_WEIGHT
+};
