@@ -450,5 +450,7 @@ document.addEventListener('keydown',function(e){
 
 if(visible().length) selected=visible()[0].id;
 renderAll();
-setTimeout(function(){tgo(0)},400);
+/* The tour opens itself for anyone arriving cold on a shared link. Load with
+   #present to suppress it when you are driving the demo yourself. */
+if(location.hash!=='#present') setTimeout(function(){tgo(0)},400);
 </script>
