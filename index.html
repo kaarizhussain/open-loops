@@ -100,6 +100,17 @@ button{font:inherit;color:inherit}
 .caveat h2{margin:0 0 5px;font-size:13px;font-weight:600}
 .caveat p{margin:0;font-size:13.5px;color:var(--ink2);line-height:1.6;max-width:76ch}
 
+.built{margin-top:14px;background:var(--surface);border:1px solid var(--line);
+  border-radius:6px;padding:13px 16px}
+.built h2{margin:0 0 4px;font-size:13px;font-weight:600}
+.built p{margin:0 0 9px;font-size:13px;color:var(--ink2);line-height:1.6;max-width:76ch}
+.built h3{margin:11px 0 4px;font-size:12px;font-weight:600;color:var(--ink2)}
+.built ul{margin:0;padding-left:17px}
+.built li{font-size:12.5px;color:var(--ink2);line-height:1.55;margin:3px 0;max-width:72ch}
+.built li b{color:var(--ink);font-weight:600}
+.built .foot2{margin:11px 0 0;font-size:12px;color:var(--ink3)}
+.built a{color:var(--accent2)}
+
 .bar{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
 .bar .lbl{font-size:12.5px;color:var(--ink3)}
 .seg{display:inline-flex;border:1px solid var(--line2);border-radius:5px;overflow:hidden;background:var(--surface)}
@@ -246,6 +257,7 @@ footer b{color:var(--ink2);font-weight:600}
 
   <section class="cleared" id="cleared"></section>
   <section class="caveat" id="caveat"></section>
+  <section class="built" id="built"></section>
   <footer id="foot"></footer>
 </div>
 
@@ -1077,6 +1089,32 @@ document.getElementById('who').innerHTML=
     ', '+esc(PRINCIPAL.company)+'</span><br>'+esc(PRINCIPAL.business)+' · '+esc(PRINCIPAL.scale)+
     ' · she owns '+esc(PRINCIPAL.owns)+'</dd>'+
   '<dt>This week</dt><dd>'+esc(PRINCIPAL.week)+'</dd>';
+
+document.getElementById('built').innerHTML=
+  '<h2>How this was built</h2>'+
+  '<p>Two evenings, after a conversation about the role. AI tooling wrote a lot of the code. '+
+  'The work was deciding what counts as a promise — and most of that time went on things that '+
+  'look obvious only in hindsight.</p>'+
+  '<h3>Judgment calls</h3><ul>'+
+    '<li><b>“Let me know”</b> reads like a commitment and is the opposite of one — it is a request.</li>'+
+    '<li><b>A proposed meeting time is not a deadline.</b> “Does Thursday work?” is a suggestion.</li>'+
+    '<li><b>A deadline landing on Saturday is a Friday deadline.</b> Nobody is reading it at the weekend.</li>'+
+    '<li><b>An agenda that arrives on the morning of is too late</b> to prepare against, so the runway '+
+      'closes the day before.</li>'+
+    '<li><b>Who matters is curated, not inferred.</b> The tool does not guess that an investor '+
+      'outranks a conference organiser.</li>'+
+  '</ul>'+
+  '<h3>Two bugs worth admitting</h3><ul>'+
+    '<li>A client sending a <b>follow-up made their own earlier unanswered request disappear</b>, '+
+      'because silence was measured from the last message in the thread rather than the last one we sent.</li>'+
+    '<li>A single <b>“pricing attached” closed every other open promise</b> in that thread, including '+
+      'things that were never sent, because a delivery was not checked against what it delivered.</li>'+
+  '</ul>'+
+  '<p class="foot2">Both were items leaving the list without being done — the failure that matters '+
+  'most here, because nobody goes looking for what has silently gone. No dependencies and no '+
+  'framework: the detector is plain JavaScript over a normalised shape of messages and calendar '+
+  'events, with an assert-based test suite covering the cases that must <em>not</em> fire. '+
+  '<a href="https://github.com/kaarizhussain/open-loops">Code and commit history</a>.</p>';
 
 document.getElementById('ctx').innerHTML=
   'For '+dayName(TODAY)+', '+D(TODAY)+' · built <b>the evening before</b>, from 25 threads and 5 meetings';
