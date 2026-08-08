@@ -1,5 +1,5 @@
 var assert = require('assert');
-var { detectLoops, parseDue, LABEL, OWNER } = require('./src/loops.js');
+var { detectLoops, meetingBriefs, parseDue, LABEL, OWNER } = require('./src/loops.js');
 var F = require('./src/fixture.js');
 
 /* date parsing */
@@ -88,6 +88,37 @@ var plain = detectLoops(F.MESSAGES, F.EVENTS, { exec: F.EXEC, today: F.TODAY });
 assert.ok(plain.open.every(function (l) { return l.rel === null; }), 'no contacts map means no tiers');
 var meridianPlain = plain.open.filter(function (l) { return l.subject.indexOf('Meridian') > -1 && l.type === 'owed_to_us'; })[0];
 assert.ok(mer.risk > meridianPlain.risk, 'key-account weighting should raise risk');
+
+/* ---- meeting briefs ---- */
+var B = meetingBriefs(F.MESSAGES, F.EVENTS, r.open, { exec: F.EXEC, today: F.TODAY });
+var brief = function (s) { return B.filter(function (b) { return b.title.indexOf(s) > -1; })[0]; };
+
+assert.strictEqual(B.length, 3, 'expected 3 upcoming external meetings, got ' + B.length);
+assert.ok(!brief('Cobalt'), 'a meeting in the past is not upcoming');
+assert.ok(!brief('Weekly revenue staff'), 'internal-only meetings need no briefing');
+assert.ok(B[0].start <= B[1].start && B[1].start <= B[2].start, 'briefs run in time order');
+
+/* the one an assistant would catch: QBR tomorrow, agenda requested days ago, never answered */
+var qbr = brief('Vector Freight');
+assert.ok(qbr, 'QBR brief missing');
+assert.strictEqual(qbr.inDays, 1, 'QBR is tomorrow');
+assert.strictEqual(qbr.agenda, false);
+assert.strictEqual(qbr.items.length, 1, 'the unanswered agenda request should attach to this meeting');
+assert.strictEqual(qbr.items[0].type, 'unanswered_ask');
+assert.ok(qbr.items[0].what.indexOf('agenda') > -1);
+assert.ok(!qbr.items.some(function (i) { return i.eventId === qbr.id; }),
+  'the meeting\'s own no-agenda flag must not double up as an item');
+assert.strictEqual(qbr.ready, false);
+
+/* a meeting that genuinely needs nothing */
+var nw = brief('Northwind');
+assert.ok(nw && nw.ready === true, 'Northwind has an agenda and no open items — should read ready');
+assert.strictEqual(nw.items.length, 0);
+assert.ok(nw.lastContact, 'last contact date should resolve from the thread');
+
+/* today's call: no agenda, so not ready */
+var lark = brief('Larkspur');
+assert.ok(lark && lark.inDays === 0 && lark.agenda === false && lark.ready === false);
 
 /* ranking: overdue and due-today outrank idle chatter */
 assert.ok(r.open[0].risk >= r.open[r.open.length - 1].risk);

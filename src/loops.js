@@ -229,6 +229,37 @@ function detectLoops(messages, events, opts) {
   return { open: open, closed: closed, today: today };
 }
 
+/* Regroup everything by upcoming meeting. The list answers "what is outstanding";
+ * an assistant is asked "what do I need before this". Same commitments, read the
+ * way you read them the night before. */
+function meetingBriefs(messages, events, open, opts) {
+  var today = opts.today, execDomain = domain(opts.exec.toLowerCase());
+  return events.map(function (e) {
+    if (day(e.start) < today) return null;
+    var ext = e.attendees.filter(function (a) { return domain(a) !== execDomain; });
+    if (!ext.length) return null;
+    var doms = ext.map(domain);
+    var items = open.filter(function (l) {
+      if (l.eventId === e.id) return false;         // the agenda flag already says this
+      return l.who && (ext.indexOf(l.who) > -1 || doms.indexOf(domain(l.who)) > -1);
+    }).sort(function (a, b) { return b.risk - a.risk; });
+    var last = null;
+    messages.forEach(function (m) {
+      var party = m.from.toLowerCase() === opts.exec.toLowerCase() ? m.to : [m.from];
+      if (party.some(function (p) { return doms.indexOf(domain(p)) > -1; })) {
+        if (!last || m.date > last) last = m.date;
+      }
+    });
+    return {
+      id: e.id, title: e.title, start: e.start, day: day(e.start),
+      inDays: daysBetween(today, day(e.start)),
+      attendees: ext, agenda: e.agenda, items: items,
+      lastContact: last ? day(last) : null,
+      ready: e.agenda && !items.length
+    };
+  }).filter(Boolean).sort(function (a, b) { return a.start < b.start ? -1 : 1; });
+}
+
 var OWNER = {
   them: { title: 'Chase them', note: 'Someone else owes this. Your move is the nudge.' },
   you:  { title: 'Yours to handle', note: 'Logistics you can close out without the executive.' },
@@ -246,5 +277,6 @@ var LABEL = {
 };
 
 if (typeof module !== 'undefined') module.exports = {
-  detectLoops: detectLoops, parseDue: parseDue, LABEL: LABEL, OWNER: OWNER, TIER_WEIGHT: TIER_WEIGHT
+  detectLoops: detectLoops, meetingBriefs: meetingBriefs, parseDue: parseDue,
+  LABEL: LABEL, OWNER: OWNER, TIER_WEIGHT: TIER_WEIGHT
 };

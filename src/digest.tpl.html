@@ -49,6 +49,30 @@ button{font:inherit;color:inherit}
 .pile .s{display:block;font-size:11.5px;color:var(--ink3);margin-top:1px;line-height:1.35}
 .pile.exec .n{color:var(--late)}
 
+.upnext{margin-bottom:16px}
+.upnext-h{display:flex;align-items:baseline;gap:10px;margin-bottom:7px;flex-wrap:wrap}
+.upnext-h h2{margin:0;font-size:13.5px;font-weight:600}
+.sub2{font-size:12.5px;color:var(--ink3)}
+.briefs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.brief{background:var(--surface);border:1px solid var(--line);border-radius:6px;
+  padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.brief.warn{border-color:#e8bda9;background:#fffaf7}
+.brief .w{font-size:11.5px;font-weight:600;color:var(--late)}
+.brief.ok .w{color:var(--done)}
+.brief .ti{font-size:13px;font-weight:600;line-height:1.35}
+.brief .wi{font-size:12px;color:var(--ink3)}
+.brief .st{margin-top:6px;font-size:12px;color:var(--ink2);line-height:1.45}
+.brief .st.ready{color:var(--done)}
+.brief .go{appearance:none;text-align:left;background:none;border:0;padding:6px 0 0;
+  font-size:12px;line-height:1.45;color:var(--accent2);cursor:pointer;text-decoration:underline}
+.brief .go:hover{color:var(--accent)}
+.brief .go:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
+
+.caveat{margin-top:14px;background:var(--surface);border:1px solid var(--line);
+  border-left:3px solid var(--line2);border-radius:6px;padding:13px 16px}
+.caveat h2{margin:0 0 5px;font-size:13px;font-weight:600}
+.caveat p{margin:0;font-size:13.5px;color:var(--ink2);line-height:1.6;max-width:76ch}
+
 .bar{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
 .bar .lbl{font-size:12.5px;color:var(--ink3)}
 .seg{display:inline-flex;border:1px solid var(--line2);border-radius:5px;overflow:hidden;background:var(--surface)}
@@ -166,6 +190,14 @@ footer b{color:var(--ink2);font-weight:600}
   <div class="banner" id="banner"></div>
   <div class="piles" id="piles"></div>
 
+  <section class="upnext">
+    <div class="upnext-h">
+      <h2>Before your next meetings</h2>
+      <span class="sub2">Same commitments, grouped by what is about to happen</span>
+    </div>
+    <div class="briefs" id="briefs"></div>
+  </section>
+
   <div class="bar">
     <span class="lbl">Sort</span>
     <div class="seg" id="sortSeg"></div>
@@ -178,6 +210,7 @@ footer b{color:var(--ink2);font-weight:600}
   </div>
 
   <section class="cleared" id="cleared"></section>
+  <section class="caveat" id="caveat"></section>
   <footer id="foot"></footer>
 </div>
 
@@ -323,7 +356,7 @@ function renderUndo(){
   var u=document.getElementById('undoBtn');
   if(u) u.onclick=function(){ lastDone.item.done=false; selected=lastDone.item.id; lastDone=null; renderAll(); };
 }
-function renderAll(){ renderPiles(); renderList(); renderDetail(); renderUndo(); }
+function renderAll(){ renderPiles(); renderBriefs(); renderList(); renderDetail(); renderUndo(); }
 
 function copyNote(btn){
   var l=ITEMS.filter(function(x){return x.id===selected})[0]; if(!l) return;
@@ -376,6 +409,46 @@ document.addEventListener('keydown',function(e){
   else if(e.key==='c'||e.key==='C'){ var b=document.getElementById('copyBtn'); if(b) copyNote(b); }
   else if(e.key==='h'||e.key==='H'){ markDone(); }
 });
+
+var BRIEFS = meetingBriefs(MESSAGES, EVENTS, ITEMS, { exec: EXEC, today: TODAY });
+function whenLabel(b){
+  var t=b.start.slice(11);
+  return (b.inDays===0?'Today':b.inDays===1?'Tomorrow':dayName(b.day))+' '+t;
+}
+function renderBriefs(){
+  document.getElementById('briefs').innerHTML=BRIEFS.map(function(b){
+    var open=b.items.filter(function(i){return !i.done});
+    var ready=b.agenda&&!open.length;
+    var gaps=[];
+    if(!b.agenda) gaps.push('no agenda attached');
+    if(open.length) gaps.push(open.length===1?'1 open item with them':open.length+' open items with them');
+    return '<div class="brief'+(ready?' ok':(!b.agenda||open.length?' warn':''))+'">'+
+      '<span class="w">'+esc(whenLabel(b))+'</span>'+
+      '<span class="ti">'+esc(b.title)+'</span>'+
+      '<span class="wi">'+esc(nm(b.attendees[0]))+
+        (b.attendees.length>1?' +'+(b.attendees.length-1):'')+
+        (b.lastContact?' · last spoke '+D(b.lastContact):'')+'</span>'+
+      (ready?'<span class="st ready">Agenda sent, nothing outstanding.</span>'
+           :'<span class="st">'+esc(gaps.join(' · '))+'</span>')+
+      open.slice(0,1).map(function(i){
+        return '<button class="go" data-go="'+i.id+'">“'+esc(i.what)+'”</button>';
+      }).join('')+
+      '</div>';
+  }).join('');
+}
+document.getElementById('briefs').addEventListener('click',function(e){
+  var b=e.target.closest('[data-go]'); if(!b) return;
+  filter='all'; selected=b.dataset.go;
+  renderAll();
+  var row=document.querySelector('.row[data-id="'+selected+'"]');
+  if(row) row.scrollIntoView({behavior:reduce?'auto':'smooth',block:'center'});
+});
+
+document.getElementById('caveat').innerHTML=
+  '<h2>What this does not do</h2><p>This handles the bookkeeping — what was promised, by whom, '+
+  'by when. It cannot tell you which of these actually matters today, who is having a bad week and '+
+  'should not be chased, or when the right move is to walk down the hall instead of sending the '+
+  'note. That is the job. This just means you are not holding the list in your head while you do it.</p>';
 
 document.getElementById('ctx').innerHTML=
   dayName(TODAY)+', '+D(TODAY)+' · assembled <b>6:45am</b> from 25 threads and 5 meetings';
