@@ -37,6 +37,16 @@ button{font:inherit;color:inherit}
   padding:11px 14px;font-size:13px;color:var(--ink2);line-height:1.55;margin-bottom:14px}
 .banner b{color:var(--ink);font-weight:600}
 
+.who{background:var(--surface);border:1px solid var(--line);border-radius:6px;
+  padding:11px 14px;margin-bottom:14px;display:grid;grid-template-columns:88px 1fr;
+  gap:3px 12px;align-items:baseline}
+.who dt{font-size:11.5px;color:var(--ink3);padding-top:1px}
+.who dd{margin:0;font-size:13px;line-height:1.5;color:var(--ink2)}
+.who dd b{color:var(--ink);font-weight:600}
+.who .role{color:var(--ink2)}
+@media (max-width:560px){.who{grid-template-columns:1fr;gap:1px}
+  .who dt{margin-top:6px}}
+
 .piles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
 .pile{appearance:none;text-align:left;background:var(--surface);border:1px solid var(--line);
   border-radius:6px;padding:10px 12px;cursor:pointer;transition:border-color .12s,background .12s}
@@ -129,6 +139,7 @@ button{font:inherit;color:inherit}
 .frow dt{width:74px;flex:none;color:var(--ink3)}
 .frow dd{margin:0;color:var(--ink2);min-width:0}
 .shift{display:block;margin-top:2px;font-size:11.5px;color:var(--soon);font-weight:500}
+.ctx2{display:block;margin-top:2px;font-size:11.5px;color:var(--ink3);line-height:1.4}
 .quote{margin-top:12px;padding:9px 11px;background:var(--canvas);border-radius:5px;
   font-size:12.5px;color:var(--ink2);line-height:1.55}
 .why{margin-top:10px;font-size:12.5px;color:var(--ink3);line-height:1.5}
@@ -189,6 +200,7 @@ footer b{color:var(--ink2);font-weight:600}
   </header>
 
   <div class="banner" id="banner"></div>
+  <div class="who" id="who"></div>
   <div class="piles" id="piles"></div>
 
   <section class="upnext">
@@ -243,6 +255,7 @@ function ago(n){return n===0?'today':n===1?'yesterday':n+' days ago';}
 function nm(e){var s=e.split('@')[0].replace(/[._]/g,' ');
   if(s.length<=3) return s.toUpperCase();
   return s.replace(/\b\w/g,function(c){return c.toUpperCase()});}
+function whoName(l){return (l.rel&&l.rel.as)||nm(l.who);}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]});}
 
@@ -318,7 +331,7 @@ function renderList(){
       '<span class="dot '+dotCls(l)+'"></span>'+
       '<span class="main"><span class="what">'+esc(l.what)+'</span>'+
         '<span class="sub">'+(l.rel?'<span class="tier t-'+l.rel.tier+'">'+esc(l.rel.label)+'</span> ':'')+
-        '<b>'+esc(nm(l.who))+'</b> · '+esc(l.subject)+' · '+ago(daysAgo(l.said))+'</span></span>'+
+        '<b>'+esc(whoName(l))+'</b> · '+esc(l.subject)+' · '+ago(daysAgo(l.said))+'</span></span>'+
       whenChip(l)+'</button>';
   }).join('');
 }
@@ -335,8 +348,9 @@ function renderDetail(){
     '<div class="dhead"><div class="dkind">'+esc(LABEL[l.type])+'</div>'+
       '<div class="dwhat">'+esc(l.what)+'</div></div>'+
     '<div class="dbody"><dl>'+
-        '<div class="frow"><dt>Who</dt><dd>'+esc(nm(l.who))+
-          (l.rel?' <span class="tier t-'+l.rel.tier+'">'+esc(l.rel.label)+'</span>':'')+'</dd></div>'+
+        '<div class="frow"><dt>Who</dt><dd>'+esc(whoName(l))+
+          (l.rel?' <span class="tier t-'+l.rel.tier+'">'+esc(l.rel.label)+'</span>':'')+
+          (l.rel&&l.rel.context?'<span class="ctx2">'+esc(l.rel.context)+'</span>':'')+'</dd></div>'+
         '<div class="frow"><dt>Thread</dt><dd>'+esc(l.subject)+'</dd></div>'+
         '<div class="frow"><dt>Said</dt><dd>'+D(l.said)+' · '+ago(daysAgo(l.said))+'</dd></div>'+
         '<div class="frow"><dt>Due</dt><dd>'+dueTxt+'</dd></div>'+
@@ -455,6 +469,12 @@ document.getElementById('caveat').innerHTML=
   'should not be chased, or when the right move is to walk down the hall instead of sending the '+
   'note. That is the job. This just means you are not holding the list in your head while you do it.</p>';
 
+document.getElementById('who').innerHTML=
+  '<dt>Supporting</dt><dd><b>'+esc(PRINCIPAL.name)+'</b> · <span class="role">'+esc(PRINCIPAL.role)+
+    ', '+esc(PRINCIPAL.company)+'</span><br>'+esc(PRINCIPAL.business)+' · '+esc(PRINCIPAL.scale)+
+    ' · she owns '+esc(PRINCIPAL.owns)+'</dd>'+
+  '<dt>This week</dt><dd>'+esc(PRINCIPAL.week)+'</dd>';
+
 document.getElementById('ctx').innerHTML=
   'For '+dayName(TODAY)+', '+D(TODAY)+' · built <b>the evening before</b>, from 25 threads and 5 meetings';
 document.getElementById('banner').innerHTML=
@@ -481,7 +501,8 @@ document.getElementById('foot').innerHTML=
 /* This is the presentation. Each step is an argument, not a caption. */
 var TOUR=[
  {t:'Built before the day starts',
-  p:'This runs in the evening, not the morning. An assistant does not triage the day once it has already begun — they leave knowing tomorrow is set up. Every thread and every meeting, read and reconciled into what is still owed.'},
+  p:'You support the Chief Revenue Officer of a supply-chain software company — her customers are shippers and manufacturers, and her week ends with a board packet. This runs in the evening, not the morning: an assistant does not triage a day that has already begun, they leave knowing tomorrow is set up.',
+  el:function(){return document.getElementById('who')}},
  {t:'Runway, not just deadlines',
   p:'The QBR is tomorrow at ten and no agenda is attached, so the agenda has to go out today — an agenda that lands on the morning of is too late to prep against. The client also asked for one six days ago and never got a reply. Three separate signals. One problem.',
   el:function(){return document.querySelector('.upnext')}},

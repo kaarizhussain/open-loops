@@ -100,7 +100,9 @@ function relationship(addr, contacts) {
   var a = addr.toLowerCase();
   var hit = contacts[a] || contacts[domain(a)];
   if (!hit) return null;
-  return { tier: hit.tier, label: hit.label, weight: TIER_WEIGHT[hit.tier] || 0 };
+  // `as` overrides the derived display name for role addresses like program@ or hr@.
+  return { tier: hit.tier, label: hit.label, context: hit.context || null,
+           as: hit.as || null, weight: TIER_WEIGHT[hit.tier] || 0 };
 }
 
 function sentences(body) {

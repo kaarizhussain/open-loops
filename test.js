@@ -94,7 +94,10 @@ var deckRel = find('board deck', 'owed_by_us');
 assert.strictEqual(deckRel.rel.tier, 'exec', 'exact-address match must beat the domain rule');
 assert.strictEqual(find('Solstice', 'owed_to_us').rel.tier, 'partner');
 assert.strictEqual(find('offsite', 'owed_by_us').rel.tier, 'internal', 'domain fallback for colleagues');
-assert.strictEqual(find('RevOps Summit', 'unanswered_ask').rel, null, 'unknown contacts carry no weight');
+var summitRel = find('RevOps Summit', 'unanswered_ask').rel;
+assert.strictEqual(summitRel.tier, 'other');
+assert.strictEqual(summitRel.weight, 0, 'an "other" contact is labelled but must not gain rank from it');
+assert.ok(summitRel.context, 'context travels with the relationship');
 
 /* weighting must actually move the ranking, not just decorate it */
 var plain = detectLoops(F.MESSAGES, F.EVENTS, { exec: F.EXEC, today: F.TODAY });

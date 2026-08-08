@@ -107,24 +107,43 @@ var EVENTS = [
     attendees: [EXEC, 's.abioye@northwindlogistics.com'], agenda: true }
 ];
 
+/* The executive being supported. An assistant's list only makes sense against the
+ * shape of the week it belongs to. */
+var PRINCIPAL = {
+  name: 'Dana Whitfield',
+  role: 'Chief Revenue Officer',
+  company: 'Northstar Systems',
+  business: 'supply-chain visibility software sold to mid-market shippers and manufacturers',
+  scale: 'Series B, ~300 people',
+  owns: 'new business, renewals and partnerships · ~45 in her org · reports to the CEO',
+  week: 'Board packet due Friday · two customer QBRs · a renewal decision · FY27 comp plan in sign-off'
+};
+
 /* Who matters, and how much. An assistant curates this — it is the judgment that
  * separates a promise to the board from one to a conference organiser. Keyed by
- * address for individuals, domain for whole accounts. */
+ * address for individuals, domain for whole accounts. `context` is the thing an
+ * assistant carries in their head about each name. */
 var RELATIONSHIPS = {
-  'marcus.bell@northstar.io':   { tier: 'exec',        label: 'CFO' },
-  'greg.tan@bridgepointvc.com': { tier: 'investor',    label: 'Investor' },
-  'meridianhealth.com':         { tier: 'key_account', label: 'Key account' },
-  'larkspurretail.com':         { tier: 'key_account', label: 'Key account' },
-  'vectorfreight.com':          { tier: 'customer',    label: 'Customer' },
-  'cedarline.com':              { tier: 'customer',    label: 'Customer' },
-  'northwindlogistics.com':     { tier: 'customer',    label: 'Customer' },
-  'cobaltmining.com':           { tier: 'customer',    label: 'Customer' },
-  'ironwoodmfg.com':            { tier: 'prospect',    label: 'Prospect' },
-  'arbordiagnostics.com':       { tier: 'prospect',    label: 'Prospect' },
-  'solsticemedia.com':          { tier: 'partner',     label: 'Partner' },
-  'northstar.io':               { tier: 'internal',    label: 'Internal' }
+  'marcus.bell@northstar.io':   { tier: 'exec',        label: 'CFO',         context: 'Owns the board packet' },
+  'rachel.kim@northstar.io':    { tier: 'internal',    label: 'Sales ops',   context: 'Runs planning and the offsite' },
+  'dani.okafor@northstar.io':   { tier: 'internal',    label: 'Enterprise AE', context: 'Carries Juniper and Vector Freight' },
+  'hr@northstar.io':            { tier: 'internal',    label: 'People team', context: 'FY27 compensation cycle' },
+  'greg.tan@bridgepointvc.com': { tier: 'investor',    label: 'Investor',    context: 'Bridgepoint — led the Series B' },
+  'meridianhealth.com':         { tier: 'key_account', label: 'Key account', context: 'Meridian Health — MSA in legal review' },
+  'larkspurretail.com':         { tier: 'key_account', label: 'Key account', context: 'Larkspur Retail — multi-year renewal on the table' },
+  'vectorfreight.com':          { tier: 'customer',    label: 'Customer',    context: 'Vector Freight — Q3 QBR, their COO attending' },
+  'cedarline.com':              { tier: 'customer',    label: 'Customer',    context: 'Cedarline — renewal, expanding to 240 seats' },
+  'northwindlogistics.com':     { tier: 'customer',    label: 'Customer',    context: 'Northwind — expansion clearing security review' },
+  'cobaltmining.com':           { tier: 'customer',    label: 'Customer',    context: 'Cobalt Mining — exec sponsor relationship' },
+  'ironwoodmfg.com':            { tier: 'prospect',    label: 'Prospect',    context: 'Ironwood Manufacturing — pilot being scoped' },
+  'arbordiagnostics.com':       { tier: 'prospect',    label: 'Prospect',    context: 'Arbor Diagnostics — in procurement' },
+  'solsticemedia.com':          { tier: 'partner',     label: 'Partner',     context: 'Solstice — co-marketing agreement' },
+  'revopssummit.com':           { tier: 'other',       label: 'Conference',  as: 'RevOps Summit',
+                                  context: 'She is giving the closing keynote' },
+  'northstar.io':               { tier: 'internal',    label: 'Internal',    context: 'Northstar colleague' }
 };
 
 if (typeof module !== 'undefined') module.exports = {
-  EXEC: EXEC, TODAY: TODAY, MESSAGES: MESSAGES, EVENTS: EVENTS, RELATIONSHIPS: RELATIONSHIPS
+  EXEC: EXEC, TODAY: TODAY, MESSAGES: MESSAGES, EVENTS: EVENTS,
+  RELATIONSHIPS: RELATIONSHIPS, PRINCIPAL: PRINCIPAL
 };
