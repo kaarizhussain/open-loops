@@ -472,21 +472,29 @@ document.getElementById('foot').innerHTML=
   'request’s deadline. <b>Demonstration data.</b> The same detector runs unchanged against a live '+
   'Gmail and Calendar account.';
 
+/* This is the presentation. Each step is an argument, not a caption. */
 var TOUR=[
  {t:'Thursday, 6:45am',
-  p:'This ran before anyone was awake — every thread in the executive’s inbox and every meeting on her calendar, read and reconciled into what is still owed.'},
+  p:'This ran before anyone was awake. Every thread in the executive’s inbox and every meeting on her calendar, read and reconciled into what is still owed. Nobody typed any of it in.'},
+ {t:'Tomorrow’s problem, today',
+  p:'The QBR is tomorrow at ten. No agenda is attached — and the client asked for one six days ago, a request still sitting unanswered. Three separate signals, in three different places. One problem.',
+  el:function(){return document.querySelector('.upnext')}},
  {t:'Three piles, not one list',
-  p:'The useful question is not what is late, it is who moves next. Nine of these you can close without her. Four are chases. Only two genuinely need the executive, and protecting that short list is the job. Click a card to filter.',
+  p:'The useful question is not what is late, it is who moves next. Nine of these close without her. Four are chases. Two genuinely need the executive — and guarding that short list is the job.',
   el:function(){return document.getElementById('piles')}},
  {t:'Every row shows its receipts',
-  p:'A row is what someone committed to, in their own words, tagged with who they are to the business — a key account outranks a conference organiser.',
+  p:'What someone committed to, in their own words, tagged with who they are to the business. A key account outranks a conference organiser — and a person decided that. The tool does not guess who matters.',
   el:function(){return document.querySelector('#list .row')},
   before:function(){ if(!selected&&visible().length){selected=visible()[0].id; renderList(); renderDetail();} }},
  {t:'The evidence, and the reply',
-  p:'The panel gives you the sentence that triggered it, why it was flagged, and a drafted reply to paste. Mark it handled and it leaves the list — with an undo, because assistants misclick like everyone else.',
+  p:'The sentence that triggered it, the reason it was flagged, and a drafted reply ready to paste. A list you cannot check is a list you stop trusting by the third day.',
   el:function(){return document.getElementById('detail')}},
- {t:'Have a go',
-  p:'Move with ↑ and ↓, filter by pile, sort by risk or by date, mark things handled. Nothing here was tagged, typed, or remembered by a person.'}
+ {t:'It closes its own loops',
+  p:'Three promises cleared this week without anyone touching them — a reply came back carrying the attachment. Anything needing manual upkeep is just a second to-do list.',
+  el:function(){return document.querySelector('.cleared')}},
+ {t:'And what it does not do',
+  p:'It cannot tell you what matters today, who should not be chased this week, or when the right move is to walk down the hall instead of sending the note. That is the job. This only means you are not holding the list in your head while you do it.',
+  el:function(){return document.querySelector('.caveat')}}
 ];
 var scrim=document.getElementById('scrim'), tcard=document.getElementById('tcard'), spot=null;
 var reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
