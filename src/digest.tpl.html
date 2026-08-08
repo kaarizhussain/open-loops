@@ -33,6 +33,10 @@ button{font:inherit;color:inherit}
 .ghost:hover{border-color:var(--ink3);color:var(--ink)}
 .ghost:focus-visible{outline:2px solid var(--accent2);outline-offset:1px}
 
+.clock{font-family:'PlexMono',monospace;font-size:12.5px;font-variant-numeric:tabular-nums;background:var(--surface);border:1px solid var(--line2);border-radius:5px;padding:4px 9px;color:var(--ink2)}
+.changed{background:var(--done-bg);border:1px solid #bfdfcd;border-radius:6px;padding:9px 13px;margin-bottom:14px;font-size:12.5px;color:var(--ink2);line-height:1.5}
+.changed b{color:var(--done);font-weight:600}
+.isnew{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.03em;padding:0 5px;border-radius:3px;background:var(--done-bg);color:var(--done);margin-right:5px}
 .banner{background:var(--surface);border:1px solid var(--line);border-radius:6px;
   padding:11px 14px;font-size:13px;color:var(--ink2);line-height:1.55;margin-bottom:14px}
 .banner b{color:var(--ink);font-weight:600}
@@ -196,11 +200,14 @@ footer b{color:var(--ink2);font-weight:600}
     <div class="mark"><i></i>Open Loops</div>
     <div class="ctx" id="ctx"></div>
     <div class="sp"></div>
+    <span class="clock" id="clock"></span>
+    <button class="ghost" id="advBtn"></button>
     <button class="ghost" id="tourBtn">Show me around</button>
   </header>
 
   <div class="banner" id="banner"></div>
   <div class="who" id="who"></div>
+  <div id="changed"></div>
   <div class="piles" id="piles"></div>
 
   <section class="upnext">
@@ -243,8 +250,26 @@ footer b{color:var(--ink2);font-weight:600}
 __LOOPS_JS__
 __FIXTURE_JS__
 
-var R = detectLoops(MESSAGES, EVENTS, { exec: EXEC, today: TODAY, contacts: RELATIONSHIPS });
-var ITEMS = R.open.map(function(l,i){ l.id='L'+i; l.done=false; return l; });
+var OPTS={ exec: EXEC, today: TODAY, contacts: RELATIONSHIPS };
+var clock=0, doneKeys={}, seenKeys=null, lastChange=null;
+var R, ITEMS=[], BRIEFS=[];
+function msgsNow(){ var m=MESSAGES.slice();
+  for(var i=0;i<clock;i++) m=m.concat(INTRADAY[i].messages); return m; }
+function recompute(){
+  R=detectLoops(msgsNow(), EVENTS, OPTS);
+  var keys={}; var added=[];
+  ITEMS=R.open.map(function(l,i){
+    var k=loopKey(l); keys[k]=1; l.key=k; l.id='L'+i;
+    l.done=!!doneKeys[k];
+    l.isNew=!!(seenKeys && !seenKeys[k]);
+    if(l.isNew) added.push(l);
+    return l; });
+  var gone=seenKeys?Object.keys(seenKeys).filter(function(k){return !keys[k]}).length:0;
+  seenKeys=keys;
+  BRIEFS=meetingBriefs(msgsNow(), EVENTS, ITEMS, OPTS);
+  return {added:added.length, gone:gone};
+}
+recompute();
 
 var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 var DAYN=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -329,7 +354,7 @@ function renderList(){
   el.innerHTML=v.map(function(l){
     return '<button class="row" role="option" data-id="'+l.id+'" aria-selected="'+(selected===l.id)+'">'+
       '<span class="dot '+dotCls(l)+'"></span>'+
-      '<span class="main"><span class="what">'+esc(l.what)+'</span>'+
+      '<span class="main"><span class="what">'+(l.isNew?'<span class="isnew">NEW</span>':'')+esc(l.what)+'</span>'+
         '<span class="sub">'+(l.rel?'<span class="tier t-'+l.rel.tier+'">'+esc(l.rel.label)+'</span> ':'')+
         '<b>'+esc(whoName(l))+'</b> · '+esc(l.subject)+' · '+ago(daysAgo(l.said))+'</span></span>'+
       whenChip(l)+'</button>';
@@ -371,9 +396,39 @@ function renderUndo(){
   var box=document.getElementById('undo');
   box.innerHTML= lastDone ? 'Handled: '+esc(lastDone.short)+'<button id="undoBtn">Undo</button>' : '';
   var u=document.getElementById('undoBtn');
-  if(u) u.onclick=function(){ lastDone.item.done=false; selected=lastDone.item.id; lastDone=null; renderAll(); };
+  if(u) u.onclick=function(){ delete doneKeys[lastDone.item.key]; lastDone.item.done=false; selected=lastDone.item.id; lastDone=null; renderAll(); };
 }
-function renderAll(){ renderPiles(); renderBriefs(); renderList(); renderDetail(); renderUndo(); }
+function renderAll(){ renderPiles(); renderBriefs(); renderList(); renderDetail(); renderUndo(); renderClock(); renderChanged(); renderCleared(); }
+/* ---- the day moving ---- */
+function renderClock(){
+  var at = clock===0 ? '6:45am' : INTRADAY[clock-1].at;
+  document.getElementById('clock').textContent = at;
+  var b=document.getElementById('advBtn');
+  if(clock>=INTRADAY.length){ b.textContent='End of day'; b.disabled=true; b.style.opacity=.55; }
+  else { b.textContent='Advance to '+INTRADAY[clock].at; b.disabled=false; b.style.opacity=1; }
+}
+function renderChanged(){
+  var el=document.getElementById('changed');
+  if(!lastChange){ el.className=''; el.innerHTML=''; return; }
+  var bits=[];
+  if(lastChange.added) bits.push(lastChange.added+(lastChange.added===1?' new item':' new items'));
+  if(lastChange.gone) bits.push(lastChange.gone===1?'1 resolved itself':lastChange.gone+' resolved themselves');
+  el.className='changed';
+  el.innerHTML='<b>'+esc(lastChange.at)+'</b> — '+esc(lastChange.note)+'. '+
+    (bits.length?bits.join(', ')+'. ':'')+
+    'The plan did not reshuffle underneath you.';
+}
+document.getElementById('advBtn').onclick=function(){
+  if(clock>=INTRADAY.length) return;
+  var cp=INTRADAY[clock]; clock++;
+  var delta=recompute();
+  lastChange={at:cp.at, note:cp.note, added:delta.added, gone:delta.gone};
+  var still=ITEMS.filter(function(x){return x.id===selected&&!x.done})[0];
+  var v=visible();
+  if(!still) selected=v.length?v[0].id:null;
+  renderAll();
+};
+
 
 function copyNote(btn){
   var l=ITEMS.filter(function(x){return x.id===selected})[0]; if(!l) return;
@@ -387,7 +442,7 @@ function markDone(){
   v.forEach(function(x,n){ if(x.id===selected) i=n; });
   if(i<0) return;
   var l=v[i];
-  l.done=true;
+  l.done=true; doneKeys[l.key]=1;
   lastDone={item:l, short:l.what.length>32?l.what.slice(0,31)+'…':l.what};
   var next=visible();
   selected = next.length ? (next[Math.min(i,next.length-1)]).id : null;
@@ -427,7 +482,6 @@ document.addEventListener('keydown',function(e){
   else if(e.key==='h'||e.key==='H'){ markDone(); }
 });
 
-var BRIEFS = meetingBriefs(MESSAGES, EVENTS, ITEMS, { exec: EXEC, today: TODAY });
 function whenLabel(b){
   var t=b.start.slice(11);
   return (b.inDays===0?'Today':b.inDays===1?'Tomorrow':dayName(b.day))+' '+t;
@@ -482,7 +536,7 @@ document.getElementById('banner').innerHTML=
   'you leave for the night, so tomorrow starts already set up rather than triaged at 9am. Everything '+
   'below was pulled out of her email and calendar automatically — nothing was tagged by hand. '+
   'Click a row, or move through the list with <kbd>↑</kbd> <kbd>↓</kbd>.';
-document.getElementById('cleared').innerHTML=
+function renderCleared(){ document.getElementById('cleared').innerHTML=
   '<h2>Closed itself this week — '+R.closed.length+'</h2>'+
   '<p>A later reply arrived carrying the attachment, so these were marked delivered without '+
   'anyone ticking them off.</p>'+
@@ -490,7 +544,7 @@ document.getElementById('cleared').innerHTML=
     return '<div class="cl"><span class="tick">✓</span><span>'+esc(l.what)+
       '<br><span style="color:var(--ink3)">'+esc(nm(l.who))+' · '+esc(l.subject)+'</span></span>'+
       '<span class="d mono">'+D(l.closedOn)+'</span></div>';
-  }).join('');
+  }).join(''); }
 document.getElementById('foot').innerHTML=
   'Commitments are extracted from message text — commitment phrasing, deadline language, and whether '+
   'a matching delivery followed. Deadlines resolve against the date each message was sent, so '+
@@ -516,6 +570,9 @@ var TOUR=[
  {t:'The evidence, and the reply',
   p:'The sentence that triggered it, the reason it was flagged, and a drafted reply ready to paste. A list you cannot check is a list you stop trusting by the third day.',
   el:function(){return document.getElementById('detail')}},
+ {t:'And it keeps running',
+  p:'The evening plan is the baseline, not the whole story — mail arrives all day. Advance the clock and watch: Meridian sends the redlines and an overdue chase closes itself, the CEO asks for something and that commitment is tracked from the moment it is made. What it will not do is re-rank the list under your hands while you are working in it.',
+  el:function(){return document.getElementById('advBtn')}},
  {t:'It closes its own loops',
   p:'Three promises cleared this week without anyone touching them — a reply came back carrying the attachment. Anything needing manual upkeep is just a second to-do list.',
   el:function(){return document.querySelector('.cleared')}},

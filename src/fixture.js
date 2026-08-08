@@ -107,6 +107,41 @@ var EVENTS = [
     attendees: [EXEC, 's.abioye@northwindlogistics.com'], agenda: true }
 ];
 
+/* What lands during Thursday itself. The evening plan is the baseline; these arrive
+ * while the assistant is working, and the list has to absorb them without
+ * reshuffling itself under their hands. */
+var INTRADAY = [
+  { at: '9:40am', note: 'Meridian finally sent the redlines',
+    messages: [
+      { id: 'i1', threadId: 't1', subject: 'Meridian MSA — redlines',
+        from: 'paul.oyelaran@meridianhealth.com', to: [EXEC],
+        date: '2026-08-06T09:40', attach: true,
+        body: "Redlines attached — apologies for the delay, our counsel had a backlog. Two comments on the liability cap, otherwise we are comfortable." }
+    ] },
+  { at: '11:20am', note: 'The CEO asked for something, and Dana said yes',
+    messages: [
+      { id: 'i2', threadId: 't5', subject: 'Vector Freight QBR — Friday',
+        from: 'lena.borg@vectorfreight.com', to: [EXEC],
+        date: '2026-08-06T11:20', attach: false,
+        body: "One more thing — our CFO is now joining tomorrow. Could you share the Q3 usage numbers ahead of the call so he has them in front of him?" },
+      { id: 'i3', threadId: 't16', subject: 'Board dinner — at-risk renewals',
+        from: 'nadia.okonjo@northstar.io', to: [EXEC],
+        date: '2026-08-06T11:02', attach: false,
+        body: "For the board dinner: can you pull together the ten renewals most at risk this quarter, with the story on each? I want to walk the room through it." },
+      { id: 'i4', threadId: 't16', subject: 'Board dinner — at-risk renewals',
+        from: EXEC, to: ['nadia.okonjo@northstar.io'],
+        date: '2026-08-06T11:20', attach: false,
+        body: "Yes — I'll have that to you by Monday." }
+    ] },
+  { at: '2:15pm', note: 'The revenue section went out',
+    messages: [
+      { id: 'i5', threadId: 't2', subject: 'Q3 board deck — revenue section',
+        from: EXEC, to: ['marcus.bell@northstar.io'],
+        date: '2026-08-06T14:15', attach: true,
+        body: "Revenue section attached — pipeline numbers are current as of this morning." }
+    ] }
+];
+
 /* The executive being supported. An assistant's list only makes sense against the
  * shape of the week it belongs to. */
 var PRINCIPAL = {
@@ -124,6 +159,7 @@ var PRINCIPAL = {
  * address for individuals, domain for whole accounts. `context` is the thing an
  * assistant carries in their head about each name. */
 var RELATIONSHIPS = {
+  'nadia.okonjo@northstar.io': { tier: 'exec', label: 'CEO', context: 'Dana reports to her' },
   'marcus.bell@northstar.io':   { tier: 'exec',        label: 'CFO',         context: 'Owns the board packet' },
   'rachel.kim@northstar.io':    { tier: 'internal',    label: 'Sales ops',   context: 'Runs planning and the offsite' },
   'dani.okafor@northstar.io':   { tier: 'internal',    label: 'Enterprise AE', context: 'Carries Juniper and Vector Freight' },
@@ -144,6 +180,6 @@ var RELATIONSHIPS = {
 };
 
 if (typeof module !== 'undefined') module.exports = {
-  EXEC: EXEC, TODAY: TODAY, MESSAGES: MESSAGES, EVENTS: EVENTS,
+  EXEC: EXEC, TODAY: TODAY, MESSAGES: MESSAGES, EVENTS: EVENTS, INTRADAY: INTRADAY,
   RELATIONSHIPS: RELATIONSHIPS, PRINCIPAL: PRINCIPAL
 };

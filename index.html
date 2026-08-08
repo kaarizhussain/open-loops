@@ -46,6 +46,10 @@ button{font:inherit;color:inherit}
 .ghost:hover{border-color:var(--ink3);color:var(--ink)}
 .ghost:focus-visible{outline:2px solid var(--accent2);outline-offset:1px}
 
+.clock{font-family:'PlexMono',monospace;font-size:12.5px;font-variant-numeric:tabular-nums;background:var(--surface);border:1px solid var(--line2);border-radius:5px;padding:4px 9px;color:var(--ink2)}
+.changed{background:var(--done-bg);border:1px solid #bfdfcd;border-radius:6px;padding:9px 13px;margin-bottom:14px;font-size:12.5px;color:var(--ink2);line-height:1.5}
+.changed b{color:var(--done);font-weight:600}
+.isnew{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.03em;padding:0 5px;border-radius:3px;background:var(--done-bg);color:var(--done);margin-right:5px}
 .banner{background:var(--surface);border:1px solid var(--line);border-radius:6px;
   padding:11px 14px;font-size:13px;color:var(--ink2);line-height:1.55;margin-bottom:14px}
 .banner b{color:var(--ink);font-weight:600}
@@ -211,11 +215,14 @@ footer b{color:var(--ink2);font-weight:600}
     <div class="mark"><i></i>Open Loops</div>
     <div class="ctx" id="ctx"></div>
     <div class="sp"></div>
+    <span class="clock" id="clock"></span>
+    <button class="ghost" id="advBtn"></button>
     <button class="ghost" id="tourBtn">Show me around</button>
   </header>
 
   <div class="banner" id="banner"></div>
   <div class="who" id="who"></div>
+  <div id="changed"></div>
   <div class="piles" id="piles"></div>
 
   <section class="upnext">
@@ -430,19 +437,43 @@ function detectLoops(messages, events, opts) {
       });
     });
 
-    /* --- silence in either direction --- */
-    var age = daysBetween(day(last.date), today);
-    var hasAsk = ASK.test(last.body) || /\?/.test(last.body);
-    if (hasAsk && age >= 2) {
-      var askS = sentences(last.body).filter(function (s) { return ASK.test(s) || /\?$/.test(s); })[0] || last.body;
-      out.push({
-        type: last.out ? 'awaiting_reply' : 'unanswered_ask', threadId: tid, subject: last.subject,
-        who: last.out ? (counterparty || last.to[0]) : last.from, byUs: !last.out,
-        what: shorten(askS, 110), said: day(last.date), age: age,
-        // A date in an outbound question is usually a proposed slot, not a deadline — only date inbound asks.
-        due: last.out ? null : parseDue(askS, last.date),
-        excerpt: last.body, msgId: last.id
-      });
+    /* --- silence in either direction ---
+     * Anchored on the last message we sent, not the last message in the thread. A
+     * client who follows up must not erase their own earlier unanswered request —
+     * the clock still runs from when they first asked. */
+    var lastOut = -1, lastIn = -1;
+    msgs.forEach(function (m, i) { if (m.out) lastOut = i; else lastIn = i; });
+    var askIn = function (m) {
+      return sentences(m.body).filter(function (s) { return ASK.test(s) || /\?$/.test(s); })[0];
+    };
+
+    if (lastIn > lastOut) {
+      // They are waiting on us. Age from the oldest thing still unanswered.
+      var pending = msgs.slice(lastOut + 1).filter(function (m) { return !m.out && askIn(m); });
+      if (pending.length) {
+        var first = pending[0], fAge = daysBetween(day(first.date), today);
+        if (fAge >= 2) {
+          var fs = askIn(first);
+          out.push({
+            type: 'unanswered_ask', threadId: tid, subject: first.subject,
+            who: first.from, byUs: true, pendingCount: pending.length,
+            what: shorten(fs, 110), said: day(first.date), age: fAge,
+            due: parseDue(fs, first.date), excerpt: first.body, msgId: first.id
+          });
+        }
+      }
+    } else if (lastOut > -1 && askIn(msgs[lastOut])) {
+      // We are waiting on them.
+      var ours = msgs[lastOut], oAge = daysBetween(day(ours.date), today);
+      if (oAge >= 2) {
+        out.push({
+          type: 'awaiting_reply', threadId: tid, subject: ours.subject,
+          who: counterparty || ours.to[0], byUs: false,
+          what: shorten(askIn(ours), 110), said: day(ours.date), age: oAge,
+          // A date in an outbound question is a proposed slot, not a deadline.
+          due: null, excerpt: ours.body, msgId: ours.id
+        });
+      }
     }
   });
 
@@ -535,6 +566,14 @@ function meetingBriefs(messages, events, open, opts) {
       ready: e.agenda && !items.length
     };
   }).filter(Boolean).sort(function (a, b) { return a.start < b.start ? -1 : 1; });
+}
+
+/* A stable identity for a detected item, so that re-running against a longer message
+ * set keeps what the assistant already did to it — and so anything genuinely new can
+ * be told apart from everything that was already on the list. */
+function loopKey(l) {
+  if (l.eventId) return l.type + '|' + l.eventId;
+  return [l.type, l.threadId, l.said, l.what].join('|');
 }
 
 var OWNER = {
@@ -663,6 +702,41 @@ var EVENTS = [
     attendees: [EXEC, 's.abioye@northwindlogistics.com'], agenda: true }
 ];
 
+/* What lands during Thursday itself. The evening plan is the baseline; these arrive
+ * while the assistant is working, and the list has to absorb them without
+ * reshuffling itself under their hands. */
+var INTRADAY = [
+  { at: '9:40am', note: 'Meridian finally sent the redlines',
+    messages: [
+      { id: 'i1', threadId: 't1', subject: 'Meridian MSA — redlines',
+        from: 'paul.oyelaran@meridianhealth.com', to: [EXEC],
+        date: '2026-08-06T09:40', attach: true,
+        body: "Redlines attached — apologies for the delay, our counsel had a backlog. Two comments on the liability cap, otherwise we are comfortable." }
+    ] },
+  { at: '11:20am', note: 'The CEO asked for something, and Dana said yes',
+    messages: [
+      { id: 'i2', threadId: 't5', subject: 'Vector Freight QBR — Friday',
+        from: 'lena.borg@vectorfreight.com', to: [EXEC],
+        date: '2026-08-06T11:20', attach: false,
+        body: "One more thing — our CFO is now joining tomorrow. Could you share the Q3 usage numbers ahead of the call so he has them in front of him?" },
+      { id: 'i3', threadId: 't16', subject: 'Board dinner — at-risk renewals',
+        from: 'nadia.okonjo@northstar.io', to: [EXEC],
+        date: '2026-08-06T11:02', attach: false,
+        body: "For the board dinner: can you pull together the ten renewals most at risk this quarter, with the story on each? I want to walk the room through it." },
+      { id: 'i4', threadId: 't16', subject: 'Board dinner — at-risk renewals',
+        from: EXEC, to: ['nadia.okonjo@northstar.io'],
+        date: '2026-08-06T11:20', attach: false,
+        body: "Yes — I'll have that to you by Monday." }
+    ] },
+  { at: '2:15pm', note: 'The revenue section went out',
+    messages: [
+      { id: 'i5', threadId: 't2', subject: 'Q3 board deck — revenue section',
+        from: EXEC, to: ['marcus.bell@northstar.io'],
+        date: '2026-08-06T14:15', attach: true,
+        body: "Revenue section attached — pipeline numbers are current as of this morning." }
+    ] }
+];
+
 /* The executive being supported. An assistant's list only makes sense against the
  * shape of the week it belongs to. */
 var PRINCIPAL = {
@@ -680,6 +754,7 @@ var PRINCIPAL = {
  * address for individuals, domain for whole accounts. `context` is the thing an
  * assistant carries in their head about each name. */
 var RELATIONSHIPS = {
+  'nadia.okonjo@northstar.io': { tier: 'exec', label: 'CEO', context: 'Dana reports to her' },
   'marcus.bell@northstar.io':   { tier: 'exec',        label: 'CFO',         context: 'Owns the board packet' },
   'rachel.kim@northstar.io':    { tier: 'internal',    label: 'Sales ops',   context: 'Runs planning and the offsite' },
   'dani.okafor@northstar.io':   { tier: 'internal',    label: 'Enterprise AE', context: 'Carries Juniper and Vector Freight' },
@@ -701,8 +776,26 @@ var RELATIONSHIPS = {
 
 
 
-var R = detectLoops(MESSAGES, EVENTS, { exec: EXEC, today: TODAY, contacts: RELATIONSHIPS });
-var ITEMS = R.open.map(function(l,i){ l.id='L'+i; l.done=false; return l; });
+var OPTS={ exec: EXEC, today: TODAY, contacts: RELATIONSHIPS };
+var clock=0, doneKeys={}, seenKeys=null, lastChange=null;
+var R, ITEMS=[], BRIEFS=[];
+function msgsNow(){ var m=MESSAGES.slice();
+  for(var i=0;i<clock;i++) m=m.concat(INTRADAY[i].messages); return m; }
+function recompute(){
+  R=detectLoops(msgsNow(), EVENTS, OPTS);
+  var keys={}; var added=[];
+  ITEMS=R.open.map(function(l,i){
+    var k=loopKey(l); keys[k]=1; l.key=k; l.id='L'+i;
+    l.done=!!doneKeys[k];
+    l.isNew=!!(seenKeys && !seenKeys[k]);
+    if(l.isNew) added.push(l);
+    return l; });
+  var gone=seenKeys?Object.keys(seenKeys).filter(function(k){return !keys[k]}).length:0;
+  seenKeys=keys;
+  BRIEFS=meetingBriefs(msgsNow(), EVENTS, ITEMS, OPTS);
+  return {added:added.length, gone:gone};
+}
+recompute();
 
 var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 var DAYN=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -787,7 +880,7 @@ function renderList(){
   el.innerHTML=v.map(function(l){
     return '<button class="row" role="option" data-id="'+l.id+'" aria-selected="'+(selected===l.id)+'">'+
       '<span class="dot '+dotCls(l)+'"></span>'+
-      '<span class="main"><span class="what">'+esc(l.what)+'</span>'+
+      '<span class="main"><span class="what">'+(l.isNew?'<span class="isnew">NEW</span>':'')+esc(l.what)+'</span>'+
         '<span class="sub">'+(l.rel?'<span class="tier t-'+l.rel.tier+'">'+esc(l.rel.label)+'</span> ':'')+
         '<b>'+esc(whoName(l))+'</b> · '+esc(l.subject)+' · '+ago(daysAgo(l.said))+'</span></span>'+
       whenChip(l)+'</button>';
@@ -829,9 +922,39 @@ function renderUndo(){
   var box=document.getElementById('undo');
   box.innerHTML= lastDone ? 'Handled: '+esc(lastDone.short)+'<button id="undoBtn">Undo</button>' : '';
   var u=document.getElementById('undoBtn');
-  if(u) u.onclick=function(){ lastDone.item.done=false; selected=lastDone.item.id; lastDone=null; renderAll(); };
+  if(u) u.onclick=function(){ delete doneKeys[lastDone.item.key]; lastDone.item.done=false; selected=lastDone.item.id; lastDone=null; renderAll(); };
 }
-function renderAll(){ renderPiles(); renderBriefs(); renderList(); renderDetail(); renderUndo(); }
+function renderAll(){ renderPiles(); renderBriefs(); renderList(); renderDetail(); renderUndo(); renderClock(); renderChanged(); renderCleared(); }
+/* ---- the day moving ---- */
+function renderClock(){
+  var at = clock===0 ? '6:45am' : INTRADAY[clock-1].at;
+  document.getElementById('clock').textContent = at;
+  var b=document.getElementById('advBtn');
+  if(clock>=INTRADAY.length){ b.textContent='End of day'; b.disabled=true; b.style.opacity=.55; }
+  else { b.textContent='Advance to '+INTRADAY[clock].at; b.disabled=false; b.style.opacity=1; }
+}
+function renderChanged(){
+  var el=document.getElementById('changed');
+  if(!lastChange){ el.className=''; el.innerHTML=''; return; }
+  var bits=[];
+  if(lastChange.added) bits.push(lastChange.added+(lastChange.added===1?' new item':' new items'));
+  if(lastChange.gone) bits.push(lastChange.gone===1?'1 resolved itself':lastChange.gone+' resolved themselves');
+  el.className='changed';
+  el.innerHTML='<b>'+esc(lastChange.at)+'</b> — '+esc(lastChange.note)+'. '+
+    (bits.length?bits.join(', ')+'. ':'')+
+    'The plan did not reshuffle underneath you.';
+}
+document.getElementById('advBtn').onclick=function(){
+  if(clock>=INTRADAY.length) return;
+  var cp=INTRADAY[clock]; clock++;
+  var delta=recompute();
+  lastChange={at:cp.at, note:cp.note, added:delta.added, gone:delta.gone};
+  var still=ITEMS.filter(function(x){return x.id===selected&&!x.done})[0];
+  var v=visible();
+  if(!still) selected=v.length?v[0].id:null;
+  renderAll();
+};
+
 
 function copyNote(btn){
   var l=ITEMS.filter(function(x){return x.id===selected})[0]; if(!l) return;
@@ -845,7 +968,7 @@ function markDone(){
   v.forEach(function(x,n){ if(x.id===selected) i=n; });
   if(i<0) return;
   var l=v[i];
-  l.done=true;
+  l.done=true; doneKeys[l.key]=1;
   lastDone={item:l, short:l.what.length>32?l.what.slice(0,31)+'…':l.what};
   var next=visible();
   selected = next.length ? (next[Math.min(i,next.length-1)]).id : null;
@@ -885,7 +1008,6 @@ document.addEventListener('keydown',function(e){
   else if(e.key==='h'||e.key==='H'){ markDone(); }
 });
 
-var BRIEFS = meetingBriefs(MESSAGES, EVENTS, ITEMS, { exec: EXEC, today: TODAY });
 function whenLabel(b){
   var t=b.start.slice(11);
   return (b.inDays===0?'Today':b.inDays===1?'Tomorrow':dayName(b.day))+' '+t;
@@ -940,7 +1062,7 @@ document.getElementById('banner').innerHTML=
   'you leave for the night, so tomorrow starts already set up rather than triaged at 9am. Everything '+
   'below was pulled out of her email and calendar automatically — nothing was tagged by hand. '+
   'Click a row, or move through the list with <kbd>↑</kbd> <kbd>↓</kbd>.';
-document.getElementById('cleared').innerHTML=
+function renderCleared(){ document.getElementById('cleared').innerHTML=
   '<h2>Closed itself this week — '+R.closed.length+'</h2>'+
   '<p>A later reply arrived carrying the attachment, so these were marked delivered without '+
   'anyone ticking them off.</p>'+
@@ -948,7 +1070,7 @@ document.getElementById('cleared').innerHTML=
     return '<div class="cl"><span class="tick">✓</span><span>'+esc(l.what)+
       '<br><span style="color:var(--ink3)">'+esc(nm(l.who))+' · '+esc(l.subject)+'</span></span>'+
       '<span class="d mono">'+D(l.closedOn)+'</span></div>';
-  }).join('');
+  }).join(''); }
 document.getElementById('foot').innerHTML=
   'Commitments are extracted from message text — commitment phrasing, deadline language, and whether '+
   'a matching delivery followed. Deadlines resolve against the date each message was sent, so '+
@@ -974,6 +1096,9 @@ var TOUR=[
  {t:'The evidence, and the reply',
   p:'The sentence that triggered it, the reason it was flagged, and a drafted reply ready to paste. A list you cannot check is a list you stop trusting by the third day.',
   el:function(){return document.getElementById('detail')}},
+ {t:'And it keeps running',
+  p:'The evening plan is the baseline, not the whole story — mail arrives all day. Advance the clock and watch: Meridian sends the redlines and an overdue chase closes itself, the CEO asks for something and that commitment is tracked from the moment it is made. What it will not do is re-rank the list under your hands while you are working in it.',
+  el:function(){return document.getElementById('advBtn')}},
  {t:'It closes its own loops',
   p:'Three promises cleared this week without anyone touching them — a reply came back carrying the attachment. Anything needing manual upkeep is just a second to-do list.',
   el:function(){return document.querySelector('.cleared')}},

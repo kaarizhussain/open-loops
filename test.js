@@ -143,6 +143,49 @@ assert.ok(lark && lark.inDays === 0 && lark.agenda === false && lark.ready === f
 assert.strictEqual(lark.prepLate, true, 'prep window for a meeting today has already passed');
 assert.strictEqual(nw.prepDue, false, 'a prepared meeting five days out needs nothing today');
 
+/* ---- the day moves: arrivals land, resolved things drop ---- */
+var { loopKey } = require('./src/loops.js');
+var opts = { exec: F.EXEC, today: F.TODAY, contacts: F.RELATIONSHIPS };
+var msgs = F.MESSAGES.slice(), prevKeys = new Set(r.open.map(loopKey));
+var timeline = F.INTRADAY.map(function (cp) {
+  msgs = msgs.concat(cp.messages);
+  var res = detectLoops(msgs, F.EVENTS, opts);
+  var keys = new Set(res.open.map(loopKey));
+  var added = res.open.filter(function (l) { return !prevKeys.has(loopKey(l)); });
+  var gone = [].concat.apply([], [Array.from(prevKeys).filter(function (k) { return !keys.has(k); })]);
+  prevKeys = keys;
+  return { at: cp.at, res: res, added: added, gone: gone };
+});
+
+/* a delivery resolves the overdue chase and the nudge chasing it */
+assert.strictEqual(timeline[0].added.length, 0, 'a delivery should add nothing');
+assert.strictEqual(timeline[0].gone.length, 2, 'the promise and the chase both close');
+assert.ok(timeline[0].res.closed.length > r.closed.length, 'it moves into the cleared list');
+assert.ok(!timeline[0].res.open.some(function (l) { return l.subject.indexOf('Meridian') > -1; }),
+  'nothing Meridian should remain open');
+
+/* a commitment made midday is tracked from the moment it is made */
+assert.strictEqual(timeline[1].added.length, 1, 'exactly one new commitment');
+var fresh = timeline[1].added[0];
+assert.strictEqual(fresh.type, 'owed_by_us');
+assert.strictEqual(fresh.owner, 'exec', 'only she can pull the renewal stories together');
+assert.strictEqual(fresh.due, '2026-08-10', '"by Monday" resolves to the actual Monday');
+assert.strictEqual(fresh.rel.tier, 'exec');
+
+/* a follow-up must not erase the earlier unanswered request */
+var qbrAsk = timeline[2].res.open.filter(function (l) {
+  return l.type === 'unanswered_ask' && l.subject.indexOf('Vector Freight') > -1;
+})[0];
+assert.ok(qbrAsk, 'the original agenda request survives a follow-up on the same thread');
+assert.strictEqual(qbrAsk.said, '2026-07-31', 'and is still aged from when they first asked');
+assert.strictEqual(qbrAsk.pendingCount, 2, 'both unanswered asks are counted');
+
+/* identity is stable across recomputation, so nothing false-flags as new */
+var again = detectLoops(F.MESSAGES, F.EVENTS, opts);
+assert.deepStrictEqual(again.open.map(loopKey).sort(), r.open.map(loopKey).sort(),
+  'the same input must produce the same keys');
+assert.strictEqual(new Set(r.open.map(loopKey)).size, r.open.length, 'keys are unique');
+
 /* ranking: overdue and due-today outrank idle chatter */
 assert.ok(r.open[0].risk >= r.open[r.open.length - 1].risk);
 assert.ok(['overdue', 'due_today'].indexOf(r.open[0].status) > -1, 'top item should be overdue or due today');

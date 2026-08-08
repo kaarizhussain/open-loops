@@ -173,19 +173,43 @@ function detectLoops(messages, events, opts) {
       });
     });
 
-    /* --- silence in either direction --- */
-    var age = daysBetween(day(last.date), today);
-    var hasAsk = ASK.test(last.body) || /\?/.test(last.body);
-    if (hasAsk && age >= 2) {
-      var askS = sentences(last.body).filter(function (s) { return ASK.test(s) || /\?$/.test(s); })[0] || last.body;
-      out.push({
-        type: last.out ? 'awaiting_reply' : 'unanswered_ask', threadId: tid, subject: last.subject,
-        who: last.out ? (counterparty || last.to[0]) : last.from, byUs: !last.out,
-        what: shorten(askS, 110), said: day(last.date), age: age,
-        // A date in an outbound question is usually a proposed slot, not a deadline — only date inbound asks.
-        due: last.out ? null : parseDue(askS, last.date),
-        excerpt: last.body, msgId: last.id
-      });
+    /* --- silence in either direction ---
+     * Anchored on the last message we sent, not the last message in the thread. A
+     * client who follows up must not erase their own earlier unanswered request —
+     * the clock still runs from when they first asked. */
+    var lastOut = -1, lastIn = -1;
+    msgs.forEach(function (m, i) { if (m.out) lastOut = i; else lastIn = i; });
+    var askIn = function (m) {
+      return sentences(m.body).filter(function (s) { return ASK.test(s) || /\?$/.test(s); })[0];
+    };
+
+    if (lastIn > lastOut) {
+      // They are waiting on us. Age from the oldest thing still unanswered.
+      var pending = msgs.slice(lastOut + 1).filter(function (m) { return !m.out && askIn(m); });
+      if (pending.length) {
+        var first = pending[0], fAge = daysBetween(day(first.date), today);
+        if (fAge >= 2) {
+          var fs = askIn(first);
+          out.push({
+            type: 'unanswered_ask', threadId: tid, subject: first.subject,
+            who: first.from, byUs: true, pendingCount: pending.length,
+            what: shorten(fs, 110), said: day(first.date), age: fAge,
+            due: parseDue(fs, first.date), excerpt: first.body, msgId: first.id
+          });
+        }
+      }
+    } else if (lastOut > -1 && askIn(msgs[lastOut])) {
+      // We are waiting on them.
+      var ours = msgs[lastOut], oAge = daysBetween(day(ours.date), today);
+      if (oAge >= 2) {
+        out.push({
+          type: 'awaiting_reply', threadId: tid, subject: ours.subject,
+          who: counterparty || ours.to[0], byUs: false,
+          what: shorten(askIn(ours), 110), said: day(ours.date), age: oAge,
+          // A date in an outbound question is a proposed slot, not a deadline.
+          due: null, excerpt: ours.body, msgId: ours.id
+        });
+      }
     }
   });
 
@@ -280,6 +304,14 @@ function meetingBriefs(messages, events, open, opts) {
   }).filter(Boolean).sort(function (a, b) { return a.start < b.start ? -1 : 1; });
 }
 
+/* A stable identity for a detected item, so that re-running against a longer message
+ * set keeps what the assistant already did to it — and so anything genuinely new can
+ * be told apart from everything that was already on the list. */
+function loopKey(l) {
+  if (l.eventId) return l.type + '|' + l.eventId;
+  return [l.type, l.threadId, l.said, l.what].join('|');
+}
+
 var OWNER = {
   them: { title: 'Chase them', note: 'Someone else owes this. Your move is the nudge.' },
   you:  { title: 'Yours to handle', note: 'Logistics you can close out without the executive.' },
@@ -297,6 +329,6 @@ var LABEL = {
 };
 
 if (typeof module !== 'undefined') module.exports = {
-  detectLoops: detectLoops, meetingBriefs: meetingBriefs, parseDue: parseDue,
-  LABEL: LABEL, OWNER: OWNER, TIER_WEIGHT: TIER_WEIGHT
+  detectLoops: detectLoops, meetingBriefs: meetingBriefs, loopKey: loopKey,
+  parseDue: parseDue, LABEL: LABEL, OWNER: OWNER, TIER_WEIGHT: TIER_WEIGHT
 };
