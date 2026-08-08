@@ -141,6 +141,7 @@ button{font:inherit;color:inherit}
 .frow{display:flex;gap:10px;font-size:12.5px;padding:3px 0}
 .frow dt{width:74px;flex:none;color:var(--ink3)}
 .frow dd{margin:0;color:var(--ink2);min-width:0}
+.shift{display:block;margin-top:2px;font-size:11.5px;color:var(--soon);font-weight:500}
 .quote{margin-top:12px;padding:9px 11px;background:var(--canvas);border-radius:5px;
   font-size:12.5px;color:var(--ink2);line-height:1.55}
 .why{margin-top:10px;font-size:12.5px;color:var(--ink3);line-height:1.5}
@@ -259,6 +260,16 @@ function iso(d) { return d.toISOString().slice(0, 10); }
 function daysBetween(a, b) { return Math.round((toUTC(b) - toUTC(a)) / 86400000); }
 function addDays(s, n) { var d = toUTC(s); d.setUTCDate(d.getUTCDate() + n); return iso(d); }
 function domain(addr) { return (addr.split('@')[1] || '').toLowerCase(); }
+
+/* A deadline landing on a weekend is really a Friday deadline — nobody is reading it
+ * Saturday, so the last working chance is the Friday before. */
+function workingDue(s) {
+  var d = toUTC(s), dow = d.getUTCDay();
+  if (dow === 6) d.setUTCDate(d.getUTCDate() - 1);
+  else if (dow === 0) d.setUTCDate(d.getUTCDate() - 2);
+  else return s;
+  return iso(d);
+}
 
 /* Next occurrence of a weekday strictly after `from` (same-day "by Friday" means next Friday). */
 function nextDow(from, target) {
@@ -444,7 +455,10 @@ function detectLoops(messages, events, opts) {
   /* --- status + risk --- */
   out.forEach(function (l) {
     if (l.type === 'closed') { l.status = 'closed'; l.risk = 0; return; }
-    var over = l.due ? daysBetween(l.due, today) : null;
+    // Everything downstream reasons about the last working chance, not the stated date.
+    l.workDue = l.due ? workingDue(l.due) : null;
+    l.weekendShift = !!(l.due && l.workDue !== l.due);
+    var over = l.workDue ? daysBetween(l.workDue, today) : null;
     l.overdueDays = over > 0 ? over : 0;
     l.ageDays = l.age != null ? l.age : daysBetween(l.said, today);
     if (over > 0) l.status = 'overdue';
@@ -494,11 +508,16 @@ function meetingBriefs(messages, events, open, opts) {
         if (!last || m.date > last) last = m.date;
       }
     });
+    // An agenda that arrives on the morning of is too late to prep against.
+    var prepBy = addDays(day(e.start), -1);
     return {
       id: e.id, title: e.title, start: e.start, day: day(e.start),
       inDays: daysBetween(today, day(e.start)),
       attendees: ext, agenda: e.agenda, items: items,
       lastContact: last ? day(last) : null,
+      prepBy: prepBy,
+      prepDue: !e.agenda && prepBy <= today,      // runway closes today or has already gone
+      prepLate: !e.agenda && prepBy < today,
       ready: e.agenda && !items.length
     };
   }).filter(Boolean).sort(function (a, b) { return a.start < b.start ? -1 : 1; });
@@ -528,7 +547,7 @@ var TODAY = '2026-08-06';
 var MESSAGES = [
   { id: 'm1', threadId: 't1', subject: 'Meridian MSA — redlines', from: 'paul.oyelaran@meridianhealth.com',
     to: [EXEC], date: '2026-07-28T14:12', attach: false,
-    body: "Thanks for sending the MSA over. Our counsel is reviewing now. We will have their comments back to you by Friday Aug 1 at the latest." },
+    body: "Thanks for sending the MSA over. Our counsel is reviewing now. We will have their comments back to you by Friday Jul 31 at the latest." },
   { id: 'm2', threadId: 't1', subject: 'Meridian MSA — redlines', from: EXEC,
     to: ['paul.oyelaran@meridianhealth.com'], date: '2026-08-03T09:05', attach: false,
     body: "Hi Paul — checking in on the redlines. Anything I can unblock on our side? Happy to get our legal team on a call if that speeds things up." },
@@ -748,6 +767,8 @@ function renderDetail(){
     ' why it was flagged, and a drafted reply.</div>'; return; }
   var dueTxt=l.due?D(l.due)+' · '+(l.status==='overdue'?l.overdueDays+' days late':
     l.status==='due_today'?'today':dayName(l.due)):'none stated';
+  if(l.weekendShift) dueTxt+=' <span class="shift">lands on a weekend — last working chance '+
+    dayName(l.workDue)+' '+D(l.workDue)+'</span>';
   el.innerHTML=
     '<div class="dhead"><div class="dkind">'+esc(LABEL[l.type])+'</div>'+
       '<div class="dwhat">'+esc(l.what)+'</div></div>'+
@@ -840,7 +861,9 @@ function renderBriefs(){
     var open=b.items.filter(function(i){return !i.done});
     var ready=b.agenda&&!open.length;
     var gaps=[];
-    if(!b.agenda) gaps.push('no agenda attached');
+    if(b.prepLate) gaps.push('agenda already overdue');
+    else if(b.prepDue) gaps.push('agenda has to go out today');
+    else if(!b.agenda) gaps.push('no agenda yet — send by '+dayName(b.prepBy));
     if(open.length) gaps.push(open.length===1?'1 open item with them':open.length+' open items with them');
     return '<div class="brief'+(ready?' ok':(!b.agenda||open.length?' warn':''))+'">'+
       '<span class="w">'+esc(whenLabel(b))+'</span>'+
@@ -871,11 +894,12 @@ document.getElementById('caveat').innerHTML=
   'note. That is the job. This just means you are not holding the list in your head while you do it.</p>';
 
 document.getElementById('ctx').innerHTML=
-  dayName(TODAY)+', '+D(TODAY)+' · assembled <b>6:45am</b> from 25 threads and 5 meetings';
+  'For '+dayName(TODAY)+', '+D(TODAY)+' · built <b>the evening before</b>, from 25 threads and 5 meetings';
 document.getElementById('banner').innerHTML=
-  '<b>A working demo.</b> You are the assistant to a Chief Revenue Officer. Everything below was '+
-  'pulled out of her email and calendar automatically — nothing was tagged by hand. Click a row, '+
-  'or move through the list with <kbd>↑</kbd> <kbd>↓</kbd>.';
+  '<b>A working demo.</b> You are the assistant to a Chief Revenue Officer. This is assembled before '+
+  'you leave for the night, so tomorrow starts already set up rather than triaged at 9am. Everything '+
+  'below was pulled out of her email and calendar automatically — nothing was tagged by hand. '+
+  'Click a row, or move through the list with <kbd>↑</kbd> <kbd>↓</kbd>.';
 document.getElementById('cleared').innerHTML=
   '<h2>Closed itself this week — '+R.closed.length+'</h2>'+
   '<p>A later reply arrived carrying the attachment, so these were marked delivered without '+
@@ -894,10 +918,10 @@ document.getElementById('foot').innerHTML=
 
 /* This is the presentation. Each step is an argument, not a caption. */
 var TOUR=[
- {t:'Thursday, 6:45am',
-  p:'This ran before anyone was awake. Every thread in the executive’s inbox and every meeting on her calendar, read and reconciled into what is still owed. Nobody typed any of it in.'},
- {t:'Tomorrow’s problem, today',
-  p:'The QBR is tomorrow at ten. No agenda is attached — and the client asked for one six days ago, a request still sitting unanswered. Three separate signals, in three different places. One problem.',
+ {t:'Built before the day starts',
+  p:'This runs in the evening, not the morning. An assistant does not triage the day once it has already begun — they leave knowing tomorrow is set up. Every thread and every meeting, read and reconciled into what is still owed.'},
+ {t:'Runway, not just deadlines',
+  p:'The QBR is tomorrow at ten and no agenda is attached, so the agenda has to go out today — an agenda that lands on the morning of is too late to prep against. The client also asked for one six days ago and never got a reply. Three separate signals. One problem.',
   el:function(){return document.querySelector('.upnext')}},
  {t:'Three piles, not one list',
   p:'The useful question is not what is late, it is who moves next. Nine of these close without her. Four are chases. Two genuinely need the executive — and guarding that short list is the job.',

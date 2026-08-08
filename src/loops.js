@@ -16,6 +16,16 @@ function daysBetween(a, b) { return Math.round((toUTC(b) - toUTC(a)) / 86400000)
 function addDays(s, n) { var d = toUTC(s); d.setUTCDate(d.getUTCDate() + n); return iso(d); }
 function domain(addr) { return (addr.split('@')[1] || '').toLowerCase(); }
 
+/* A deadline landing on a weekend is really a Friday deadline — nobody is reading it
+ * Saturday, so the last working chance is the Friday before. */
+function workingDue(s) {
+  var d = toUTC(s), dow = d.getUTCDay();
+  if (dow === 6) d.setUTCDate(d.getUTCDate() - 1);
+  else if (dow === 0) d.setUTCDate(d.getUTCDate() - 2);
+  else return s;
+  return iso(d);
+}
+
 /* Next occurrence of a weekday strictly after `from` (same-day "by Friday" means next Friday). */
 function nextDow(from, target) {
   var d = toUTC(from), cur = d.getUTCDay(), delta = (target - cur + 7) % 7;
@@ -200,7 +210,10 @@ function detectLoops(messages, events, opts) {
   /* --- status + risk --- */
   out.forEach(function (l) {
     if (l.type === 'closed') { l.status = 'closed'; l.risk = 0; return; }
-    var over = l.due ? daysBetween(l.due, today) : null;
+    // Everything downstream reasons about the last working chance, not the stated date.
+    l.workDue = l.due ? workingDue(l.due) : null;
+    l.weekendShift = !!(l.due && l.workDue !== l.due);
+    var over = l.workDue ? daysBetween(l.workDue, today) : null;
     l.overdueDays = over > 0 ? over : 0;
     l.ageDays = l.age != null ? l.age : daysBetween(l.said, today);
     if (over > 0) l.status = 'overdue';
@@ -250,11 +263,16 @@ function meetingBriefs(messages, events, open, opts) {
         if (!last || m.date > last) last = m.date;
       }
     });
+    // An agenda that arrives on the morning of is too late to prep against.
+    var prepBy = addDays(day(e.start), -1);
     return {
       id: e.id, title: e.title, start: e.start, day: day(e.start),
       inDays: daysBetween(today, day(e.start)),
       attendees: ext, agenda: e.agenda, items: items,
       lastContact: last ? day(last) : null,
+      prepBy: prepBy,
+      prepDue: !e.agenda && prepBy <= today,      // runway closes today or has already gone
+      prepLate: !e.agenda && prepBy < today,
       ready: e.agenda && !items.length
     };
   }).filter(Boolean).sort(function (a, b) { return a.start < b.start ? -1 : 1; });

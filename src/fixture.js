@@ -5,7 +5,7 @@ var TODAY = '2026-08-06';
 var MESSAGES = [
   { id: 'm1', threadId: 't1', subject: 'Meridian MSA — redlines', from: 'paul.oyelaran@meridianhealth.com',
     to: [EXEC], date: '2026-07-28T14:12', attach: false,
-    body: "Thanks for sending the MSA over. Our counsel is reviewing now. We will have their comments back to you by Friday Aug 1 at the latest." },
+    body: "Thanks for sending the MSA over. Our counsel is reviewing now. We will have their comments back to you by Friday Jul 31 at the latest." },
   { id: 'm2', threadId: 't1', subject: 'Meridian MSA — redlines', from: EXEC,
     to: ['paul.oyelaran@meridianhealth.com'], date: '2026-08-03T09:05', attach: false,
     body: "Hi Paul — checking in on the redlines. Anything I can unblock on our side? Happy to get our legal team on a call if that speeds things up." },

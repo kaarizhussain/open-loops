@@ -22,9 +22,22 @@ assert.ok(r.closed.length >= 3, 'expected delivered promises in cleared list, go
 /* the overdue inbound promise */
 var mer = find('Meridian', 'owed_to_us');
 assert.ok(mer, 'Meridian redlines promise not detected');
-assert.strictEqual(mer.due, '2026-08-01');
+assert.strictEqual(mer.due, '2026-07-31');
 assert.strictEqual(mer.status, 'overdue');
-assert.strictEqual(mer.overdueDays, 5);
+assert.strictEqual(mer.overdueDays, 6);
+
+/* ---- weekend deadlines are really Friday deadlines ---- */
+var comp2 = find('comp plan', 'owed_by_us');
+assert.strictEqual(comp2.due, '2026-08-08', 'the stated date is preserved');
+assert.strictEqual(comp2.workDue, '2026-08-07', 'Saturday resolves back to the Friday before');
+assert.strictEqual(comp2.weekendShift, true);
+assert.strictEqual(mer.weekendShift, false, 'a Friday deadline is not shifted');
+assert.strictEqual(mer.workDue, mer.due);
+assert.ok(r.open.every(function (l) {
+  if (!l.workDue) return true;
+  var d = new Date(l.workDue + 'T00:00:00Z').getUTCDay();
+  return d !== 0 && d !== 6;
+}), 'no working deadline may land on a weekend');
 
 /* the promise due today */
 var deck = find('board deck', 'owed_by_us');
@@ -110,6 +123,11 @@ assert.ok(!qbr.items.some(function (i) { return i.eventId === qbr.id; }),
   'the meeting\'s own no-agenda flag must not double up as an item');
 assert.strictEqual(qbr.ready, false);
 
+/* runway: an agenda for tomorrow has to leave today */
+assert.strictEqual(qbr.prepBy, '2026-08-06', 'prep for a Friday meeting is due Thursday');
+assert.strictEqual(qbr.prepDue, true, 'runway closes today');
+assert.strictEqual(qbr.prepLate, false, 'today is still in time');
+
 /* a meeting that genuinely needs nothing */
 var nw = brief('Northwind');
 assert.ok(nw && nw.ready === true, 'Northwind has an agenda and no open items — should read ready');
@@ -119,6 +137,8 @@ assert.ok(nw.lastContact, 'last contact date should resolve from the thread');
 /* today's call: no agenda, so not ready */
 var lark = brief('Larkspur');
 assert.ok(lark && lark.inDays === 0 && lark.agenda === false && lark.ready === false);
+assert.strictEqual(lark.prepLate, true, 'prep window for a meeting today has already passed');
+assert.strictEqual(nw.prepDue, false, 'a prepared meeting five days out needs nothing today');
 
 /* ranking: overdue and due-today outrank idle chatter */
 assert.ok(r.open[0].risk >= r.open[r.open.length - 1].risk);
