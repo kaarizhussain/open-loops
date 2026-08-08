@@ -105,6 +105,29 @@ function relationship(addr, contacts) {
            as: hit.as || null, weight: TIER_WEIGHT[hit.tier] || 0 };
 }
 
+/* Does a delivery actually refer to this promise? Without this check a single
+ * "pricing attached" quietly closes every other promise in the thread, and things
+ * leave the list without being done — the worst failure this tool can have.
+ * Matched on shared subject-matter words, prefixed to absorb simple plurals and
+ * tenses. A delivery with no topical words of its own ("Attached.") can't be
+ * discriminated, so it is allowed to close. */
+var TOPIC_STOP = /^(the|and|for|you|your|our|their|its|will|would|can|could|should|have|has|had|been|are|was|were|that|this|these|those|with|from|into|over|back|also|some|more|need|want|get|got|give|take|make|send|sent|sending|attach|attached|here|there|just|then|than|when|what|which|who|how|why|about|before|after|once|soon|today|tomorrow|week|day|days|monday|tuesday|wednesday|thursday|friday|saturday|sunday|eod|latest|ahead|team|thanks|thank|please|sure|okay|yes|all|set|done|out|off|via|per|any|one|two|let|know|good|talking|apologies|delay)$/;
+
+function topics(text) {
+  var out = {};
+  (String(text).toLowerCase().match(/[a-z0-9]{3,}/g) || []).forEach(function (w) {
+    if (!TOPIC_STOP.test(w)) out[w.slice(0, 4)] = 1;
+  });
+  return out;
+}
+function refersTo(promise, delivery) {
+  var d = topics(delivery), p = topics(promise);
+  // "I'll send it Thursday EOD" names nothing; neither does a bare "Attached."
+  // Either way there is nothing to discriminate on, so do not block the close.
+  if (!Object.keys(d).length || !Object.keys(p).length) return true;
+  return Object.keys(p).some(function (k) { return d[k]; });
+}
+
 function sentences(body) {
   return body.split(/(?<=[.!?])\s+|\n+/).map(function (s) { return s.trim(); }).filter(Boolean);
 }
@@ -145,7 +168,7 @@ function detectLoops(messages, events, opts) {
         var closer = null;
         later.forEach(function (n) {
           if (closer) return;
-          if (n.attach || DELIVER.test(n.body)) closer = n;
+          if ((n.attach || DELIVER.test(n.body)) && refersTo(s, n.body)) closer = n;
         });
         // "I'll review before the deadline" — the date lives in the message being answered.
         var due = parseDue(s, m.date);

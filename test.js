@@ -143,6 +143,37 @@ assert.ok(lark && lark.inDays === 0 && lark.agenda === false && lark.ready === f
 assert.strictEqual(lark.prepLate, true, 'prep window for a meeting today has already passed');
 assert.strictEqual(nw.prepDue, false, 'a prepared meeting five days out needs nothing today');
 
+/* ---- a delivery only closes the promise it refers to ---- */
+var msg = function (id, date, body, attach) {
+  return { id: id, threadId: 'z', subject: 'Thread', from: F.EXEC, to: ['x@acme.com'],
+           date: date, attach: !!attach, body: body };
+};
+var twoPromises = detectLoops([
+  msg('a', '2026-08-03T09:00', "I'll send the pricing sheet by Wednesday."),
+  msg('b', '2026-08-04T09:00', "I'll also get you the security questionnaire by Friday."),
+  msg('c', '2026-08-05T09:00', 'Pricing attached.', true)
+], [], { exec: F.EXEC, today: F.TODAY });
+assert.strictEqual(twoPromises.closed.length, 1, 'one delivery must not close both promises');
+assert.ok(twoPromises.closed[0].what.indexOf('pricing') > -1, 'it closes the one it names');
+assert.strictEqual(twoPromises.open.length, 1);
+assert.ok(twoPromises.open[0].what.indexOf('questionnaire') > -1,
+  'the undelivered promise must survive — silently dropping it is the worst failure here');
+
+/* a promise that names nothing must still be closable — "I'll send it Thursday EOD"
+   has no subject-matter words, so there is nothing to match and nothing to block on */
+var vague = detectLoops([
+  msg('a', '2026-08-03T09:00', "Yes — I'll send it Thursday EOD."),
+  msg('b', '2026-08-05T09:00', 'Revenue section attached — numbers are current.', true)
+], [], { exec: F.EXEC, today: F.TODAY });
+assert.strictEqual(vague.closed.length, 1, 'a contentless promise must not become uncloseable');
+
+/* a delivery with nothing to discriminate on still closes */
+var bare = detectLoops([
+  msg('a', '2026-08-03T09:00', "I'll send the pricing sheet by Wednesday."),
+  msg('c', '2026-08-05T09:00', 'Attached.', true)
+], [], { exec: F.EXEC, today: F.TODAY });
+assert.strictEqual(bare.closed.length, 1, 'a bare attachment should still close a lone promise');
+
 /* ---- the day moves: arrivals land, resolved things drop ---- */
 var { loopKey } = require('./src/loops.js');
 var opts = { exec: F.EXEC, today: F.TODAY, contacts: F.RELATIONSHIPS };

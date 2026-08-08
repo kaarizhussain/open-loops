@@ -215,8 +215,6 @@ footer b{color:var(--ink2);font-weight:600}
     <div class="mark"><i></i>Open Loops</div>
     <div class="ctx" id="ctx"></div>
     <div class="sp"></div>
-    <span class="clock" id="clock"></span>
-    <button class="ghost" id="advBtn"></button>
     <button class="ghost" id="tourBtn">Show me around</button>
   </header>
 
@@ -234,6 +232,8 @@ footer b{color:var(--ink2);font-weight:600}
   </section>
 
   <div class="bar">
+    <span class="clock" id="clock"></span>
+    <button class="ghost" id="advBtn"></button>
     <span class="lbl">Sort</span>
     <div class="seg" id="sortSeg"></div>
     <span class="undo" id="undo"></span>
@@ -369,6 +369,29 @@ function relationship(addr, contacts) {
            as: hit.as || null, weight: TIER_WEIGHT[hit.tier] || 0 };
 }
 
+/* Does a delivery actually refer to this promise? Without this check a single
+ * "pricing attached" quietly closes every other promise in the thread, and things
+ * leave the list without being done — the worst failure this tool can have.
+ * Matched on shared subject-matter words, prefixed to absorb simple plurals and
+ * tenses. A delivery with no topical words of its own ("Attached.") can't be
+ * discriminated, so it is allowed to close. */
+var TOPIC_STOP = /^(the|and|for|you|your|our|their|its|will|would|can|could|should|have|has|had|been|are|was|were|that|this|these|those|with|from|into|over|back|also|some|more|need|want|get|got|give|take|make|send|sent|sending|attach|attached|here|there|just|then|than|when|what|which|who|how|why|about|before|after|once|soon|today|tomorrow|week|day|days|monday|tuesday|wednesday|thursday|friday|saturday|sunday|eod|latest|ahead|team|thanks|thank|please|sure|okay|yes|all|set|done|out|off|via|per|any|one|two|let|know|good|talking|apologies|delay)$/;
+
+function topics(text) {
+  var out = {};
+  (String(text).toLowerCase().match(/[a-z0-9]{3,}/g) || []).forEach(function (w) {
+    if (!TOPIC_STOP.test(w)) out[w.slice(0, 4)] = 1;
+  });
+  return out;
+}
+function refersTo(promise, delivery) {
+  var d = topics(delivery), p = topics(promise);
+  // "I'll send it Thursday EOD" names nothing; neither does a bare "Attached."
+  // Either way there is nothing to discriminate on, so do not block the close.
+  if (!Object.keys(d).length || !Object.keys(p).length) return true;
+  return Object.keys(p).some(function (k) { return d[k]; });
+}
+
 function sentences(body) {
   return body.split(/(?<=[.!?])\s+|\n+/).map(function (s) { return s.trim(); }).filter(Boolean);
 }
@@ -409,7 +432,7 @@ function detectLoops(messages, events, opts) {
         var closer = null;
         later.forEach(function (n) {
           if (closer) return;
-          if (n.attach || DELIVER.test(n.body)) closer = n;
+          if ((n.attach || DELIVER.test(n.body)) && refersTo(s, n.body)) closer = n;
         });
         // "I'll review before the deadline" — the date lives in the message being answered.
         var due = parseDue(s, m.date);
@@ -1084,12 +1107,15 @@ var TOUR=[
  {t:'Built before the day starts',
   p:'You support the Chief Revenue Officer of a supply-chain software company — her customers are shippers and manufacturers, and her week ends with a board packet. The plan is built the evening before, rather than at nine the next morning: an assistant does not triage a day that has already begun, they leave knowing tomorrow is set up.',
   el:function(){return document.getElementById('who')}},
- {t:'Runway, not just deadlines',
-  p:'The QBR is tomorrow at ten and no agenda is attached, so the agenda has to go out today — an agenda that lands on the morning of is too late to prep against. The client also asked for one six days ago and never got a reply. Three separate signals. One problem.',
-  el:function(){return document.querySelector('.upnext')}},
  {t:'Three piles, not one list',
   p:'The useful question is not what is late, it is who moves next. Nine of these close without her. Four are chases. Two genuinely need the executive — and guarding that short list is the job.',
   el:function(){return document.getElementById('piles')}},
+ {t:'Runway, not just deadlines',
+  p:'The QBR is tomorrow at ten and no agenda is attached, so the agenda has to go out today — an agenda that lands on the morning of is too late to prep against. The client also asked for one six days ago and never got a reply. Three separate signals. One problem.',
+  el:function(){return document.querySelector('.upnext')}},
+ {t:'And it keeps running',
+  p:'The evening plan is the baseline, not the whole story — mail arrives all day. Advance the clock and watch: Meridian sends the redlines and an overdue chase closes itself, the CEO asks for something and that commitment is tracked from the moment it is made. What it will not do is re-rank the list under your hands while you are working in it.',
+  el:function(){return document.getElementById('advBtn')}},
  {t:'Every row shows its receipts',
   p:'What someone committed to, in their own words, tagged with who they are to the business. A key account outranks a conference organiser — and a person decided that. The tool does not guess who matters.',
   el:function(){return document.querySelector('#list .row')},
@@ -1097,9 +1123,6 @@ var TOUR=[
  {t:'The evidence, and the reply',
   p:'The sentence that triggered it, the reason it was flagged, and a drafted reply ready to paste. A list you cannot check is a list you stop trusting by the third day.',
   el:function(){return document.getElementById('detail')}},
- {t:'And it keeps running',
-  p:'The evening plan is the baseline, not the whole story — mail arrives all day. Advance the clock and watch: Meridian sends the redlines and an overdue chase closes itself, the CEO asks for something and that commitment is tracked from the moment it is made. What it will not do is re-rank the list under your hands while you are working in it.',
-  el:function(){return document.getElementById('advBtn')}},
  {t:'It closes its own loops',
   p:'Three promises cleared this week without anyone touching them — a reply came back carrying the attachment. Anything needing manual upkeep is just a second to-do list.',
   el:function(){return document.querySelector('.cleared')}},
