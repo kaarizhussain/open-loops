@@ -92,7 +92,14 @@ button{font:inherit;color:inherit}
 .built h2{margin:0 0 4px;font-size:13px;font-weight:600}
 .built p{margin:0 0 9px;font-size:13px;color:var(--ink2);line-height:1.6;max-width:76ch}
 .built h3{margin:11px 0 4px;font-size:12px;font-weight:600;color:var(--ink2)}
-.built ul{margin:0;padding-left:17px}
+.built ul,.built ol{margin:0;padding-left:17px}
+.built ol.steps{list-style:none;padding-left:0;counter-reset:bstep}
+.built ol.steps li{counter-increment:bstep;position:relative;padding:8px 0 8px 30px;
+  border-top:1px solid var(--line)}
+.built ol.steps li:first-child{border-top:0}
+.built ol.steps li:before{content:counter(bstep);position:absolute;left:0;top:8px;
+  width:20px;height:20px;border-radius:50%;background:var(--sel);color:var(--accent);
+  font-size:11px;font-weight:600;display:grid;place-items:center}
 .built li{font-size:12.5px;color:var(--ink2);line-height:1.55;margin:3px 0;max-width:72ch}
 .built li b{color:var(--ink);font-weight:600}
 .built .foot2{margin:11px 0 0;font-size:12px;color:var(--ink3)}
@@ -542,29 +549,38 @@ document.getElementById('who').innerHTML=
   '<dt>This week</dt><dd>'+esc(PRINCIPAL.week)+'</dd>';
 
 document.getElementById('built').innerHTML=
-  '<h2>How this was built</h2>'+
-  '<p>Two evenings, after a conversation about the role. AI tooling wrote a lot of the code. '+
-  'The work was deciding what counts as a promise — and most of that time went on things that '+
-  'look obvious only in hindsight.</p>'+
-  '<h3>Judgment calls</h3><ul>'+
-    '<li><b>“Let me know”</b> reads like a commitment and is the opposite of one — it is a request.</li>'+
-    '<li><b>A proposed meeting time is not a deadline.</b> “Does Thursday work?” is a suggestion.</li>'+
-    '<li><b>A deadline landing on Saturday is a Friday deadline.</b> Nobody is reading it at the weekend.</li>'+
-    '<li><b>An agenda that arrives on the morning of is too late</b> to prepare against, so the runway '+
-      'closes the day before.</li>'+
-    '<li><b>Who matters is curated, not inferred.</b> The tool does not guess that an investor '+
-      'outranks a conference organiser.</li>'+
-  '</ul>'+
-  '<h3>Two bugs worth admitting</h3><ul>'+
-    '<li>A client sending a <b>follow-up made their own earlier unanswered request disappear</b>, '+
-      'because silence was measured from the last message in the thread rather than the last one we sent.</li>'+
-    '<li>A single <b>“pricing attached” closed every other open promise</b> in that thread, including '+
-      'things that were never sent, because a delivery was not checked against what it delivered.</li>'+
-  '</ul>'+
-  '<p class="foot2">Both were items leaving the list without being done — the failure that matters '+
-  'most here, because nobody goes looking for what has silently gone. No dependencies and no '+
-  'framework: the detector is plain JavaScript over a normalised shape of messages and calendar '+
-  'events, with an assert-based test suite covering the cases that must <em>not</em> fire. '+
+  '<h2>How I built this</h2>'+
+  '<p>Two evenings, after a conversation about the role. AI tooling wrote much of the code — '+
+  'the work was knowing what to point it at, and knowing when what came back was wrong.</p>'+
+  '<ol class="steps">'+
+    '<li><b>It did not start with a tool.</b> It started with a question: which part of this job is '+
+      'still held together by memory? The answer was the waiting-on list — the thing an assistant '+
+      'carries in their head and nobody has a system for. My first attempt was a revenue-forecast '+
+      'dashboard, genuinely useful to somebody but not the work an assistant does, so I scrapped it '+
+      'and started again from there.</li>'+
+    '<li><b>Find out what already exists.</b> Before adding anything I looked at what assistants '+
+      'actually run. Superhuman surfaces mail you have not answered, Fellow captures what a bot heard '+
+      'in a meeting, Motion schedules what you have already written down. All three assume the '+
+      'commitment has been recorded somewhere first. That assumption is the gap.</li>'+
+    '<li><b>Test it against the real rhythm of the work.</b> Twice it did not match, and both times '+
+      'the tool changed rather than the explanation. It planned the day you were already standing in, '+
+      'when assistants leave with tomorrow set up — so it moved to the evening before. Then an evening '+
+      'plan is only a snapshot, and mail arrives all day — so the clock went in.</li>'+
+    '<li><b>Push on it until something breaks.</b> Asking plainly how an item closes itself turned up '+
+      'a bug where one “pricing attached” quietly closed promises it had nothing to do with. Asking why '+
+      'a request had vanished turned up another: a client sending a follow-up erased their own earlier '+
+      'unanswered ask. Both were things leaving the list without being done, which is the failure that '+
+      'matters here — nobody goes looking for what has silently gone.</li>'+
+    '<li><b>Knowing when to stop.</b> I stopped when the questions stopped changing the tool. '+
+      'Everything here came from asking whether it matched the job, and by the end those questions were '+
+      'producing corrections rather than features — the demo was getting harder to explain, not easier. '+
+      'The other test I use: can I write down what it cannot do without hedging? If I cannot, I do not '+
+      'understand it well enough to be finished with it.</li>'+
+  '</ol>'+
+  '<p class="foot2">No dependencies, no framework, and an assert-based test suite covering the cases '+
+  'that must <em>not</em> fire as carefully as the ones that must. Every decision above is in the '+
+  'commit history rather than in a summary of it. The rule I keep coming back to: if I cannot explain '+
+  'why it did something, I do not yet know whether it is right. '+
   '<a href="https://github.com/kaarizhussain/open-loops">Code and commit history</a>.</p>';
 
 document.getElementById('ctx').innerHTML=
