@@ -532,8 +532,9 @@ document.getElementById('who').innerHTML=
 document.getElementById('ctx').innerHTML=
   'For '+dayName(TODAY)+', '+D(TODAY)+' · built <b>the evening before</b>, from 25 threads and 5 meetings';
 document.getElementById('banner').innerHTML=
-  '<b>A working demo.</b> You are the assistant to a Chief Revenue Officer. This is assembled before '+
-  'you leave for the night, so tomorrow starts already set up rather than triaged at 9am. Everything '+
+  '<b>A working demo.</b> You are the assistant to a Chief Revenue Officer. The plan is assembled before '+
+  'you leave for the night, so tomorrow starts set up rather than triaged at 9am — then it keeps up as '+
+  'the day moves. Everything '+
   'below was pulled out of her email and calendar automatically — nothing was tagged by hand. '+
   'Click a row, or move through the list with <kbd>↑</kbd> <kbd>↓</kbd>.';
 function renderCleared(){ document.getElementById('cleared').innerHTML=
@@ -555,7 +556,7 @@ document.getElementById('foot').innerHTML=
 /* This is the presentation. Each step is an argument, not a caption. */
 var TOUR=[
  {t:'Built before the day starts',
-  p:'You support the Chief Revenue Officer of a supply-chain software company — her customers are shippers and manufacturers, and her week ends with a board packet. This runs in the evening, not the morning: an assistant does not triage a day that has already begun, they leave knowing tomorrow is set up.',
+  p:'You support the Chief Revenue Officer of a supply-chain software company — her customers are shippers and manufacturers, and her week ends with a board packet. The plan is built the evening before, rather than at nine the next morning: an assistant does not triage a day that has already begun, they leave knowing tomorrow is set up.',
   el:function(){return document.getElementById('who')}},
  {t:'Runway, not just deadlines',
   p:'The QBR is tomorrow at ten and no agenda is attached, so the agenda has to go out today — an agenda that lands on the morning of is too late to prep against. The client also asked for one six days ago and never got a reply. Three separate signals. One problem.',
