@@ -209,6 +209,7 @@ footer b{color:var(--ink2);font-weight:600}
   .panes{grid-template-columns:minmax(0,1fr)}
   .detail{position:static}
   .piles{grid-template-columns:repeat(2,1fr)}
+  .briefs{grid-template-columns:1fr}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
@@ -302,6 +303,9 @@ function nm(e){var s=e.split('@')[0].replace(/[._]/g,' ');
 function whoName(l){return (l.rel&&l.rel.as)||nm(l.who);}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]});}
+var WORDS=['no','one','two','three','four','five','six','seven','eight','nine','ten'];
+function w(n){return n<=10?WORDS[n]:String(n);}
+function cap(s){return s.charAt(0).toUpperCase()+s.slice(1);}
 
 var WHY={
   owed_by_us:'An outbound message committed to this, and nothing resembling a delivery has gone out since.',
@@ -316,9 +320,16 @@ function note(l){
   var who=nm(l.who).split(' ')[0];
   if(l.type==='unprepped_meeting')
     return 'Re: '+l.subject+'\n\nAgenda for '+dayName(l.due)+':\n1. \n2. \n3. \n\nSending ahead so everyone can prep.';
+  // An apology only fits something actually late — a commitment made this morning
+  // and due Monday gets a confirmation, not a mea culpa.
+  var late = l.status==='overdue' || l.status==='due_today';
   var body={
-    owed_by_us:'I still owe you this'+(l.due?' (I had said '+D(l.due)+')':'')+' — getting it over to you today. Apologies for the lag.',
-    owed_to_us:'just checking in on this'+(l.due?', as you had mentioned it would come through by '+D(l.due):'')+'. Anything holding it up on your side?',
+    owed_by_us: late
+      ? 'I still owe you this'+(l.due?' (I had said '+D(l.due)+')':'')+' — getting it over to you today. Apologies for the lag.'
+      : 'confirming this is in motion — you’ll have it'+(l.due?' by '+dayName(l.due)+' '+D(l.due):' shortly')+'.',
+    owed_to_us: late
+      ? 'just checking in on this'+(l.due?', as you had mentioned it would come through by '+D(l.due):'')+'. Anything holding it up on your side?'
+      : 'just confirming this is still on track'+(l.due?' for '+D(l.due):'')+'?',
     unanswered_ask:'apologies for the slow reply here. Coming back to you with an answer today.',
     awaiting_reply:'bumping this one — any thoughts when you get a moment?',
     agreed_unscheduled:'putting time on the calendar for the call we agreed to. Invite coming across shortly.',
@@ -613,7 +624,13 @@ var TOUR=[
   p:'You support the Chief Revenue Officer of a supply-chain software company — her customers are shippers and manufacturers, and her week ends with a board packet. The plan is built the evening before, rather than at nine the next morning: an assistant does not triage a day that has already begun, they leave knowing tomorrow is set up.',
   el:function(){return document.getElementById('who')}},
  {t:'Three piles, not one list',
-  p:'The useful question is not what is late, it is who moves next. Nine of these close without her. Four are chases. Two genuinely need the executive — and guarding that short list is the job.',
+  p:function(){
+    var n={them:0,you:0,exec:0};
+    live().forEach(function(l){n[l.owner]++});
+    return 'The useful question is not what is late, it is who moves next. '+
+      cap(w(n.you))+' of these close without her. '+cap(w(n.them))+(n.them===1?' is a chase. ':' are chases. ')+
+      cap(w(n.exec))+' genuinely '+(n.exec===1?'needs':'need')+' the executive — and guarding that short list is the job.';
+  },
   el:function(){return document.getElementById('piles')}},
  {t:'Runway, not just deadlines',
   p:'The QBR is tomorrow at ten and no agenda is attached, so the agenda has to go out today — an agenda that lands on the morning of is too late to prep against. The client also asked for one six days ago and never got a reply. Three separate signals. One problem.',
@@ -648,7 +665,7 @@ function tgo(i){
     el.scrollIntoView({behavior:reduce?'auto':'smooth',block:'center'}); }
   else window.scrollTo({top:0,behavior:reduce?'auto':'smooth'});
   document.getElementById('tcardH').textContent=s.t;
-  document.getElementById('tcardP').textContent=s.p;
+  document.getElementById('tcardP').textContent=(typeof s.p==='function')?s.p():s.p;
   document.getElementById('tcardS').textContent=(i+1)+' / '+TOUR.length;
   document.getElementById('tBack').style.visibility=i?'visible':'hidden';
   document.getElementById('tNext').textContent=(i===TOUR.length-1)?'Done':'Next';
