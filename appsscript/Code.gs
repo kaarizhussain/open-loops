@@ -6,10 +6,11 @@
  *
  * SETUP
  *  1. script.google.com → New project
- *  2. Add three files: loops.js (from ../src), adapters.js, and this one
+ *  2. Add four files: loops.js (from ../src), adapters.js, ledger.js, and this one
  *  3. Fill in CONFIG
  *  4. Run `preview` by hand — it logs the digest without emailing anyone
  *  5. Run `installTrigger` once it looks right
+ *  6. Run `precisionReport` after a fortnight to see how much of it was real
  *
  * Note this must live in the *executive's* account. Gmail delegation is a UI
  * feature, not an API one, so a script in the assistant's account cannot read a
@@ -78,13 +79,24 @@ function readEvents() {
   });
 }
 
-function build() {
+/* `persist` is false for preview, so reading the digest by hand never writes a
+ * run into the ledger — otherwise the first real send would report nothing as new. */
+function build(persist) {
   var messages = readMessages();
   var events = readEvents();
   var opts = { exec: CONFIG.exec.toLowerCase(), today: today(), contacts: CONFIG.contacts };
   var result = detectLoops(messages, events, opts);
+
+  /* Merge before the briefs are built, or an item the reader marked wrong is
+   * suppressed from the main list and then reappears under its meeting. */
+  var sh = ledgerSheet(), rows = readLedger(sh);
+  var ledger = mergeLedger(rows, result.open, opts.today);
+  result.open = ledger.shown;
+  if (persist) writeLedger(sh, rows);
+
   var briefs = meetingBriefs(messages, events, result.open, opts);
-  return { messages: messages, events: events, result: result, briefs: briefs };
+  return { messages: messages, events: events, result: result, briefs: briefs,
+           ledger: ledger, ledgerUrl: sh.getParent().getUrl() };
 }
 
 var OWNER_ORDER = ['exec', 'them', 'you'];
@@ -95,6 +107,13 @@ function render(b) {
 
   p('OPEN LOOPS — for ' + today());
   p('Read ' + b.messages.length + ' messages and ' + b.events.length + ' meetings.');
+  /* What changed since yesterday, on the first line — the rest of this is the same
+   * list it was, and a reader who already knows that will not scan it again. */
+  if (b.ledger) {
+    p(open.length + ' open · ' + b.ledger.fresh + ' new' +
+      (b.ledger.gone.length ? ' · ' + b.ledger.gone.length + ' cleared' : '') +
+      (b.ledger.suppressed ? ' · ' + b.ledger.suppressed + ' hidden as wrong' : ''));
+  }
   p('');
 
   var due = b.briefs.filter(function (x) { return x.prepDue; });
@@ -117,11 +136,24 @@ function render(b) {
         : l.status === 'overdue' ? l.overdueDays + 'd late'
         : l.status === 'due_today' ? 'today' : 'due ' + l.due;
       p('  [' + when + '] ' + l.what);
-      p('      ' + (l.rel ? l.rel.label + ' · ' : '') + l.who + ' · ' + l.subject);
+      // How long this has been sitting here is its own kind of overdue.
+      var tracked = l.isNew ? 'NEW' : l.trackedDays > 0 ? l.trackedDays + 'd on the list' : null;
+      p('      ' + (tracked ? tracked + ' · ' : '') +
+        (l.rel ? l.rel.label + ' · ' : '') + l.who + ' · ' + l.subject);
       if (l.weekendShift) p('      note: stated ' + l.due + ' is a weekend — last working day is ' + l.workDue);
     });
     p('');
   });
+
+  /* Dropped off the list since the last run. The only part of this email that is
+   * good news, which is reason enough to keep it in. */
+  if (b.ledger && b.ledger.gone.length) {
+    p('CLEARED SINCE THE LAST RUN (' + b.ledger.gone.length + ')');
+    b.ledger.gone.forEach(function (row) {
+      p('  ' + row[COL.what] + (row[COL.who] ? '  — ' + row[COL.who] : ''));
+    });
+    p('');
+  }
 
   if (r.closed.length) {
     p('CLOSED ITSELF (' + r.closed.length + ')');
@@ -130,23 +162,49 @@ function render(b) {
   }
 
   p('Drafts only — nothing here has been sent. Verify before acting on any of it.');
+  if (b.ledgerUrl) {
+    p('Something here not real? Put an x in its verdict column and it stops coming back:');
+    p(b.ledgerUrl);
+  }
   return L.join('\n');
 }
 
-/* Run this by hand first. Logs the digest, emails nobody. */
+/* Run this by hand first. Logs the digest, emails nobody, records nothing. */
 function preview() {
-  var text = render(build());
+  var text = render(build(false));
+  Logger.log(text);
+  return text;
+}
+
+/* How much of it was real. Run it after the fortnight, before anyone depends on this. */
+function precisionReport() {
+  var p = precision(readLedger(ledgerSheet()));
+  var L = ['OPEN LOOPS — precision', '',
+           'Tracked ' + p.total + ' items. ' + p.wrong + ' marked wrong.'];
+  if (p.total) {
+    var pct = Math.round((1 - p.wrong / p.total) * 100);
+    L.push(pct + '% held up' + (pct < 80 ? ' — under the bar. Fix it or stop.' : '.'));
+  }
+  L.push('', 'By signal:');
+  Object.keys(p.byType).sort().forEach(function (t) {
+    var b = p.byType[t];
+    L.push('  ' + (LABEL[t] || t) + ': ' + (b.total - b.wrong) + '/' + b.total);
+  });
+  L.push('', 'Unmarked rows count as correct, so this is the optimistic reading.');
+  var text = L.join('\n');
   Logger.log(text);
   return text;
 }
 
 function run() {
-  var b = build();
+  var b = build(true);
   var text = render(b);
   var late = b.result.open.filter(function (l) { return l.status === 'overdue'; }).length;
   MailApp.sendEmail({
     to: CONFIG.sendTo,
-    subject: 'Open loops — ' + today() + ' (' + b.result.open.length + ' open, ' + late + ' overdue)',
+    // The new count is in the subject because it is the only reason to open this today.
+    subject: 'Open loops — ' + today() + ' (' + b.result.open.length + ' open, ' + late +
+             ' overdue, ' + b.ledger.fresh + ' new)',
     body: text
   });
   return text;

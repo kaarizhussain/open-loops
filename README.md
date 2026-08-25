@@ -120,7 +120,10 @@ Calendar it's `summary`, `start.dateTime`, `attendees[].email`, and whether `des
 is non-empty for `agenda`.
 
 Run it on a schedule and deliver the ranked list wherever the assistant already looks —
-email, Slack, or a page like the demo.
+email, Slack, or a page like the demo. [`appsscript/`](appsscript/) is that version: the
+same detector as a daily Gmail and Calendar job, with a ledger so each digest leads with
+what changed rather than repeating yesterday's list, and one keystroke to mark an item
+wrong so it never comes back — and so the false-positive rate becomes a number.
 
 ## Demo data
 
