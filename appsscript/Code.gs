@@ -1,8 +1,10 @@
 /* Open Loops — Apps Script runner.
  *
  * Runs inside the executive's own Google account, reads their mail and calendar,
- * and emails the digest to whoever supports them. Nothing is stored, nothing is
- * sent on anyone's behalf, and no data leaves the tenant.
+ * and emails the digest to whoever supports them. Nothing is sent on anyone's
+ * behalf and no data leaves the tenant. The one thing it writes is the ledger —
+ * a spreadsheet in the same account, one row per detected item, holding a short
+ * excerpt of the sentence that triggered it.
  *
  * SETUP
  *  1. script.google.com → New project
@@ -46,11 +48,25 @@ function ignored(from) {
   return CONFIG.ignoreSenders.some(function (bad) { return local.indexOf(bad) > -1; });
 }
 
+/* Gmail will not tell you how much you missed. GmailApp exposes no match total at all,
+ * and the Gmail API's own estimate is no help either — checked through a connector, a
+ * seven-day and a twenty-one-day query returned an identical figure. So the only honest
+ * signal available is noticing that the search came back full.
+ *
+ * ponytail: warns rather than paginates. Paging a large mailbox risks the six-minute
+ * execution limit, and failing outright is worse than reading less and saying so.
+ * Paginate if this starts firing at a lookback someone actually needs.
+ */
+var READ_CAP = 300;
+var lastRead = { threads: 0, capped: false };
+
 function readMessages() {
   var q = 'newer_than:' + CONFIG.lookbackDays + 'd -in:chats -in:spam -in:trash' +
           ' -category:promotions -category:social';
   var out = [];
-  GmailApp.search(q, 0, 300).forEach(function (thread) {
+  var threads = GmailApp.search(q, 0, READ_CAP);
+  lastRead = { threads: threads.length, capped: threads.length >= READ_CAP };
+  threads.forEach(function (thread) {
     var tid = thread.getId();
     thread.getMessages().forEach(function (m) {
       var from = addr(m.getFrom());
@@ -96,7 +112,7 @@ function build(persist) {
 
   var briefs = meetingBriefs(messages, events, result.open, opts);
   return { messages: messages, events: events, result: result, briefs: briefs,
-           ledger: ledger, ledgerUrl: sh.getParent().getUrl() };
+           ledger: ledger, ledgerUrl: sh.getParent().getUrl(), read: lastRead };
 }
 
 var OWNER_ORDER = ['exec', 'them', 'you'];
@@ -106,7 +122,15 @@ function render(b) {
   var r = b.result, open = r.open;
 
   p('OPEN LOOPS — for ' + today());
-  p('Read ' + b.messages.length + ' messages and ' + b.events.length + ' meetings.');
+  p('Read ' + b.messages.length + ' messages' +
+    (b.read && b.read.threads ? ' across ' + b.read.threads + ' threads' : '') +
+    ' and ' + b.events.length + ' meetings.');
+  /* Silent truncation would make a half-read mailbox look like a complete digest, and
+   * the half it drops is the oldest — which is exactly where the overdue items are. */
+  if (b.read && b.read.capped) {
+    p('INCOMPLETE — stopped at the ' + READ_CAP + '-thread limit. The oldest mail in the ' +
+      'window was not read, which is where overdue items live. Lower lookbackDays and rerun.');
+  }
   /* What changed since yesterday, on the first line — the rest of this is the same
    * list it was, and a reader who already knows that will not scan it again. */
   if (b.ledger) {

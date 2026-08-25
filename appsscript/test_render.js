@@ -191,6 +191,13 @@ assert.ok(/^Open loops — 2026-08-06 \(\d+ open, \d+ overdue, \d+ new\)$/.test(
   'subject carries the counts, new included: ' + sent.subject);
 assert.ok(!/html/i.test(Object.keys(sent).join(' ')), 'plain text only — nothing to render or break');
 
+/* A truncated read must announce itself. Silence here would make a half-read mailbox
+ * look like a finished digest, and the half Gmail drops is the oldest. */
+var full = sandbox.render(Object.assign({}, b1, { read: { threads: 300, capped: true } }));
+assert.ok(full.indexOf('INCOMPLETE') > -1, 'hitting the read cap is stated outright');
+assert.ok(full.indexOf('across 300 threads') > -1, 'and the digest says how much it read');
+assert.ok(text.indexOf('INCOMPLETE') === -1, 'but an uncapped read says nothing about it');
+
 /* preview must not record a run, or the first real send reports nothing as new. */
 var before = JSON.stringify(SHEET.__data);
 sandbox.preview();

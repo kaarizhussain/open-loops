@@ -7,6 +7,49 @@ supports that executive.
 `src/loops.js` is used unchanged. That was the point of building it as pure functions
 over a normalised shape — moving it here needed an adapter, not a rewrite.
 
+## Run it on your own inbox first
+
+Before this goes near anyone else's mail, point it at your own and find out whether the
+detector is any good. Everything the engine claims is currently tuned against a fixture
+its author wrote — the fixture was written to exercise the rules, and the rules were
+tuned until they passed it. No number in this repo comes from real correspondence.
+
+Nothing else in this file is a prerequisite. The digest goes to you, so there is no
+confidentiality question to settle first, and relationship tiers only change ordering.
+
+```js
+var CONFIG = {
+  exec: 'you@gmail.com',      // your own address
+  sendTo: 'you@gmail.com',    // and your own address again
+  lookbackDays: 7,            // start narrow — widen once you know it reads it all
+  lookaheadDays: 7,
+  triggerHour: 18,
+  ignoreSenders: ['noreply', 'no-reply', 'donotreply', 'notifications', 'mailer-daemon',
+                  'calendar-notification', 'automated'],
+  contacts: {}                // leave empty; it only affects ranking
+};
+```
+
+Run `preview`. It logs the digest, emails nobody, and writes nothing to the ledger.
+
+**What to look at, in order:**
+
+1. **Did it read everything?** The first line says how many threads. If it says
+   `INCOMPLETE`, it hit the 300-thread cap and silently skipped the oldest mail in the
+   window — which is where overdue items live. Lower `lookbackDays` and rerun before
+   reading anything else, because a truncated digest looks exactly like a complete one.
+2. **How many items came back?** Fifteen is a list. Ninety is a firehose, and no amount
+   of accuracy fixes an unreadable list. Nobody has ever seen this run at real volume.
+3. **How many are wrong?** This is the number the project has never had. Run `installTrigger`,
+   let it arrive daily, and put an `x` in the ledger against everything that isn't real.
+   After a fortnight, `precisionReport`.
+
+**Read the result honestly.** A personal inbox is a weak test of *recall* — there are far
+fewer real commitments in it than in an executive's, so finding few proves little. It is a
+brutal test of *false positives*, because marketing and transactional mail is full of
+sentences like "we'll send you" and "you'll receive". That is the number that matters
+anyway: a list that cries wolf gets ignored by the third day.
+
 ## Whose account it runs in
 
 **The executive's.** Gmail delegation is a UI feature, not an API one, so a script in
@@ -36,8 +79,14 @@ reading of it is a different thing that nobody has approved yet. At a company ho
 regulated data this is not a grey area.
 
 The version most likely to survive that conversation is the one here: read-only,
-stores nothing, sends nothing, no third-party processor, no model call. It asks for
-less access than several tools that are probably already approved.
+sends nothing, no third-party processor, no model call. It asks for less access than
+several tools that are probably already approved.
+
+It does write one thing, and an earlier version of this file wrongly said it wrote
+nothing. The ledger is a spreadsheet in the same account holding one row per detected
+item, including a short excerpt of the sentence that triggered it. That is a second
+place email content lives, so retention policy and eDiscovery reach it. Say so in the
+conversation rather than letting someone find it later.
 
 ## Why it remembers
 
