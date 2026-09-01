@@ -172,7 +172,12 @@ function detectLoops(messages, events, opts) {
         var closer = null;
         later.forEach(function (n) {
           if (closer) return;
-          if ((n.attach || DELIVER.test(n.body)) && refersTo(s, n.body)) closer = n;
+          /* The delivery sentence is the evidence, not the whole message — otherwise
+           * "the NDA is signed, still working on the pricing" closes the pricing promise
+           * on the strength of one word about something else. An attachment has no
+           * sentence of its own, so there the message body is all the evidence there is. */
+          if (n.attach ? refersTo(s, n.body)
+                       : sentences(n.body).some(function (x) { return DELIVER.test(x) && refersTo(s, x); })) closer = n;
         });
         // "I'll review before the deadline" — the date lives in the message being answered.
         var due = parseDue(s, m.date);

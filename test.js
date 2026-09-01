@@ -238,6 +238,24 @@ signedPromise[0].body = 'Signed order form attached.';
 assert.strictEqual(detectLoops(signedPromise, [], { exec: 'me@co.com', today: '2026-08-12' }).open.length, 0,
   'a bare delivery is not a commitment');
 
+/* A delivery closes a promise only if the delivering sentence is about that promise.
+   Whole-message matching let one stray delivery word close an unrelated commitment,
+   which is the failure that takes a live item off the list without it being done. */
+var pricing = [
+  { id: 'c1', threadId: 'tc', subject: 'Acme pricing', from: 'them@acme.com', to: ['me@co.com'],
+    date: '2026-08-01T10:00', attach: false, body: "We'll send the pricing sheet Friday Aug 8." },
+  { id: 'c2', threadId: 'tc', subject: 'Acme pricing', from: 'them@acme.com', to: ['me@co.com'],
+    date: '2026-08-04T10:00', attach: false, body: 'The NDA is signed. Still working on the pricing sheet.' }
+];
+var stillOpen = detectLoops(pricing, [], { exec: 'me@co.com', today: '2026-08-12' });
+assert.strictEqual(stillOpen.closed.length, 0, 'a delivery about the NDA does not close the pricing promise');
+assert.strictEqual(stillOpen.open.length, 1, 'and the promise is still on the list');
+
+/* ...while a delivery that is about the promise still closes it. */
+pricing[1].body = 'Pricing sheet attached.';
+assert.strictEqual(detectLoops(pricing, [], { exec: 'me@co.com', today: '2026-08-12' }).closed.length, 1,
+  'a real delivery still closes');
+
 console.log('open loops: ' + r.open.length + ' | cleared: ' + r.closed.length + '\n');
 ['them', 'you', 'exec'].forEach(function (o) {
   var items = r.open.filter(function (l) { return l.owner === o; });
