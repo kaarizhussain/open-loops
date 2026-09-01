@@ -77,6 +77,59 @@ var dated = [['k1', new Date(2026, 7, 1), new Date(2026, 7, 5), '', 'owed_by_us'
 var r7 = L.mergeLedger(dated, [], '2026-08-06');
 assert.strictEqual(r7.gone.length, 1, 'date-typed cells still compare correctly');
 
+/* --- marking wrong by replying --- */
+
+/* The shapes a person actually types when told "reply with just its number". */
+assert.deepStrictEqual(L.parseMarks('3 7', 15), [3, 7]);
+assert.deepStrictEqual(L.parseMarks('3, 7', 15), [3, 7]);
+assert.deepStrictEqual(L.parseMarks('3 and 7 arent real', 15), [3, 7]);
+assert.deepStrictEqual(L.parseMarks('#3, #7 please', 15), [3, 7]);
+assert.deepStrictEqual(L.parseMarks('7\n3\n', 15), [7, 3]);
+assert.deepStrictEqual(L.parseMarks('3 3 7', 15), [3, 7], 'a repeated number is one mark');
+assert.deepStrictEqual(L.parseMarks('', 15), [], 'an empty reply marks nothing');
+assert.deepStrictEqual(L.parseMarks('all good thanks', 15), [], 'and so does a reply with no numbers');
+
+/* Out of range is the important one — a quoted digest is full of dates and counts,
+ * and 2026 must never be read as a mark. */
+assert.deepStrictEqual(L.parseMarks('0 16 2026 99', 15), [], 'numbers outside the list are ignored');
+
+/* Dates and times are the trap: "2026-08-25" offers up 8 and 25, and people quote
+   dates when saying which item they mean. Only standalone numbers count. */
+assert.deepStrictEqual(L.parseMarks('due 2026-08-25, item 4', 15), [4],
+  'an ISO date in the reply does not become a mark');
+assert.deepStrictEqual(L.parseMarks('the 08/25 one and 6', 15), [6], 'nor a slashed date');
+assert.deepStrictEqual(L.parseMarks('the 9:15 call, plus 2', 15), [2], 'nor a time');
+assert.deepStrictEqual(L.parseMarks('item 4.', 15), [4], 'a trailing full stop is still a mark');
+assert.deepStrictEqual(L.parseMarks('3 is wrong. 7 too.', 15), [3, 7], 'sentences ending in numbers');
+assert.deepStrictEqual(L.parseMarks('the 3.5 hour one, and 8', 15), [8], 'but a decimal is not two marks');
+
+/* --- resolving those numbers against the list as it was sent --- */
+var sent = ['k-alpha', 'k-beta', 'k-gamma'];
+var led = [
+  ['k-alpha', '2026-08-01', '2026-08-06', '', 'owed_by_us', 'a@b.com', 'alpha', ''],
+  ['k-beta', '2026-08-01', '2026-08-06', '', 'owed_to_us', 'b@b.com', 'beta', ''],
+  ['k-gamma', '2026-08-01', '2026-08-06', '', 'unanswered_ask', 'c@b.com', 'gamma', '']
+];
+assert.strictEqual(L.markWrong(led, sent, [1, 3]), 2, 'two marks, two rows changed');
+assert.strictEqual(led[0][COL.verdict], 'x');
+assert.strictEqual(led[1][COL.verdict], '', 'the unmarked one is untouched');
+assert.strictEqual(led[2][COL.verdict], 'x');
+assert.strictEqual(L.markWrong(led, sent, [1]), 0, 'marking the same item twice changes nothing');
+
+/* The whole reason the digest's order is recorded: item 1 today is not item 1
+   tomorrow, so a stale reply must resolve against the list it was answering. */
+var reordered = ['k-gamma', 'k-alpha', 'k-beta'];
+var fresh2 = [
+  ['k-alpha', '', '', '', 'owed_by_us', '', 'alpha', ''],
+  ['k-beta', '', '', '', 'owed_to_us', '', 'beta', '']
+];
+L.markWrong(fresh2, reordered, [2]);
+assert.strictEqual(fresh2[0][COL.verdict], 'x', 'number 2 in that digest was alpha, not beta');
+assert.strictEqual(fresh2[1][COL.verdict], '');
+
+/* A number pointing at nothing must not throw or mark something arbitrary. */
+assert.strictEqual(L.markWrong(fresh2, ['k-missing'], [1]), 0, 'an unknown key marks nothing');
+
 /* --- precision --- */
 var p = L.precision([
   ['k1', '', '', '', 'owed_by_us', '', '', ''],
