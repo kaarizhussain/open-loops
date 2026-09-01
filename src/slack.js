@@ -6,7 +6,7 @@
  * choice, not an interface, and it can change without warning. Everything here
  * keys off the one line that is unambiguous.
  *
- *   === Message from Kaariz Hussain <kaarizh@gmail.com> (U0BU26UAZD3) at 2026-09-01 11:06:12 EDT ===
+ *   === Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 11:06:12 EDT ===
  *   Message TS: 1788275172.381139
  *   the actual text
  *
@@ -24,7 +24,7 @@ var THREAD_LINE = /^(?:Thread TS|Thread|In thread|Reply to|Parent)\s*:?\s*([\d.]
 var ATTACH_LINE = /^(?:Files?|Attachments?)\s*:/i;
 
 /* Slack writes links, mentions and channel refs as angle-bracket spans. Left in
- * place they become noise the detector has to read around — "<@U0BU26UAZD3>"
+ * place they become noise the detector has to read around — "<@U0EXAMPLE001>"
  * contributes nothing and a raw URL contributes false topic words. */
 function cleanText(s) {
   return String(s || '')

@@ -9,7 +9,7 @@ var os = require('os');
 var path = require('path');
 var { main } = require('./slack-run.js');
 
-var ME = 'kaarizh@gmail.com';
+var ME = 'you@example.com';
 var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'openloops-slack-'));
 var ledger = path.join(dir, 'ledger.json');
 
@@ -19,7 +19,7 @@ var msg = function (name, email, uid, ts, body) {
   return ['=== Message from ' + name + ' <' + email + '> (' + uid + ') at ' + ts + ' UTC ===',
           'Message TS: ' + ts, body].join('\n');
 };
-var me = function (ts, body) { return msg('Kaariz Hussain', ME, 'U0BU26UAZD3', ts, body); };
+var me = function (ts, body) { return msg('Alex Rivera', ME, 'U0EXAMPLE001', ts, body); };
 var them = function (name, email, uid, ts, body) { return msg(name, email, uid, ts, body); };
 
 var input = {
@@ -42,7 +42,7 @@ var input = {
       them('Sana Iyer', 'sana@halcyon.io', 'U03', at(2026, 8, 25, 12), 'Great, looking forward to it.')
     ].join('\n') }
   ],
-  dm: { channel: 'D0BU8A3MK7B', text: '' }
+  dm: { channel: 'D0EXAMPLE001', text: '' }
 };
 
 var write = function (o) {

@@ -12,16 +12,16 @@ var OPTS = { channel: '#deals', members: ['lena@vectorfreight.com'], tzOffset: 0
 
 /* --- the shape the connector actually returned --- */
 var real = [
-  'Channel: #all-open-loops (C0BV0PRC95E)',
+  'Channel: #general (C0EXAMPLE001)',
   '',
-  '=== Message from Kaariz Hussain <kaarizh@gmail.com> (U0BU26UAZD3) at 2026-09-01 11:06:12 EDT === ',
+  '=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 11:06:12 EDT === ',
   'Message TS: 1788275172.381139',
   "I'll send the pricing sheet Thursday."
 ].join('\n');
 
 var m = parseChannel(real, OPTS);
 assert.strictEqual(m.length, 1, 'one message parsed');
-assert.strictEqual(m[0].from, 'kaarizh@gmail.com', 'the inline email becomes the sender');
+assert.strictEqual(m[0].from, 'you@example.com', 'the inline email becomes the sender');
 assert.strictEqual(m[0].id, '1788275172.381139');
 assert.strictEqual(m[0].body, "I'll send the pricing sheet Thursday.");
 assert.strictEqual(m[0].subject, '#deals', 'the conversation name stands in for a subject');
@@ -31,13 +31,13 @@ assert.strictEqual(m[0].date.slice(0, 10), '2026-09-01', 'and comes from the epo
 
 /* --- several messages, and the ones that are not really messages --- */
 var many = [
-  '=== Message from Kaariz Hussain <kaarizh@gmail.com> (U0BU26UAZD3) at 2026-09-01 09:00:00 EDT ===',
+  '=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 09:00:00 EDT ===',
   'Message TS: 1788260400.000100',
-  '<@U0BU26UAZD3|Kaariz Hussain> has joined the channel',
-  '=== Message from Lena Borg <lena@vectorfreight.com> (U0BU111AAA1) at 2026-09-01 10:00:00 EDT ===',
+  '<@U0EXAMPLE001|Alex Rivera> has joined the channel',
+  '=== Message from Lena Borg <lena@vectorfreight.com> (U0EXAMPLE002) at 2026-09-01 10:00:00 EDT ===',
   'Message TS: 1788264000.000200',
   "We'll get you the countersigned copy Monday.",
-  '=== Message from Kaariz Hussain <kaarizh@gmail.com> (U0BU26UAZD3) at 2026-09-01 11:00:00 EDT ===',
+  '=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 11:00:00 EDT ===',
   'Message TS: 1788267600.000300',
   'Thanks — noted.'
 ].join('\n');
@@ -49,13 +49,13 @@ assert.ok(mm[0].date < mm[1].date, 'messages come back oldest first, as the dete
 
 /* --- a sender with no email on the header --- */
 var anon = [
-  '=== Message from Someone (U0BU999ZZZ9) at 2026-09-01 12:00:00 EDT ===',
+  '=== Message from Someone (U0EXAMPLE003) at 2026-09-01 12:00:00 EDT ===',
   'Message TS: 1788271200.000400',
   "I'll book the room."
 ].join('\n');
 var a = parseChannel(anon, OPTS);
 assert.strictEqual(a.length, 1, 'a missing email must not drop the message');
-assert.strictEqual(a[0].from, 'U0BU999ZZZ9@slack.local',
+assert.strictEqual(a[0].from, 'U0EXAMPLE003@slack.local',
   'it falls back to something addressable, so direction still resolves');
 
 /* --- Slack markup would otherwise reach the detector as content --- */
@@ -75,10 +75,10 @@ var { detectLoops } = require('./src/loops.js');
 var epoch = function (y, mo, d, h) { return (Date.UTC(y, mo - 1, d, h) / 1000).toFixed(6); };
 
 var convo = [
-  '=== Message from Lena Borg <lena@vectorfreight.com> (U0BU111AAA1) at 2026-08-01 10:00:00 UTC ===',
+  '=== Message from Lena Borg <lena@vectorfreight.com> (U0EXAMPLE002) at 2026-08-01 10:00:00 UTC ===',
   'Message TS: ' + epoch(2026, 8, 1, 10),
   "We'll get the contract back to you Friday Aug 8.",
-  '=== Message from Kaariz Hussain <kaarizh@gmail.com> (U0BU26UAZD3) at 2026-08-04 10:00:00 UTC ===',
+  '=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-08-04 10:00:00 UTC ===',
   'Message TS: ' + epoch(2026, 8, 4, 10),
   'Great — thanks Lena.'
 ].join('\n');
@@ -86,7 +86,7 @@ var convo = [
 var msgs = parseChannel(convo, { channel: '#vector-freight', members: ['lena@vectorfreight.com'], tzOffset: 0 });
 assert.strictEqual(msgs[0].date, '2026-08-01T10:00', 'the epoch round-trips to the right day');
 
-var r = detectLoops(msgs, [], { exec: 'kaarizh@gmail.com', today: '2026-08-12' });
+var r = detectLoops(msgs, [], { exec: 'you@example.com', today: '2026-08-12' });
 var owed = r.open.filter(function (l) { return l.type === 'owed_to_us'; })[0];
 assert.ok(owed, 'an inbound promise in Slack is found the same way it is in mail');
 assert.strictEqual(owed.due, '2026-08-08', 'and its deadline resolves from the message date');
@@ -100,11 +100,11 @@ assert.strictEqual(owed.who, 'lena@vectorfreight.com');
    fixture only escapes it because "countersigned" has no word boundary before
    "signed". Same class of bug as the three the README already documents. */
 var trap = parseChannel([
-  '=== Message from Lena Borg <lena@vectorfreight.com> (U0BU111AAA1) at 2026-08-01 10:00:00 UTC ===',
+  '=== Message from Lena Borg <lena@vectorfreight.com> (U0EXAMPLE002) at 2026-08-01 10:00:00 UTC ===',
   'Message TS: ' + epoch(2026, 8, 1, 10),
   "We'll have the signed order form back to you Friday Aug 8."
 ].join('\n'), { channel: '#vf', members: [], tzOffset: 0 });
-var missed = detectLoops(trap, [], { exec: 'kaarizh@gmail.com', today: '2026-08-12' });
+var missed = detectLoops(trap, [], { exec: 'you@example.com', today: '2026-08-12' });
 assert.strictEqual(missed.open.length, 0,
   'KNOWN BUG: a promise containing "signed" is swallowed by DELIVER — see note above');
 
