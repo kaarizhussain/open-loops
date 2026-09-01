@@ -8,7 +8,8 @@
  *
  * SETUP
  *  1. script.google.com → New project
- *  2. Add four files: loops.js (from ../src), adapters.js, ledger.js, and this one
+ *  2. Add six files: loops.js, digest.js and ledger.js (from ../src), then
+ *     adapters.js, ledger-sheet.js and this one (from here)
  *  3. Fill in CONFIG
  *  4. Run `preview` by hand — it logs the digest without emailing anyone
  *  5. Run `installTrigger` once it looks right

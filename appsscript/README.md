@@ -63,7 +63,7 @@ but needs a Workspace admin and is a much larger conversation. Start with the fi
 ## Setup
 
 1. [script.google.com](https://script.google.com) → New project, **in the executive's account**
-2. Add five files: `loops.js` and `digest.js` (copied from `../src/`), `adapters.js`, `ledger.js`, `Code.gs`
+2. Add six files: `loops.js`, `digest.js` and `ledger.js` (copied from `../src/`), then `adapters.js`, `ledger-sheet.js` and `Code.gs` from here
 3. Fill in `CONFIG` at the top of `Code.gs`
 4. Run **`preview`** by hand. It logs the digest, emails nobody, and records nothing —
    read the output before anyone else does
