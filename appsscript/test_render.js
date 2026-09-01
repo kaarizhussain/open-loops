@@ -37,7 +37,8 @@ function fakeSheet() {
           });
         }
       };
-    }
+    },
+    deleteRows: function (start, count) { data.splice(start - 1, count); }
   };
 }
 
@@ -271,6 +272,42 @@ REPLIES = [{ subject: 'Open loops — 2019-01-01 (x)',
              from: 'Assistant <' + sandbox.CONFIG.sendTo + '>', body: '1 2 3' }];
 assert.strictEqual(sandbox.build(true).marked, 0, 'an unremembered digest marks nothing');
 REPLIES = [];
+
+/* ===================== what must never be read ===================== */
+
+/* The exclusions have to reach the query, or the excluded mail is fetched anyway
+   and only filtered afterwards — which is the same mail leaving the mailbox. */
+sandbox.CONFIG.exclude = { labels: ['Private', 'HR Matters'], senders: ['legal@northstar.io', 'clinic.org'] };
+var q = sandbox.scopeQuery();
+assert.ok(q.indexOf('-label:Private') > -1, 'a label exclusion reaches the search');
+assert.ok(q.indexOf('-label:"HR Matters"') > -1, 'and a label with a space is quoted');
+assert.ok(q.indexOf('-from:legal@northstar.io') > -1, 'so does a sender');
+assert.ok(q.indexOf('-from:clinic.org') > -1, 'and a whole domain');
+assert.ok(q.indexOf('{') === -1, 'no allowlist clause unless one is configured');
+
+assert.ok(sandbox.senderExcluded('legal@northstar.io'), 'excluded by address');
+assert.ok(sandbox.senderExcluded('nurse@clinic.org'), 'excluded by domain');
+assert.ok(!sandbox.senderExcluded('dana@northstar.io'), 'and nobody else is');
+
+/* Gmail matches at thread level, so a thread where only one message carries the
+   label still comes back from the search. Checking it again is the difference
+   between honouring the label and forwarding the one thread marked private. */
+var labelled = function (names) {
+  return { getLabels: function () {
+    return names.map(function (n) { return { getName: function () { return n; } }; });
+  } };
+};
+assert.ok(sandbox.threadExcluded(labelled(['Private'])), 'an excluded label hides the thread');
+assert.ok(sandbox.threadExcluded(labelled(['Inbox', 'hr matters'])), 'match is case-insensitive');
+assert.ok(!sandbox.threadExcluded(labelled(['Inbox', 'Clients'])), 'other labels are left alone');
+
+/* Strict allowlist: everything not named becomes invisible. */
+sandbox.CONFIG.only = ['bigclient.com', 'chair@board.org'];
+var allow = sandbox.scopeQuery();
+assert.ok(/\{[^}]*from:bigclient\.com[^}]*\}/.test(allow), 'the allowlist is an OR group');
+assert.ok(allow.indexOf('to:chair@board.org') > -1, 'and matches either side of the correspondence');
+sandbox.CONFIG.only = [];
+sandbox.CONFIG.exclude = { labels: [], senders: [] };
 
 /* A truncated read must announce itself. Silence here would make a half-read mailbox
  * look like a finished digest, and the half Gmail drops is the oldest. */

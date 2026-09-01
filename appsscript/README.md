@@ -72,6 +72,50 @@ but needs a Workspace admin and is a much larger conversation. Start with the fi
 A spreadsheet named *Open Loops — ledger* is created in the same account on the first
 real run, and every digest links to it.
 
+## Keeping things out of it
+
+An executive's mailbox carries comp discussions, HR matters, board threads, a
+diagnosis. Delegated access is a person with judgement choosing what to open. This is
+automated extraction and forwarding, which is a different thing, and the difference is
+the entire reason someone might say no.
+
+Label those threads in Gmail and name the labels in `CONFIG.exclude`:
+
+```js
+exclude: {
+  labels:  ['Private', 'HR', 'Board'],
+  senders: ['legal@company.com', 'clinic.org']   // addresses or whole domains
+},
+only: []          // non-empty = strict allowlist; nothing else is read at all
+```
+
+Exclusions go into the Gmail query, so excluded mail is never fetched rather than
+fetched and then discarded. Labels are then checked a second time per thread, because
+Gmail matches at thread level — a thread where only one message carries the label can
+still come back from the search, and getting that wrong forwards the one conversation
+somebody specifically marked private.
+
+`only` is default-deny: set it and nothing outside that list exists. Unusable for
+general work, correct for a regulated environment.
+
+**This is opt-out, and that is a real limit.** A label only protects a thread if
+someone applied it before the evening run. Default-deny would be safer and close to
+useless; `only` is the honest answer for anyone who needs it.
+
+Set in the script — which means by whoever owns the mailbox, not by whoever reads
+the digest. The two cannot reach each other's settings, which is the point.
+
+## What the ledger keeps, and for how long
+
+```js
+keepLedgerDays: 90,   // rows are forgotten this long after the item was last detected
+storeText: true       // false keeps the key and verdict, drops the words
+```
+
+Age runs from when an item was last matched, not when it was created, so nothing
+still live is ever pruned out from under itself — including items hidden as wrong,
+which are still being detected even though they no longer appear.
+
 ## Before you point this at anyone's real mail
 
 Ask first. An assistant reading an executive's inbox is sanctioned; automating the

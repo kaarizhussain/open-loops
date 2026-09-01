@@ -53,15 +53,25 @@ function isKnown(v) {
  * isNew / trackedDays so the digest can say what changed. Returns the loops that
  * should actually be shown — anything the reader marked wrong never reaches the
  * digest again. */
-function mergeLedger(rows, loops, today) {
+function mergeLedger(rows, loops, today, opts) {
   var byKey = {}, touched = {}, shown = [], fresh = 0, suppressed = 0;
+  // Retention mode: keep the key and the verdict, drop the words. Suppression still
+  // works; what is lost is being able to read back what an item said.
+  var keepText = !opts || opts.storeText !== false;
   rows.forEach(function (r) { byKey[cell(r[COL.key])] = r; });
 
   loops.forEach(function (l) {
     var k = loopKey(l), row = byKey[k];
     touched[k] = 1;
 
-    if (row && isWrong(row[COL.verdict])) { suppressed++; return; }
+    if (row && isWrong(row[COL.verdict])) {
+      /* Still detected, just hidden — so its clock has to keep running. Leaving
+       * last_seen stale would let retention prune a row whose item is very much
+       * alive, and it would come back the next morning as something brand new. */
+      row[COL.last_seen] = today;
+      suppressed++;
+      return;
+    }
 
     if (row) {
       row[COL.last_seen] = today;
@@ -70,7 +80,8 @@ function mergeLedger(rows, loops, today) {
       l.firstSeen = cell(row[COL.first_seen]);
       l.trackedDays = daysApart(l.firstSeen, today);
     } else {
-      row = [k, today, today, '', l.type, l.who || '', l.what || '', ''];
+      row = [k, today, today, '', l.type,
+             keepText ? (l.who || '') : '', keepText ? (l.what || '') : '', ''];
       byKey[k] = row;
       rows.push(row);
       l.isNew = true;
@@ -127,6 +138,27 @@ function precision(rows) {
   });
   return { total: total, wrong: wrong, knew: knew, byType: byType,
            news: total - wrong - knew };
+}
+
+/* Forget rows nothing has matched for a while.
+ *
+ * The ledger is a second place email content lives, so "how long do you keep this"
+ * is a question someone will ask and the answer has to be a number rather than
+ * "forever". Age runs from last_seen, which every run refreshes for anything still
+ * being detected — including items hidden as wrong — so an item that is still live
+ * is never pruned out from under itself.
+ *
+ * Mutates rows in place, since that is what gets written back. */
+function pruneLedger(rows, today, keepDays) {
+  if (!keepDays) return 0;
+  var kept = rows.filter(function (r) {
+    var seen = cell(r[COL.last_seen]);
+    return !seen || daysApart(seen, today) < keepDays;
+  });
+  var dropped = rows.length - kept.length;
+  rows.length = 0;
+  kept.forEach(function (r) { rows.push(r); });
+  return dropped;
 }
 
 /* --- marking things wrong by replying to the digest ---
@@ -254,13 +286,18 @@ function readLedger(sh) {
 }
 
 function writeLedger(sh, rows) {
+  var had = sh.getLastRow() - 1;
   if (rows.length) sh.getRange(2, 1, rows.length, LEDGER_COLS.length).setValues(rows);
+  // Pruning shortens the list, and anything below what was just written is a row
+  // that was supposed to be forgotten still sitting there in plain sight.
+  var surplus = had - rows.length;
+  if (surplus > 0) sh.deleteRows(2 + rows.length, surplus);
 }
 
 if (typeof module !== 'undefined') {
   module.exports = {
     mergeLedger: mergeLedger, precision: precision, isWrong: isWrong, isKnown: isKnown,
     cell: cell, daysApart: daysApart, parseMarks: parseMarks, applyMarks: applyMarks,
-    LEDGER_COLS: LEDGER_COLS, COL: COL
+    pruneLedger: pruneLedger, LEDGER_COLS: LEDGER_COLS, COL: COL
   };
 }
