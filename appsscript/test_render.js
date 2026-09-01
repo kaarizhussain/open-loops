@@ -202,9 +202,13 @@ assert.ok(/\d+d on the list/.test(text6), 'items carry how long they have been s
 
 /* ------------------------------ precision ------------------------------ */
 var report = sandbox.precisionReport();
-assert.ok(/Tracked \d+ items\. 1 marked wrong\./.test(report), 'precision counts the marks: ' + report);
-assert.ok(/% held up/.test(report), 'and turns them into a number');
+assert.ok(/Tracked \d+ items\./.test(report), 'the report counts what it tracked: ' + report);
+assert.ok(/\d+ wrong\s+→ \d+% held up/.test(report), 'trust: how much of it was real');
+assert.ok(/\d+ genuinely new → \d+% told you something/.test(report),
+  'value: how much of it the reader did not already know');
+assert.ok(/already known/.test(report), 'and the middle category is named');
 assert.ok(report.indexOf('You promised') > -1, 'broken out by signal, in the digest\'s own words');
+assert.ok(/\(\d+ new\)/.test(report), 'per-signal novelty too — one detector can be the dull one');
 
 /* -------------------------------- sending ------------------------------- */
 sandbox.today = function () { return F.TODAY; };

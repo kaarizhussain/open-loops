@@ -124,6 +124,39 @@ The next run reads that reply, drops those two for good, and says at the top tha
 took the correction. Nothing to open, nothing to log into. The ledger is still there
 if you would rather edit it directly, and both write to the same place.
 
+## The number that matters more than precision
+
+Precision says whether the list can be trusted. It does not say whether the list is
+worth reading. Someone with a good memory could get a flawless digest every morning
+and gain nothing from it, because they already knew all fifteen items.
+
+What this exists to catch is the thing that fell out of everyone's head three weeks
+ago. So a second mark, on a line beginning with `k`:
+
+```
+3 7
+k 1 4
+```
+
+Items 1 and 4 were real — you just already knew. They stay on the list, because they
+are still outstanding. They stop counting as something this told you.
+
+`precisionReport` then gives both numbers:
+
+```
+Tracked 63 items.
+
+   9 wrong        → 86% held up
+  41 already known
+  13 genuinely new → 21% told you something
+
+Accurate, but it is mostly telling you things you knew. Look further back,
+or rank differently, before adding anything.
+```
+
+High trust and low value is a tidy list nobody needs. Low trust and high value gets
+ignored by the third day. You need both, and only one of them is measured by accuracy.
+
 That does two things. The item never appears in the digest again — a list that cries
 wolf gets ignored by the third day, and you only get one attempt at someone's trust in
 it. And it becomes the measurement: **`precisionReport`** prints the wrong-rate broken
