@@ -174,6 +174,39 @@ var bare = detectLoops([
 ], [], { exec: F.EXEC, today: F.TODAY });
 assert.strictEqual(bare.closed.length, 1, 'a bare attachment should still close a lone promise');
 
+/* ...but only while it is the lone promise. "Attached." does not deliver a booked
+   venue, and closing something that was never done is the one failure that makes
+   this worse than keeping no list at all. Chat makes it the common case rather than
+   the corner case, because "done" and "sent" are message types there. */
+var ambiguous = detectLoops([
+  msg('a', '2026-08-03T09:00', "I'll send the pricing sheet by Wednesday."),
+  msg('b', '2026-08-04T09:00', "I'll book the venue for the offsite."),
+  msg('c', '2026-08-05T09:00', 'Attached.', true)
+], [], { exec: F.EXEC, today: F.TODAY });
+assert.strictEqual(ambiguous.closed.length, 0,
+  'a delivery naming nothing closes nothing while more than one thing is outstanding');
+assert.strictEqual(ambiguous.open.filter(function (l) { return l.type === 'owed_by_us'; }).length, 2);
+
+/* The ordering matters, not just the count. A promise made *after* a delivery was
+   not outstanding when it arrived, so the delivery still closes the one that was —
+   otherwise an ordinary back-and-forth stops closing anything at all. */
+var interleaved = detectLoops([
+  msg('a', '2026-08-01T09:00', "I'll send the pricing sheet Monday."),
+  msg('b', '2026-08-02T09:00', 'Attached.', true),
+  msg('c', '2026-08-03T09:00', "I'll book the venue for the offsite."),
+  msg('d', '2026-08-04T09:00', 'Attached.', true)
+], [], { exec: F.EXEC, today: F.TODAY });
+assert.strictEqual(interleaved.closed.length, 2,
+  'promise, deliver, promise, deliver closes both — each was alone when answered');
+
+/* One delivery may still close two things when it names them both. */
+var both = detectLoops([
+  msg('a', '2026-08-03T09:00', "I'll send the pricing sheet by Wednesday."),
+  msg('b', '2026-08-04T09:00', "I'll send the questionnaire too."),
+  msg('c', '2026-08-05T09:00', 'Pricing and questionnaire attached.', true)
+], [], { exec: F.EXEC, today: F.TODAY });
+assert.strictEqual(both.closed.length, 2, 'a delivery that names two promises closes two');
+
 /* ---- the day moves: arrivals land, resolved things drop ---- */
 var { loopKey } = require('./src/loops.js');
 var opts = { exec: F.EXEC, today: F.TODAY, contacts: F.RELATIONSHIPS };

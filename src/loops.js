@@ -120,11 +120,21 @@ function topics(text) {
   });
   return out;
 }
-function refersTo(promise, delivery) {
+/* Three answers, not two:
+ *
+ *   true  — they share subject-matter words
+ *   false — both name something, and they name different things
+ *   null  — one of them names nothing, so this cannot tell you either way
+ *
+ * The third is the dangerous one, and it used to be reported as a match. "Attached."
+ * names nothing; so does "I'll send it Thursday EOD". Treating that as agreement is
+ * how one attachment quietly closes every open promise in a conversation — things
+ * leave the list without being done, which is the worst failure this can have.
+ * The caller resolves it with the only other evidence there is: whether there was
+ * anything else the delivery could have been answering. */
+function topicMatch(promise, delivery) {
   var d = topics(delivery), p = topics(promise);
-  // "I'll send it Thursday EOD" names nothing; neither does a bare "Attached."
-  // Either way there is nothing to discriminate on, so do not block the close.
-  if (!Object.keys(d).length || !Object.keys(p).length) return true;
+  if (!Object.keys(d).length || !Object.keys(p).length) return null;
   return Object.keys(p).some(function (k) { return d[k]; });
 }
 
@@ -159,49 +169,75 @@ function detectLoops(messages, events, opts) {
       });
     }
 
-    /* --- promises, in both directions --- */
+    /* --- promises, in both directions ---
+     *
+     * Collected first, then deliveries resolved against them in order. Letting each
+     * promise scan forward for its own closer cannot answer "was this the only thing
+     * outstanding when that delivery arrived" — and that is the only evidence there
+     * is when a delivery names nothing. */
+    var promises = [];
     msgs.forEach(function (m, i) {
       sentences(m.body).forEach(function (s) {
-        if (!COMMIT.test(s)) return;
         /* No DELIVER check here, deliberately. A bare "attached" never reaches this
          * line — COMMIT already rejected it. The only sentences a DELIVER test could
          * reject are ones that commit *and* use delivery words, and those are promises:
          * "we’ll have the signed copy back Friday", "just sent it, I’ll follow up Monday".
          * Tense decides, not vocabulary, and a commitment is future tense by construction. */
-        var later = msgs.slice(i + 1).filter(function (n) { return n.out === m.out; });
-        var closer = null;
-        later.forEach(function (n) {
-          if (closer) return;
-          /* The delivery sentence is the evidence, not the whole message — otherwise
-           * "the NDA is signed, still working on the pricing" closes the pricing promise
-           * on the strength of one word about something else. An attachment has no
-           * sentence of its own, so there the message body is all the evidence there is. */
-          if (n.attach ? refersTo(s, n.body)
-                       : sentences(n.body).some(function (x) { return DELIVER.test(x) && refersTo(s, x); })) closer = n;
+        if (COMMIT.test(s)) promises.push({ at: i, m: m, s: s, closer: null });
+      });
+    });
+
+    msgs.forEach(function (n, j) {
+      /* The delivery sentence is the evidence, not the whole message — otherwise
+       * "the NDA is signed, still working on the pricing" closes the pricing promise
+       * on the strength of one word about something else. An attachment has no
+       * sentence of its own, so there the message body is all the evidence there is. */
+      var evidence = n.attach ? [n.body]
+        : sentences(n.body).filter(function (x) { return DELIVER.test(x); });
+
+      evidence.forEach(function (d) {
+        // Recomputed per sentence: two deliveries in one message close in sequence.
+        var open = promises.filter(function (p) {
+          return !p.closer && p.m.out === n.out && p.at < j;
         });
-        // "I'll review before the deadline" — the date lives in the message being answered.
-        var due = parseDue(s, m.date);
-        for (var j = i - 1; j >= 0 && !due; j--) due = parseDue(msgs[j].body, msgs[j].date);
-        var type = m.out ? 'owed_by_us' : 'owed_to_us';
-        // The promise and the scheduling language often sit in different sentences.
-        if (!closer && m.out && MEETINGY.test(s) && SCHEDULEY.test(m.body)) {
-          var toks = keyTokens(m.subject);
-          var booked = events.some(function (e) {
-            if (e.start < day(m.date)) return false;
-            // An internal colleague appears on unrelated meetings — their presence proves nothing.
-            if (counterparty && domain(counterparty) !== execDomain && e.attendees.indexOf(counterparty) > -1) return true;
-            return toks.some(function (w) { return e.title.toLowerCase().indexOf(w.toLowerCase()) > -1; });
-          });
-          if (!booked) type = 'agreed_unscheduled';
-        }
-        out.push({
-          type: closer ? 'closed' : type, openType: type, threadId: tid, subject: m.subject,
-          who: m.out ? (counterparty || m.to[0]) : m.from, byUs: m.out,
-          what: shorten(s, 110), said: day(m.date), due: due,
-          closedOn: closer ? day(closer.date) : null,
-          closedBy: closer ? shorten(sentences(closer.body).find(function (x) { return DELIVER.test(x); }) || closer.body, 80) : null,
-          excerpt: s, msgId: m.id
+        if (!open.length) return;
+
+        // "Pricing and the questionnaire attached" legitimately closes two things.
+        var named = open.filter(function (p) { return topicMatch(p.s, d) === true; });
+        if (named.length) { named.forEach(function (p) { p.closer = n; }); return; }
+
+        /* Neither side names anything, so there is nothing to match on. Closing is
+         * only safe when exactly one promise was outstanding — then "Attached." can
+         * only have meant that one. With two open it could have meant either, and
+         * guessing closes something that was never done. */
+        if (open.length === 1 && topicMatch(open[0].s, d) === null) open[0].closer = n;
+      });
+    });
+
+    promises.forEach(function (pr) {
+      var m = pr.m, i = pr.at, s = pr.s, closer = pr.closer;
+      // "I'll review before the deadline" — the date lives in the message being answered.
+      var due = parseDue(s, m.date);
+      for (var k = i - 1; k >= 0 && !due; k--) due = parseDue(msgs[k].body, msgs[k].date);
+      var type = m.out ? 'owed_by_us' : 'owed_to_us';
+      // The promise and the scheduling language often sit in different sentences.
+      if (!closer && m.out && MEETINGY.test(s) && SCHEDULEY.test(m.body)) {
+        var toks = keyTokens(m.subject);
+        var booked = events.some(function (e) {
+          if (e.start < day(m.date)) return false;
+          // An internal colleague appears on unrelated meetings — their presence proves nothing.
+          if (counterparty && domain(counterparty) !== execDomain && e.attendees.indexOf(counterparty) > -1) return true;
+          return toks.some(function (w) { return e.title.toLowerCase().indexOf(w.toLowerCase()) > -1; });
         });
+        if (!booked) type = 'agreed_unscheduled';
+      }
+      out.push({
+        type: closer ? 'closed' : type, openType: type, threadId: tid, subject: m.subject,
+        who: m.out ? (counterparty || m.to[0]) : m.from, byUs: m.out,
+        what: shorten(s, 110), said: day(m.date), due: due,
+        closedOn: closer ? day(closer.date) : null,
+        closedBy: closer ? shorten(sentences(closer.body).find(function (x) { return DELIVER.test(x); }) || closer.body, 80) : null,
+        excerpt: s, msgId: m.id
       });
     });
 
