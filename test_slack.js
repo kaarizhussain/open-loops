@@ -97,6 +97,51 @@ assert.deepStrictEqual(ordered.map(function (m) { return m.body; }),
   ['message 1', 'message 2', 'message 3'], 'ordered on the epoch, not the truncated date');
 assert.strictEqual(ordered[0].date, ordered[2].date, 'even though all three share a minute');
 
+/* --- a thread read, which uses a different format entirely ---
+ *
+ * Copied from a live response. The banner and the identity are separate lines here,
+ * where a channel read puts them together — so the adapter has to know both shapes,
+ * and a thread read is the only way to see a reply at all. */
+var threadText = [
+  '=== THREAD PARENT MESSAGE ===',
+  'From: Alex Rivera <you@example.com> (U0EXAMPLE001)',
+  'Time: 2026-09-01 16:03:11 EDT',
+  'Message TS: 1788292991.482509',
+  'Halcyon pilot — scoping thread.',
+  '*Sent using* <@U0EXAMPLE009|Claude>',
+  '',
+  '=== THREAD REPLIES (1 total) ===',
+  '',
+  '--- Reply 1 of 1 ---',
+  'From: Lena Borg <lena@vectorfreight.com> (U0EXAMPLE002)',
+  'Time: 2026-09-01 16:03:17 EDT',
+  'Message TS: 1788292997.287589',
+  "I'll put together the scope doc and share it Wednesday.",
+  '*Sent using* <@U0EXAMPLE009|Claude>'
+].join('\n');
+
+var th = parseChannel(threadText, { channel: '#deals', threadId: '1788292991.482509', tzOffset: 0 });
+assert.strictEqual(th.length, 2, 'parent and reply both parse');
+assert.strictEqual(th[0].body, 'Halcyon pilot — scoping thread.');
+assert.strictEqual(th[1].body, "I'll put together the scope doc and share it Wednesday.");
+assert.strictEqual(th[1].from, 'lena@vectorfreight.com', 'identity comes off the From: line');
+assert.ok(th.every(function (m) { return m.threadId === '1788292991.482509'; }),
+  'a thread is its own boundary — the tightest one Slack offers');
+
+/* The section banner is a heading, not a message, and must not become an empty one. */
+assert.ok(th.every(function (m) { return m.body.indexOf('THREAD REPLIES') === -1; }));
+
+/* A body line that happens to start "From:" must not rewrite who sent the message. */
+var quoted = parseChannel([
+  '=== THREAD PARENT MESSAGE ===',
+  'From: Alex Rivera <you@example.com> (U0EXAMPLE001)',
+  'Message TS: 1788292958.058409',
+  'Forwarding this on:',
+  'From: Someone Else <other@example.com> (U0EXAMPLE007)',
+  "I'll handle it."
+].join('\n'), OPTS);
+assert.strictEqual(quoted[0].from, 'you@example.com', 'the first identity wins');
+
 /* --- Slack markup would otherwise reach the detector as content --- */
 assert.strictEqual(cleanText('<@U123|Dana> can you look?'), '@Dana can you look?');
 assert.strictEqual(cleanText('ping <@U123> please'), 'ping  please');

@@ -100,6 +100,15 @@ function render(b) {
     p('INCOMPLETE — stopped at the ' + (read.cap || 'read') + ' limit. The oldest of it was ' +
       'not read, which is where overdue items live. Narrow the window and rerun.');
   }
+  /* Replies live behind a separate fetch, so a promise made inside a thread is simply
+   * absent rather than wrong. A list that quietly omits things is worse than one that
+   * says what it missed. */
+  if (read.unfetchedThreads) {
+    p('INCOMPLETE — ' + read.unfetchedThreads +
+      (read.unfetchedThreads === 1 ? ' thread had replies that were not read.'
+                                   : ' threads had replies that were not read.') +
+      ' Anything promised inside them is missing from this list.');
+  }
 
   /* What changed since the last run, high up — the rest of this is the same list it
    * was, and a reader who already knows that will not scan it again. */

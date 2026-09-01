@@ -84,12 +84,36 @@ function main(argv) {
 
   /* Every conversation becomes messages in the shape loops.js already takes. The
    * channel name stands in for a subject line, which Slack does not have. */
-  var messages = [];
+  var byId = {}, roots = {};
   (input.conversations || []).forEach(function (c) {
-    messages = messages.concat(parseChannel(c.text, {
+    parseChannel(c.text, {
       channel: c.channel, members: c.members || [], tzOffset: input.tzOffset || 0
-    }));
+    }).forEach(function (m) {
+      byId[m.id] = m;
+      if (m.hasThread) roots[m.id] = c.channel;   // has replies a channel read omits
+    });
   });
+
+  /* Thread replies are a separate fetch — a channel read does not contain them, so a
+   * promise made inside a thread is invisible without this.
+   *
+   * These override rather than append: a thread read repeats its own root message,
+   * and the root belongs to the thread rather than to the channel it sits in. Keying
+   * the whole thread on the root's timestamp gives closure matching a real boundary,
+   * the only one Slack offers that is as tight as an email thread's. */
+  (input.threads || []).forEach(function (t) {
+    parseChannel(t.text, {
+      channel: t.channel, members: t.members || [], threadId: t.root,
+      tzOffset: input.tzOffset || 0
+    }).forEach(function (m) { byId[m.id] = m; });
+    delete roots[t.root];
+  });
+
+  var messages = Object.keys(byId).map(function (k) { return byId[k]; })
+    .sort(function (a, b) { return parseFloat(a.id) - parseFloat(b.id); });
+
+  // Roots whose replies nobody fetched. Saying so beats a digest that looks complete.
+  var unfetched = Object.keys(roots);
 
   var rows = store.readLedger();
 
@@ -115,7 +139,8 @@ function main(argv) {
     today: today, source: 'slack',
     messages: messages, events: [], result: result, briefs: [],
     ledger: ledger, marked: replies.marked, principals: input.principals || [],
-    read: { threads: (input.conversations || []).length, capped: false }
+    read: { threads: (input.conversations || []).length, capped: false,
+            unfetchedThreads: unfetched.length }
   });
 
   // --dry renders without recording the run, so the digest can be read by hand

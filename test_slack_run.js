@@ -136,6 +136,45 @@ var multiText = main([write(multi), '--ledger', path.join(dir, 'multi.json')]);
 assert.ok(/for (Dana|Marcus) · /.test(multiText),
   'each item says whose it is when the heading cannot');
 
+/* ------------------- thread replies are a second fetch ------------------- */
+
+/* A channel read announces that a root has replies but does not include them, so a
+   promise made inside a thread is simply absent. Absent and silent is worse than
+   absent and stated. */
+var threaded = {
+  self: ME, today: '2026-09-01', tzOffset: 0, principals: [],
+  conversations: [{ channel: '#halcyon', members: ['sana@halcyon.io'], text: [
+    msg('Alex Rivera', ME, 'U0EXAMPLE001', at(2026, 8, 30, 10), 'Halcyon pilot — scoping thread.'),
+    'Thread: 1 replies (latest: 2026-08-30 11:00:00 UTC)'
+  ].join('\n') }]
+};
+var missing = main([write(threaded), '--ledger', path.join(dir, 't1.json')]);
+assert.ok(/1 thread had replies that were not read/.test(missing),
+  'the digest says what it could not see');
+
+/* Supplied, the promise inside it appears — and the root is not duplicated, even
+   though a thread read repeats it. */
+threaded.threads = [{ channel: '#halcyon', root: at(2026, 8, 30, 10), members: ['sana@halcyon.io'], text: [
+  '=== THREAD PARENT MESSAGE ===',
+  'From: Alex Rivera <' + ME + '> (U0EXAMPLE001)',
+  'Message TS: ' + at(2026, 8, 30, 10),
+  'Halcyon pilot — scoping thread.',
+  '',
+  '=== THREAD REPLIES (1 total) ===',
+  '',
+  '--- Reply 1 of 1 ---',
+  'From: Alex Rivera <' + ME + '> (U0EXAMPLE001)',
+  'Message TS: ' + at(2026, 8, 30, 11),
+  "I'll put together the scope doc and share it Wednesday."
+].join('\n') }];
+
+var fetched = main([write(threaded), '--ledger', path.join(dir, 't2.json')]);
+assert.ok(!/replies that were not read/.test(fetched), 'nothing outstanding once it is fetched');
+assert.ok(fetched.indexOf('scope doc') > -1, 'and the promise inside the thread is found');
+assert.ok(/Read 2 messages/.test(fetched),
+  'the root is not counted twice, though a thread read repeats it: ' +
+  fetched.split('\n').filter(function (l) { return /^Read /.test(l); })[0]);
+
 /* ------------------------------ bad input ------------------------------ */
 assert.throws(function () { main([write({ conversations: [] }), '--ledger', ledger]); },
   /needs "self"/, 'without an address there is no way to tell inbound from outbound');

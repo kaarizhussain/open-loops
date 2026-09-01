@@ -23,6 +23,14 @@ slack_list_user_channels(types="public_channel,private_channel,im")
 slack_read_channel(channel_id=…, limit=100)
 ```
 
+**Threads are a second fetch.** A channel read announces a root as
+`Thread: 2 replies (latest: …)` and does not include the replies, so anything promised
+inside one is invisible without going back for it:
+
+```
+slack_read_thread(channel_id=…, message_ts=<the root's Message TS>)
+```
+
 Also read your own DM — that is where the last digest and any corrections are.
 
 **2. Write what came back:**
@@ -34,9 +42,18 @@ Also read your own DM — that is where the last digest and any corrections are.
   "conversations": [
     { "channel": "#deals", "members": ["lena@vectorfreight.com"], "text": "<connector output>" }
   ],
+  "threads": [
+    { "channel": "#deals", "root": "1788292991.482509", "text": "<slack_read_thread output>" }
+  ],
   "dm": { "channel": "D0…", "text": "<connector output for your self-DM>" }
 }
 ```
+
+A thread read repeats its own root message; it is matched by timestamp rather than
+appended, so nothing is counted twice. Each thread becomes its own conversation
+boundary — the tightest one Slack offers, and the only one as narrow as an email
+thread's. If a root's replies are not supplied, the digest says so rather than
+quietly leaving them out.
 
 `text` is the connector's response verbatim. The adapter parses it, including the
 `Message TS` line — the human date carries a timezone abbreviation and is ignored.
@@ -113,14 +130,8 @@ unprepped* — compare what was said against what is on the calendar. With Slack
 they can never fire, and those are the two that platform assistants are least able to
 replace. The digest says `0 meetings` and means it.
 
-**Thread replies are invisible.** This was checked against a live workspace rather
-than assumed. A channel read gives no thread ids at all — a root message carries a
-note saying `Thread: 1 replies (latest: …)` and nothing more, and **the replies
-themselves are not in the response**. So a promise made inside a thread is not seen.
-
-The adapter records `hasThread` on those roots so a caller can fetch them with
-`slack_read_thread`, but the runner does not do that yet. Until it does, every
-conversation is one unit and the read window is what keeps closure matching honest:
+**An unthreaded channel is one wide boundary.** Threads have their own, but plain
+channel talk does not, so the read window is what keeps closure matching honest:
 read three weeks, and a delivery can only be confused with a promise from the same
 three weeks.
 
@@ -128,6 +139,12 @@ three weeks.
 `*Sent using* @App` footer. Left in the body it would put identical words in every
 message, so every message would share subject matter with every other one and
 closure matching would start agreeing with everything. Stripped.
+
+**Two formats, neither documented.** A channel read and a thread read do not agree
+on shape — one puts the sender on the banner, the other on a separate `From:` line.
+Both were copied from live responses. This is the standing cost of parsing a
+presentation format, and the reason the adapter has tests built from real output
+rather than invented output.
 
 **Nothing is validated.** No number in this repo comes from real chatter. The
 conversations in `test_slack_run.js` are invented, the same way the mail fixture is.

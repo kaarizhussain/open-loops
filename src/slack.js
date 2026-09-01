@@ -14,8 +14,24 @@
  * epoch in `Message TS` is exact, so that is what the timestamp comes from.
  */
 
-/* One message header. Name is greedy-safe because the bracketed parts anchor it. */
+/* Two formats, because reading a channel and reading a thread do not agree.
+ *
+ * A channel read puts the whole identity on one banner:
+ *   === Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at … ===
+ *
+ * A thread read separates the banner from the identity:
+ *   === THREAD PARENT MESSAGE ===        or   --- Reply 1 of 3 ---
+ *   From: Alex Rivera <you@example.com> (U0EXAMPLE001)
+ *   Time: 2026-09-01 16:03:11 EDT
+ *
+ * Both were copied from live responses. Neither is documented anywhere, which is the
+ * standing risk of parsing a presentation format — but a thread read is the only way
+ * to see a reply at all, so there is no version of this that reads one shape. */
 var HEADER = /^=== Message from (.+?)(?:\s+<([^>]+)>)?\s+\(([UWB][A-Z0-9]+)\)\s+at\s+(.*?)\s*===\s*$/;
+var THREAD_START = /^\s*(?:===\s*THREAD PARENT MESSAGE\s*===|-{2,}\s*Reply \d+ of \d+\s*-{2,})\s*$/i;
+var THREAD_BANNER = /^\s*===\s*THREAD REPLIES\b/i;
+var FROM_LINE = /^From:\s*(.+?)(?:\s+<([^>]+)>)?\s+\(([UWB][A-Z0-9]+)\)\s*$/;
+var TIME_LINE = /^Time:\s*\S/i;
 var TS_LINE = /^Message TS:\s*([\d.]+)\s*$/;
 /* What the connector adds that nobody typed.
  *
@@ -79,11 +95,12 @@ function parseChannel(text, opts) {
     if (body && !SYSTEM.test(body)) {
       out.push({
         id: cur.ts,
-        /* The conversation is the boundary. A channel read gives no thread ids at
-         * all — only a note on the root saying how many replies it has — so there is
-         * nothing narrower to key on. That is wider than an email thread, and the
-         * read window is what keeps closure matching honest inside it. */
-        threadId: opts.channel || 'slack',
+        /* A channel read gives no thread ids, only a note on the root saying how many
+         * replies it has, so a plain channel is one wide boundary and the read window
+         * is what keeps closure matching honest inside it. A thread read is different:
+         * the caller passes the root's timestamp, and that is a real boundary — the
+         * narrowest Slack offers, and the one thing here that matches email's. */
+        threadId: opts.threadId || opts.channel || 'slack',
         // Marks a root whose replies a channel read does not include — fetching them
         // is a separate call the caller has to make.
         hasThread: !!cur.hasThread,
@@ -98,20 +115,29 @@ function parseChannel(text, opts) {
     cur = null;
   };
 
+  var start = function (name, email, uid) {
+    close();
+    cur = { name: name || '', email: (email || '').toLowerCase(), uid: uid || '',
+            ts: null, hasThread: false, attach: false, body: [] };
+  };
+
   lines.forEach(function (line) {
     var h = line.match(HEADER);
-    if (h) {
-      close();
-      cur = { name: h[1], email: (h[2] || '').toLowerCase(), uid: h[3],
-              ts: null, hasThread: false, attach: false, body: [] };
-      return;
-    }
-    if (!cur) return;                       // preamble before the first message
+    if (h) { start(h[1], h[2], h[3]); return; }      // channel read: identity inline
+    if (THREAD_START.test(line)) { start(); return; } // thread read: identity follows
+    if (THREAD_BANNER.test(line)) { close(); return; } // a section heading, not a message
+    if (!cur) return;                                 // preamble before the first message
+
+    // Only fills an identity the banner did not carry, so a body line that happens
+    // to begin "From:" cannot rewrite who sent the message.
+    var f = !cur.uid && line.match(FROM_LINE);
+    if (f) { cur.name = f[1]; cur.email = (f[2] || '').toLowerCase(); cur.uid = f[3]; return; }
+    if (TIME_LINE.test(line)) return;                 // the localised date, unparsed
 
     var t = line.match(TS_LINE);
     if (t && !cur.ts) { cur.ts = t[1]; return; }
     if (THREAD_NOTE.test(line)) { cur.hasThread = true; return; }
-    if (SENT_VIA.test(line)) return;                 // the app's own footer, not content
+    if (SENT_VIA.test(line)) return;                  // the app's own footer, not content
     if (ATTACH_LINE.test(line)) { cur.attach = true; return; }
 
     cur.body.push(line);
