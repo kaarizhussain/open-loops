@@ -163,12 +163,21 @@ function detectLoops(messages, events, opts) {
     msgs.forEach(function (m, i) {
       sentences(m.body).forEach(function (s) {
         if (!COMMIT.test(s)) return;
-        if (DELIVER.test(s)) return;              // "I'll attach" vs "attached" — the latter is delivery
+        /* No DELIVER check here, deliberately. A bare "attached" never reaches this
+         * line — COMMIT already rejected it. The only sentences a DELIVER test could
+         * reject are ones that commit *and* use delivery words, and those are promises:
+         * "we’ll have the signed copy back Friday", "just sent it, I’ll follow up Monday".
+         * Tense decides, not vocabulary, and a commitment is future tense by construction. */
         var later = msgs.slice(i + 1).filter(function (n) { return n.out === m.out; });
         var closer = null;
         later.forEach(function (n) {
           if (closer) return;
-          if ((n.attach || DELIVER.test(n.body)) && refersTo(s, n.body)) closer = n;
+          /* The delivery sentence is the evidence, not the whole message — otherwise
+           * "the NDA is signed, still working on the pricing" closes the pricing promise
+           * on the strength of one word about something else. An attachment has no
+           * sentence of its own, so there the message body is all the evidence there is. */
+          if (n.attach ? refersTo(s, n.body)
+                       : sentences(n.body).some(function (x) { return DELIVER.test(x) && refersTo(s, x); })) closer = n;
         });
         // "I'll review before the deadline" — the date lives in the message being answered.
         var due = parseDue(s, m.date);
