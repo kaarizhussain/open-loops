@@ -144,8 +144,11 @@ function render(b) {
       var tracked = l.isNew ? 'NEW' : l.trackedDays > 0 ? l.trackedDays + 'd on the list' : null;
       // With several principals the heading cannot name one, so each item does.
       var whose = many && l.principal ? 'for ' + l.principal.label + ' · ' : '';
+      /* A channel you are alone in has no counterparty, and printing "undefined"
+       * where a name goes is how a digest stops looking like it was written on
+       * purpose. Say the conversation instead. */
       p('      ' + (tracked ? tracked + ' · ' : '') + whose +
-        (l.rel ? l.rel.label + ' · ' : '') + l.who + ' · ' + l.subject);
+        (l.rel ? l.rel.label + ' · ' : '') + (l.who ? l.who + ' · ' : '') + l.subject);
       if (l.weekendShift) p('      note: stated ' + l.due + ' is a weekend — last working day is ' + l.workDue);
     });
     p('');

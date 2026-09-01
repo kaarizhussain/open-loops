@@ -460,7 +460,10 @@ function detectLoops(messages, events, opts) {
   var solo = Array.isArray(principals) && principals.length === 0;
   var out = [];
   var threads = {};
-  messages.slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; })
+  /* Equal timestamps must compare equal, or the sort is free to reorder them.
+   * Mail rarely collides to the minute; chat does it constantly, and the caller has
+   * already put them in the right order. */
+  messages.slice().sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; })
     .forEach(function (m) {
       m.out = m.from.toLowerCase() === exec;
       (threads[m.threadId] = threads[m.threadId] || []).push(m);

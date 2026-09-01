@@ -58,6 +58,45 @@ assert.strictEqual(a.length, 1, 'a missing email must not drop the message');
 assert.strictEqual(a[0].from, 'U0EXAMPLE003@slack.local',
   'it falls back to something addressable, so direction still resolves');
 
+/* --- what the connector adds, observed on a live workspace --- */
+
+/* Every message sent through an app carries this footer. Left in the body it puts
+   the same words in every message, so every message shares subject matter with
+   every other one and closure matching starts agreeing with everything. */
+var footed = parseChannel([
+  '=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 16:02:38 EDT ===',
+  'Message TS: 1788292958.058409',
+  "I'll send the revised pricing sheet to Meridian by Thursday.",
+  '*Sent using* <@U0EXAMPLE009|Claude>'
+].join('\n'), OPTS);
+assert.strictEqual(footed[0].body, "I'll send the revised pricing sheet to Meridian by Thursday.",
+  'the app footer is not part of what anyone said');
+
+/* A thread root is announced with a count, not an id — and the replies themselves
+   are not in a channel read at all, so fetching them is a separate call. */
+var rooted = parseChannel([
+  '=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 16:03:11 EDT ===',
+  'Message TS: 1788292991.482509',
+  'Halcyon pilot — scoping thread.',
+  '*Sent using* <@U0EXAMPLE009|Claude>',
+  'Thread: 1 replies (latest: 2026-09-01 16:03:17 EDT)'
+].join('\n'), OPTS);
+assert.strictEqual(rooted[0].body, 'Halcyon pilot — scoping thread.', 'the thread note is not content');
+assert.strictEqual(rooted[0].hasThread, true, 'but it is recorded, so replies can be fetched');
+assert.strictEqual(footed[0].hasThread, false);
+
+/* The connector returns newest first, and chat puts many messages inside one minute.
+   Sorting on the minute-truncated date leaves them scrambled — and a promise that
+   lands after its own delivery can never be closed by it. */
+var sameMinute = [3, 1, 2].map(function (n) {
+  return ['=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 16:02:0' + n + ' EDT ===',
+          'Message TS: 178829295' + n + '.00000' + n, 'message ' + n].join('\n');
+}).join('\n');
+var ordered = parseChannel(sameMinute, OPTS);
+assert.deepStrictEqual(ordered.map(function (m) { return m.body; }),
+  ['message 1', 'message 2', 'message 3'], 'ordered on the epoch, not the truncated date');
+assert.strictEqual(ordered[0].date, ordered[2].date, 'even though all three share a minute');
+
 /* --- Slack markup would otherwise reach the detector as content --- */
 assert.strictEqual(cleanText('<@U123|Dana> can you look?'), '@Dana can you look?');
 assert.strictEqual(cleanText('ping <@U123> please'), 'ping  please');

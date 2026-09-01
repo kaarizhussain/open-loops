@@ -17,10 +17,18 @@
 /* One message header. Name is greedy-safe because the bracketed parts anchor it. */
 var HEADER = /^=== Message from (.+?)(?:\s+<([^>]+)>)?\s+\(([UWB][A-Z0-9]+)\)\s+at\s+(.*?)\s*===\s*$/;
 var TS_LINE = /^Message TS:\s*([\d.]+)\s*$/;
-/* Not yet observed in the wild — the test workspace had no threads. Matched
- * loosely so that a thread marker under any of these spellings is picked up,
- * and its absence simply means "not a reply". */
-var THREAD_LINE = /^(?:Thread TS|Thread|In thread|Reply to|Parent)\s*:?\s*([\d.]+)\s*$/i;
+/* What the connector adds that nobody typed.
+ *
+ * Every message sent through an app carries a "*Sent using* @App" footer, and that
+ * footer is not harmless decoration: it puts the same two or three words in every
+ * single message, so every message shares subject matter with every other one and
+ * closure matching starts finding agreement everywhere.
+ *
+ * A thread root carries "Thread: 2 replies (latest: …)" — a count, not an id, and
+ * the replies themselves are not in a channel read at all. So it marks that a thread
+ * exists and nothing more; fetching it is a separate call. */
+var SENT_VIA = /^\s*\*?Sent (?:using|via)\*?\s/i;
+var THREAD_NOTE = /^\s*Thread:\s*\d+\s+repl/i;
 var ATTACH_LINE = /^(?:Files?|Attachments?)\s*:/i;
 
 /* Slack writes links, mentions and channel refs as angle-bracket spans. Left in
@@ -71,10 +79,14 @@ function parseChannel(text, opts) {
     if (body && !SYSTEM.test(body)) {
       out.push({
         id: cur.ts,
-        // No thread marker means the conversation itself is the boundary. That is
-        // wider than an email thread, which is why closure matching needs the
-        // lookback window to keep it honest.
-        threadId: cur.threadTs || opts.channel || 'slack',
+        /* The conversation is the boundary. A channel read gives no thread ids at
+         * all — only a note on the root saying how many replies it has — so there is
+         * nothing narrower to key on. That is wider than an email thread, and the
+         * read window is what keeps closure matching honest inside it. */
+        threadId: opts.channel || 'slack',
+        // Marks a root whose replies a channel read does not include — fetching them
+        // is a separate call the caller has to make.
+        hasThread: !!cur.hasThread,
         subject: opts.channel || 'Slack',
         from: cur.email || (cur.uid + '@slack.local'),
         to: (opts.members || []).slice(),
@@ -91,24 +103,29 @@ function parseChannel(text, opts) {
     if (h) {
       close();
       cur = { name: h[1], email: (h[2] || '').toLowerCase(), uid: h[3],
-              ts: null, threadTs: null, attach: false, body: [] };
+              ts: null, hasThread: false, attach: false, body: [] };
       return;
     }
     if (!cur) return;                       // preamble before the first message
 
     var t = line.match(TS_LINE);
     if (t && !cur.ts) { cur.ts = t[1]; return; }
-    var th = line.match(THREAD_LINE);
-    if (th) { cur.threadTs = th[1]; return; }
+    if (THREAD_NOTE.test(line)) { cur.hasThread = true; return; }
+    if (SENT_VIA.test(line)) return;                 // the app's own footer, not content
     if (ATTACH_LINE.test(line)) { cur.attach = true; return; }
 
     cur.body.push(line);
   });
   close();
 
-  // A message with no timestamp cannot be placed in the conversation at all.
+  /* A message with no timestamp cannot be placed in the conversation at all.
+   *
+   * Ordered on the raw epoch, not the minute-truncated date. The connector returns
+   * newest first, and chat puts many messages inside one minute — sorting on the
+   * truncated date leaves them scrambled, and a promise that lands after its own
+   * delivery can never be closed by it. */
   return out.filter(function (m) { return m.id; })
-            .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+            .sort(function (a, b) { return parseFloat(a.id) - parseFloat(b.id); });
 }
 
 if (typeof module !== 'undefined') {

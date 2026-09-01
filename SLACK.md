@@ -113,10 +113,21 @@ unprepped* — compare what was said against what is on the calendar. With Slack
 they can never fire, and those are the two that platform assistants are least able to
 replace. The digest says `0 meetings` and means it.
 
-**No threads.** Slack thread markers are matched loosely and have never been seen in
-practice, so every conversation is treated as one unit. That is wider than an email
-thread, and the read window is what keeps it honest: read three weeks and a delivery
-can only be confused with a promise from the same three weeks.
+**Thread replies are invisible.** This was checked against a live workspace rather
+than assumed. A channel read gives no thread ids at all — a root message carries a
+note saying `Thread: 1 replies (latest: …)` and nothing more, and **the replies
+themselves are not in the response**. So a promise made inside a thread is not seen.
+
+The adapter records `hasThread` on those roots so a caller can fetch them with
+`slack_read_thread`, but the runner does not do that yet. Until it does, every
+conversation is one unit and the read window is what keeps closure matching honest:
+read three weeks, and a delivery can only be confused with a promise from the same
+three weeks.
+
+**Everything an app posts is signed.** Messages sent through a connector carry a
+`*Sent using* @App` footer. Left in the body it would put identical words in every
+message, so every message would share subject matter with every other one and
+closure matching would start agreeing with everything. Stripped.
 
 **Nothing is validated.** No number in this repo comes from real chatter. The
 conversations in `test_slack_run.js` are invented, the same way the mail fixture is.
