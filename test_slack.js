@@ -93,19 +93,19 @@ assert.strictEqual(owed.due, '2026-08-08', 'and its deadline resolves from the m
 assert.strictEqual(owed.status, 'overdue');
 assert.strictEqual(owed.who, 'lena@vectorfreight.com');
 
-/* Found while writing the line above, and left as a note rather than a fix because
-   loops.js is being edited elsewhere: DELIVER matches the bare word "signed", so
-   "we'll have the signed order form back to you Friday" is read as a delivery and
-   the promise is dropped. Any promise to send a signed document disappears. The
-   fixture only escapes it because "countersigned" has no word boundary before
-   "signed". Same class of bug as the three the README already documents. */
-var trap = parseChannel([
+/* A promise to send a signed document used to vanish: DELIVER matches the bare word
+   "signed", so the sentence was read as the document already having been sent. Tense
+   decides, not vocabulary — "we'll have it back to you Friday" is future whatever
+   nouns it contains. The fixture escaped it only because "countersigned" has no word
+   boundary before "signed", which is luck rather than coverage. */
+var signed = parseChannel([
   '=== Message from Lena Borg <lena@vectorfreight.com> (U0EXAMPLE002) at 2026-08-01 10:00:00 UTC ===',
   'Message TS: ' + epoch(2026, 8, 1, 10),
   "We'll have the signed order form back to you Friday Aug 8."
 ].join('\n'), { channel: '#vf', members: [], tzOffset: 0 });
-var missed = detectLoops(trap, [], { exec: 'you@example.com', today: '2026-08-12' });
-assert.strictEqual(missed.open.length, 0,
-  'KNOWN BUG: a promise containing "signed" is swallowed by DELIVER — see note above');
+var kept = detectLoops(signed, [], { exec: 'you@example.com', today: '2026-08-12' });
+assert.strictEqual(kept.open.length, 1, 'a promise about a signed document survives');
+assert.strictEqual(kept.open[0].type, 'owed_to_us');
+assert.strictEqual(kept.open[0].due, '2026-08-08', 'with its deadline intact');
 
 console.log('slack: OK');
