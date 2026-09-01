@@ -85,7 +85,7 @@ function ignored(from) {
  * Paginate if this starts firing at a lookback someone actually needs.
  */
 var READ_CAP = 300;
-var lastRead = { threads: 0, capped: false };
+var lastRead = { threads: 0, capped: false, cap: READ_CAP };
 
 /* Gmail search terms need quoting once they contain a space. */
 function term(op, value) {
@@ -137,7 +137,8 @@ function readMessages() {
           ' -category:promotions -category:social' + scopeQuery();
   var out = [];
   var threads = GmailApp.search(q, 0, READ_CAP);
-  lastRead = { threads: threads.length, capped: threads.length >= READ_CAP, skipped: 0 };
+  lastRead = { threads: threads.length, capped: threads.length >= READ_CAP,
+               cap: READ_CAP + '-thread', skipped: 0 };
   threads.forEach(function (thread) {
     if (threadExcluded(thread)) { lastRead.skipped++; return; }
     var tid = thread.getId();
@@ -193,57 +194,11 @@ function build(persist) {
   }
 
   var briefs = meetingBriefs(messages, events, result.open, opts);
-  return { messages: messages, events: events, result: result, briefs: briefs,
+  // `today` travels on the object so the renderer never has to read a clock.
+  return { today: opts.today, source: 'gmail',
+           messages: messages, events: events, result: result, briefs: briefs,
            ledger: ledger, ledgerUrl: sh.getParent().getUrl(), read: lastRead,
            marked: marked, pruned: pruned };
-}
-
-var OWNER_ORDER = ['exec', 'them', 'you'];
-
-/* One sentence naming the worst of it, before any counts.
- *
- * A digest that opens with how many messages it read is a system reporting on itself.
- * Someone good at this job opens with the thing you would be most annoyed to discover
- * on Friday. The ranking already knows which item that is; this only has to say it. */
-function headline(open) {
-  if (!open.length) return 'Nothing outstanding. Genuinely — the list is empty.';
-
-  var late = open.filter(function (l) { return l.status === 'overdue'; })
-                 .sort(function (a, b) { return b.overdueDays - a.overdueDays; });
-  var name = function (l) { return l.subject + (l.rel ? ' (' + l.rel.label + ')' : ''); };
-
-  if (late.length) {
-    var worst = late[0];
-    return late.length === 1
-      ? 'One thing is overdue: ' + name(worst) + ', ' + worst.overdueDays + ' days past.'
-      : late.length + ' are overdue. The oldest by ' + worst.overdueDays +
-        ' days is ' + name(worst) + '.';
-  }
-
-  var today = open.filter(function (l) { return l.status === 'due_today'; });
-  if (today.length) {
-    return 'Nothing overdue. ' + today.length + (today.length === 1 ? ' thing lands' : ' things land') +
-      ' today, starting with ' + name(today[0]) + '.';
-  }
-
-  // No deadline pressure at all, so the useful signal is what has gone quiet longest.
-  var stale = open.slice().sort(function (a, b) { return (b.ageDays || 0) - (a.ageDays || 0); })[0];
-  return 'Nothing overdue and nothing due today. The quietest is ' + name(stale) +
-    ', untouched for ' + stale.ageDays + ' days.';
-}
-
-/* Number the items in the order the digest prints them, and record which loop each
- * number refers to. Stamping `n` on the loop itself means the numbering and the
- * recorded order cannot drift apart — render just prints what this assigned. */
-function digestOrder(open) {
-  var keys = [], n = 0;
-  OWNER_ORDER.forEach(function (key) {
-    open.filter(function (l) { return l.owner === key; }).forEach(function (l) {
-      l.n = ++n;
-      keys.push(loopKey(l));
-    });
-  });
-  return keys;
 }
 
 /* Replies to previous digests, turned into verdicts.
@@ -275,96 +230,6 @@ function applyReplies(rows, persist) {
   // Only on a real run: preview must not consume a reply the next send should act on.
   if (persist) rememberReplies(seen);
   return marked;
-}
-
-function render(b) {
-  var L = [], p = function (s) { L.push(s == null ? '' : s); };
-  var r = b.result, open = r.open;
-
-  p('OPEN LOOPS — for ' + today());
-  p('');
-  p(headline(open));
-  p('');
-  p('Read ' + b.messages.length + ' messages' +
-    (b.read && b.read.threads ? ' across ' + b.read.threads + ' threads' : '') +
-    ' and ' + b.events.length + ' meetings.');
-  /* Silent truncation would make a half-read mailbox look like a complete digest, and
-   * the half it drops is the oldest — which is exactly where the overdue items are. */
-  if (b.read && b.read.capped) {
-    p('INCOMPLETE — stopped at the ' + READ_CAP + '-thread limit. The oldest mail in the ' +
-      'window was not read, which is where overdue items live. Lower lookbackDays and rerun.');
-  }
-  /* What changed since yesterday, on the first line — the rest of this is the same
-   * list it was, and a reader who already knows that will not scan it again. */
-  if (b.ledger) {
-    p(open.length + ' open · ' + b.ledger.fresh + ' new' +
-      (b.ledger.gone.length ? ' · ' + b.ledger.gone.length + ' cleared' : '') +
-      (b.ledger.suppressed ? ' · ' + b.ledger.suppressed + ' hidden as wrong' : ''));
-  }
-  /* Say the reply landed. Correcting something and seeing no acknowledgement is how
-   * a reader learns the correction does not matter, and then they stop sending them. */
-  if (b.marked) {
-    p('Took your last reply — ' + b.marked + (b.marked === 1 ? ' item' : ' items') +
-      ' marked wrong and dropped for good.');
-  }
-  p('');
-
-  var due = b.briefs.filter(function (x) { return x.prepDue; });
-  if (due.length) {
-    p('NEEDS TO GO OUT TODAY');
-    due.forEach(function (x) {
-      p('  ' + (x.prepLate ? '[LATE] ' : '') + x.title + ' — ' +
-        (x.inDays === 0 ? 'today' : x.inDays === 1 ? 'tomorrow' : 'in ' + x.inDays + ' days') +
-        ', no agenda' + (x.attendees.length ? ' (' + x.attendees[0] + ')' : ''));
-    });
-    p('');
-  }
-
-  OWNER_ORDER.forEach(function (key) {
-    var items = open.filter(function (l) { return l.owner === key; });
-    if (!items.length) return;
-    p(OWNER[key].title.toUpperCase() + ' (' + items.length + ') — ' + OWNER[key].note);
-    items.forEach(function (l) {
-      var when = !l.due ? 'no date'
-        : l.status === 'overdue' ? l.overdueDays + 'd late'
-        : l.status === 'due_today' ? 'today' : 'due ' + l.due;
-      // The number is what you quote back to reject it, so it leads the line.
-      var num = l.n ? (l.n < 10 ? ' ' + l.n : '' + l.n) + '. ' : '  ';
-      p(num + '[' + when + '] ' + l.what);
-      // How long this has been sitting here is its own kind of overdue.
-      var tracked = l.isNew ? 'NEW' : l.trackedDays > 0 ? l.trackedDays + 'd on the list' : null;
-      p('      ' + (tracked ? tracked + ' · ' : '') +
-        (l.rel ? l.rel.label + ' · ' : '') + l.who + ' · ' + l.subject);
-      if (l.weekendShift) p('      note: stated ' + l.due + ' is a weekend — last working day is ' + l.workDue);
-    });
-    p('');
-  });
-
-  /* Dropped off the list since the last run. The only part of this email that is
-   * good news, which is reason enough to keep it in. */
-  if (b.ledger && b.ledger.gone.length) {
-    p('CLEARED SINCE THE LAST RUN (' + b.ledger.gone.length + ')');
-    b.ledger.gone.forEach(function (row) {
-      // Blank under storeText:false — say something rather than printing an empty line.
-      p('  ' + (row[COL.what] || '(text not kept)') + (row[COL.who] ? '  — ' + row[COL.who] : ''));
-    });
-    p('');
-  }
-
-  if (r.closed.length) {
-    p('CLOSED ITSELF (' + r.closed.length + ')');
-    r.closed.slice(0, 10).forEach(function (l) { p('  ' + l.closedOn + '  ' + l.what); });
-    p('');
-  }
-
-  p('Drafts only — nothing here has been sent. Verify before acting on any of it.');
-  p('');
-  p("Anything here that isn't real? Reply with just its number — \"3 7\" — and those");
-  p('stop coming back. That reply is the only record of what this gets wrong.');
-  p('Already knew about one? Put it on a line starting with k — "k 1 4". It stays on');
-  p('the list; it just stops counting as something this told you.');
-  if (b.ledgerUrl) p('Ledger: ' + b.ledgerUrl);
-  return L.join('\n');
 }
 
 /* Run this by hand first. Logs the digest, emails nobody, records nothing. */

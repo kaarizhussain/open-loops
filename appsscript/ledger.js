@@ -109,7 +109,9 @@ function mergeLedger(rows, loops, today, opts) {
     if (touched[cell(r[COL.key])]) return;
     if (cell(r[COL.gone_on]) || isWrong(r[COL.verdict])) return;
     r[COL.gone_on] = today;
-    gone.push(r);
+    // Reported as plain fields rather than a raw row, so whatever renders this does
+    // not need to know the ledger's column layout.
+    gone.push({ key: cell(r[COL.key]), what: cell(r[COL.what]), who: cell(r[COL.who]) });
   });
 
   return { shown: shown, fresh: fresh, suppressed: suppressed, gone: gone };

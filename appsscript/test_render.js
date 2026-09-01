@@ -103,7 +103,7 @@ var sandbox = {
   module: undefined
 };
 vm.createContext(sandbox);
-[up('loops.js'), here('adapters.js'), here('ledger.js'), here('Code.gs')].forEach(function (src) {
+[up('loops.js'), up('digest.js'), here('adapters.js'), here('ledger.js'), here('Code.gs')].forEach(function (src) {
   vm.runInContext(src, sandbox);
 });
 
