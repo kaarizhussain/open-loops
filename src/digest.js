@@ -22,6 +22,18 @@
  * then the long list you can absorb yourself. */
 var OWNER_ORDER = ['exec', 'them', 'you'];
 
+/* Name the pile after the person, when there is a person to name.
+ *
+ * "Needs the executive" is right when you support someone unnamed, wrong when you
+ * support Dana, and nonsense when you support nobody — in which case nothing lands
+ * in that pile at all and the heading never prints. */
+function ownerTitle(key, principals) {
+  if (key !== 'exec' || !principals || !principals.length) return OWNER[key].title;
+  return principals.length === 1
+    ? 'Needs ' + principals[0].label
+    : OWNER.exec.title;          // several: the name goes on each item instead
+}
+
 /* One sentence naming the worst of it, before any counts.
  *
  * A digest that opens with how many messages it read is a system reporting on itself.
@@ -116,10 +128,11 @@ function render(b) {
     p('');
   }
 
+  var many = (b.principals || []).length > 1;
   OWNER_ORDER.forEach(function (key) {
     var items = open.filter(function (l) { return l.owner === key; });
     if (!items.length) return;
-    p(OWNER[key].title.toUpperCase() + ' (' + items.length + ') — ' + OWNER[key].note);
+    p(ownerTitle(key, b.principals).toUpperCase() + ' (' + items.length + ') — ' + OWNER[key].note);
     items.forEach(function (l) {
       var when = !l.due ? 'no date'
         : l.status === 'overdue' ? l.overdueDays + 'd late'
@@ -129,7 +142,9 @@ function render(b) {
       p(num + '[' + when + '] ' + l.what);
       // How long this has been sitting here is its own kind of overdue.
       var tracked = l.isNew ? 'NEW' : l.trackedDays > 0 ? l.trackedDays + 'd on the list' : null;
-      p('      ' + (tracked ? tracked + ' · ' : '') +
+      // With several principals the heading cannot name one, so each item does.
+      var whose = many && l.principal ? 'for ' + l.principal.label + ' · ' : '';
+      p('      ' + (tracked ? tracked + ' · ' : '') + whose +
         (l.rel ? l.rel.label + ' · ' : '') + l.who + ' · ' + l.subject);
       if (l.weekendShift) p('      note: stated ' + l.due + ' is a weekend — last working day is ' + l.workDue);
     });
@@ -164,6 +179,6 @@ function render(b) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { render: render, headline: headline, digestOrder: digestOrder,
+  module.exports = { render: render, headline: headline, digestOrder: digestOrder, ownerTitle: ownerTitle,
                      OWNER_ORDER: OWNER_ORDER };
 }

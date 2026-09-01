@@ -41,6 +41,27 @@ Also read your own DM — that is where the last digest and any corrections are.
 `text` is the connector's response verbatim. The adapter parses it, including the
 `Message TS` line — the human date carries a timezone abbreviation and is ignored.
 
+## Who you support
+
+The list is optional and it defaults to empty, which means **you support nobody** —
+you are reading your own work. That is the common case here, and it matters because
+the digest otherwise sorts your own commitments into a pile headed *needs the
+executive*, which is a heading that lies about what is under it.
+
+```json
+"principals": []                                   // nobody. Two piles: chase, and yours.
+"principals": [{ "label": "Dana" }]                // one. The pile becomes "Needs Dana".
+"principals": [                                    // several. Each item says whose.
+  { "label": "Dana",   "address": "dana@northstar.io" },
+  { "label": "Marcus", "address": "marcus@northstar.io" }
+]
+```
+
+With several, items are routed by who was actually on the conversation rather than by
+guesswork, and the name goes on each line because one heading cannot carry two. That
+case only really arises when you read your own account and are copied on several
+people's work — which is also the version that needs nobody's permission to set up.
+
 **3. Run it:**
 
 ```bash

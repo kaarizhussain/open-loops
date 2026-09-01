@@ -108,6 +108,34 @@ main([write(input), '--ledger', ledger, '--dry']);
 assert.strictEqual(fs.readFileSync(ledger, 'utf8'), before,
   '--dry renders without recording, so reading it by hand costs nothing');
 
+/* --------------------- who you support, if anyone --------------------- */
+
+/* Running it over your own Slack is the common case, and the digest must not sort
+   your own work into a pile named after an executive who does not exist. */
+var soloLedger = path.join(dir, 'solo.json');
+var soloText = main([write(input), '--ledger', soloLedger]);
+assert.strictEqual(soloText.indexOf('NEEDS THE EXECUTIVE'), -1,
+  'no executive pile when you support nobody');
+assert.ok(soloText.indexOf('YOURS TO HANDLE') > -1, 'that work is simply yours');
+
+/* Supporting one person keeps the split and names them. */
+var named = JSON.parse(JSON.stringify(input));
+named.principals = [{ label: 'Dana' }];
+var namedText = main([write(named), '--ledger', path.join(dir, 'named.json')]);
+assert.ok(namedText.indexOf('NEEDS DANA') > -1, 'the pile is named after the person: ' +
+  namedText.split('\n').filter(function (l) { return /\(\d+\) —/.test(l); }).join(' | '));
+assert.strictEqual(namedText.indexOf('NEEDS THE EXECUTIVE'), -1, 'and not after a job title');
+
+/* Supporting several puts the name on each item, since one heading cannot carry two. */
+var multi = JSON.parse(JSON.stringify(input));
+multi.principals = [
+  { label: 'Dana', address: 'sana@halcyon.io' },
+  { label: 'Marcus', address: 'rachel@northstar.io' }
+];
+var multiText = main([write(multi), '--ledger', path.join(dir, 'multi.json')]);
+assert.ok(/for (Dana|Marcus) · /.test(multiText),
+  'each item says whose it is when the heading cannot');
+
 /* ------------------------------ bad input ------------------------------ */
 assert.throws(function () { main([write({ conversations: [] }), '--ledger', ledger]); },
   /needs "self"/, 'without an address there is no way to tell inbound from outbound');

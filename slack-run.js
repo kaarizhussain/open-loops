@@ -98,7 +98,11 @@ function main(argv) {
   var dmMessages = input.dm ? parseChannel(input.dm.text, { channel: 'DM', tzOffset: input.tzOffset || 0 }) : [];
   var replies = marksFromDm(dmMessages, store, rows);
 
-  var opts = { exec: self, today: today, contacts: input.contacts || null };
+  var opts = { exec: self, today: today, contacts: input.contacts || null,
+               // Absent means the historical single unnamed executive; [] means you
+               // support nobody, which is the common case for someone running this
+               // over their own account.
+               principals: input.principals || [] };
   var result = loops.detectLoops(messages, [], opts);
 
   var ledger = L.mergeLedger(rows, result.open, today, { storeText: input.storeText !== false });
@@ -110,7 +114,7 @@ function main(argv) {
   var text = digest.render({
     today: today, source: 'slack',
     messages: messages, events: [], result: result, briefs: [],
-    ledger: ledger, marked: replies.marked,
+    ledger: ledger, marked: replies.marked, principals: input.principals || [],
     read: { threads: (input.conversations || []).length, capped: false }
   });
 

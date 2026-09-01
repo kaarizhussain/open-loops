@@ -364,14 +364,35 @@ function keyTokens(subject) {
 var EXEC_WORK = /\b(review|sign[- ]?off|approve|approval|decision|decide|feedback|pricing|redline|deck|section|reference call|weigh in)\b/i;
 var EA_WORK = /\b(agenda|invite|calendar|schedul\w*|book|venue|recap|notes|questionnaire|bio|talk title|itinerary|travel|circulate|forward|logistics|intro\w*|connect)\b/i;
 
-function assignOwner(type, what, subject) {
+function assignOwner(type, what, subject, solo) {
   if (type === 'owed_to_us' || type === 'awaiting_reply') return 'them';
   // These three are logistics by definition — the next move is always the assistant's.
   if (type === 'agreed_unscheduled' || type === 'no_followup' || type === 'unprepped_meeting') return 'you';
+  /* Supporting nobody collapses two of the three piles into one. Splitting work into
+   * "yours" and "the executive's" when you are the executive produces a heading that
+   * lies about its own contents. */
+  if (solo) return 'you';
   var t = what + ' ' + subject;
   if (EXEC_WORK.test(t)) return 'exec';
   if (EA_WORK.test(t)) return 'you';
   return 'exec';
+}
+
+/* Who this belongs to, when the reader supports more than one person.
+ *
+ * One deployment usually reads one mailbox, so the list is usually empty or a single
+ * name. It genuinely holds several only when someone runs this over their own
+ * account and is copied on several people's work — which is also the version that
+ * needs nobody's permission to set up. */
+function principalFor(parties, principals) {
+  if (!principals || !principals.length) return null;
+  if (principals.length === 1) return principals[0];
+  var on = principals.filter(function (p) {
+    return p.address && (parties || []).indexOf(String(p.address).toLowerCase()) > -1;
+  });
+  // Nobody identifiable on the conversation — better to name the likeliest than to
+  // drop the item into an unlabelled pile.
+  return on[0] || principals[0];
 }
 
 /* Relationship tiers. Every assistant weights a promise to the board differently
@@ -432,6 +453,11 @@ function shorten(s, n) {
 
 function detectLoops(messages, events, opts) {
   var exec = opts.exec.toLowerCase(), today = opts.today, execDomain = domain(exec);
+  /* Who the reader supports. Absent means the historical shape — one unnamed
+   * executive — so nothing that does not pass this changes behaviour. An explicit
+   * empty list means they support nobody and are running it on their own work. */
+  var principals = opts.principals;
+  var solo = Array.isArray(principals) && principals.length === 0;
   var out = [];
   var threads = {};
   messages.slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; })
@@ -442,6 +468,15 @@ function detectLoops(messages, events, opts) {
 
   Object.keys(threads).forEach(function (tid) {
     var msgs = threads[tid], last = msgs[msgs.length - 1];
+    /* Everyone on this conversation, so an item can be routed to whichever principal
+     * was actually party to it. Only consulted when there is more than one. */
+    var seen = {};
+    msgs.forEach(function (m) {
+      seen[m.from.toLowerCase()] = 1;
+      (m.to || []).forEach(function (t) { seen[String(t).toLowerCase()] = 1; });
+    });
+    var parties = Object.keys(seen);
+    var mark = out.length;
     var counterparty = null;
     msgs.forEach(function (m) {
       if (!m.out && domain(m.from) !== execDomain && !counterparty) counterparty = m.from;
@@ -563,6 +598,9 @@ function detectLoops(messages, events, opts) {
         });
       }
     }
+
+    // Everything this thread produced carries the thread's participants with it.
+    for (var q = mark; q < out.length; q++) out[q].parties = parties;
   });
 
   /* --- meetings: no follow-up after, no agenda before --- */
@@ -607,7 +645,8 @@ function detectLoops(messages, events, opts) {
     else r += Math.min(l.ageDays, 14) * 2;
     if (l.type === 'unprepped_meeting' && l.due === today) r += 20;
 
-    l.owner = assignOwner(l.type, l.what, l.subject);
+    l.owner = assignOwner(l.type, l.what, l.subject, solo);
+    l.principal = l.owner === 'exec' ? principalFor(l.parties, principals) : null;
     l.rel = relationship(l.who, opts.contacts);
     if (l.rel) r += l.rel.weight;
     l.risk = r;

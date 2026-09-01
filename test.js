@@ -87,6 +87,65 @@ assert.strictEqual(find('Cobalt', 'no_followup').owner, 'you', 'sending a recap 
   assert.ok(OWNER[o] && OWNER[o].title, 'missing label for pile: ' + o);
 });
 
+/* ---- who you support: nobody, one person, or several ----
+ *
+ * The three-way split assumes two people. Someone running this over their own work
+ * is one person, and sorting their work into "yours" and "the executive's" produces
+ * a heading that lies about what is under it. */
+var base = { exec: F.EXEC, today: F.TODAY, contacts: F.RELATIONSHIPS };
+var withP = function (principals) {
+  var o = { exec: base.exec, today: base.today, contacts: base.contacts };
+  if (principals !== undefined) o.principals = principals;
+  return detectLoops(F.MESSAGES, F.EVENTS, o);
+};
+
+/* Passing nothing must behave exactly as it did before this existed. */
+var unchanged = withP(undefined);
+assert.strictEqual(unchanged.open.filter(function (l) { return l.owner === 'exec'; }).length,
+  r.open.filter(function (l) { return l.owner === 'exec'; }).length,
+  'absent principals is the historical shape, unchanged');
+
+/* Supporting nobody collapses the executive pile into your own. */
+var soloR = withP([]);
+assert.strictEqual(soloR.open.filter(function (l) { return l.owner === 'exec'; }).length, 0,
+  'solo: nothing is waiting on an executive, because you are the executive');
+assert.strictEqual(soloR.open.length, r.open.length, 'the items themselves do not change');
+assert.strictEqual(
+  soloR.open.filter(function (l) { return l.owner === 'you'; }).length,
+  r.open.filter(function (l) { return l.owner === 'you' || l.owner === 'exec'; }).length,
+  'they move into yours rather than disappearing');
+
+/* One principal keeps the split and gains a name. */
+var oneR = withP([{ label: 'Dana' }]);
+assert.ok(oneR.open.some(function (l) { return l.owner === 'exec'; }), 'one principal keeps the pile');
+oneR.open.filter(function (l) { return l.owner === 'exec'; }).forEach(function (l) {
+  assert.strictEqual(l.principal.label, 'Dana', 'and every item in it names them');
+});
+
+/* Several are routed by who was actually on the conversation, not by guesswork. */
+var manyR = withP([
+  { label: 'Dana', address: 'marcus.bell@northstar.io' },
+  { label: 'Marcus', address: 'hr@northstar.io' }
+]);
+var deckItem = manyR.open.filter(function (l) { return l.subject.indexOf('board deck') > -1; })[0];
+var compItem = manyR.open.filter(function (l) { return l.subject.indexOf('comp plan') > -1; })[0];
+assert.strictEqual(deckItem.principal.label, 'Dana', 'routed to whoever was on that thread');
+assert.strictEqual(compItem.principal.label, 'Marcus', 'and the other thread to the other one');
+
+/* An item on nobody's conversation still gets attributed rather than vanishing. */
+var orphan = detectLoops(F.MESSAGES, F.EVENTS, {
+  exec: F.EXEC, today: F.TODAY,
+  principals: [{ label: 'Dana', address: 'nobody@nowhere.test' }, { label: 'Marcus', address: 'also@nowhere.test' }]
+});
+orphan.open.filter(function (l) { return l.owner === 'exec'; }).forEach(function (l) {
+  assert.ok(l.principal, 'every executive item names someone, even when nobody matches');
+});
+
+/* Only the executive pile carries a principal — a chase is on the counterparty. */
+r.open.filter(function (l) { return l.owner !== 'exec'; }).forEach(function (l) {
+  assert.strictEqual(l.principal, null, 'non-executive items name no principal');
+});
+
 /* ---- relationship weighting ---- */
 var inv = find('Halcyon', 'owed_by_us');
 assert.strictEqual(inv.rel.tier, 'investor', 'VC domain should resolve to investor tier');
