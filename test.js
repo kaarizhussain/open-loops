@@ -221,6 +221,23 @@ assert.strictEqual(new Set(r.open.map(loopKey)).size, r.open.length, 'keys are u
 assert.ok(r.open[0].risk >= r.open[r.open.length - 1].risk);
 assert.ok(['overdue', 'due_today'].indexOf(r.open[0].status) > -1, 'top item should be overdue or due today');
 
+/* DELIVER matches the bare word "signed", so a sentence promising a signed
+   document used to look like a delivery and was dropped before it could become
+   a loop. It commits, though, and a commitment is future tense by construction. */
+var signedPromise = [{ id: 's1', threadId: 'ts', subject: 'Order form', from: 'them@acme.com',
+  to: ['me@co.com'], date: '2026-08-01T10:00', attach: false,
+  body: "We'll have the signed order form back to you Friday Aug 8." }];
+var caught = detectLoops(signedPromise, [], { exec: 'me@co.com', today: '2026-08-12' }).open;
+assert.strictEqual(caught.length, 1, 'a promise to send a signed document is still a promise');
+assert.strictEqual(caught[0].type, 'owed_to_us');
+assert.strictEqual(caught[0].due, '2026-08-08', 'and it keeps its deadline');
+assert.strictEqual(caught[0].status, 'overdue');
+
+/* ...while with nothing committed, delivery language still reads as delivery. */
+signedPromise[0].body = 'Signed order form attached.';
+assert.strictEqual(detectLoops(signedPromise, [], { exec: 'me@co.com', today: '2026-08-12' }).open.length, 0,
+  'a bare delivery is not a commitment');
+
 console.log('open loops: ' + r.open.length + ' | cleared: ' + r.closed.length + '\n');
 ['them', 'you', 'exec'].forEach(function (o) {
   var items = r.open.filter(function (l) { return l.owner === o; });
