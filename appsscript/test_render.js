@@ -51,6 +51,29 @@ var SS = {
 SHEET.getParent = function () { return SS; };
 
 var props = {};
+
+/* Replies to past digests, as GmailApp would hand them over. The test drives this. */
+var REPLIES = [];
+function fakeGmail() {
+  return {
+    search: function () {
+      return REPLIES.map(function (r) {
+        return { getMessages: function () {
+          return [
+            { getSubject: function () { return r.subject; },
+              getFrom: function () { return 'Open Loops <sender@northstar.io>'; },
+              getPlainBody: function () { return ''; } },
+            { getSubject: function () { return 'Re: ' + r.subject; },
+              getFrom: function () { return r.from; },
+              getId: function () { return r.id || ('reply|' + r.subject + '|' + r.body); },
+              getPlainBody: function () { return r.body; } }
+          ];
+        } };
+      });
+    }
+  };
+}
+
 var TZ = 'America/New_York';
 var sandbox = {
   console: console,
@@ -63,6 +86,7 @@ var sandbox = {
     }
   },
   MailApp: { sendEmail: function (o) { sandbox.__sent = o; } },
+  GmailApp: fakeGmail(),
   PropertiesService: {
     getScriptProperties: function () {
       return {
@@ -190,6 +214,59 @@ assert.strictEqual(sent.to, sandbox.CONFIG.sendTo);
 assert.ok(/^Open loops — 2026-08-06 \(\d+ open, \d+ overdue, \d+ new\)$/.test(sent.subject),
   'subject carries the counts, new included: ' + sent.subject);
 assert.ok(!/html/i.test(Object.keys(sent).join(' ')), 'plain text only — nothing to render or break');
+
+/* ============= marking things wrong by replying to the digest ============= */
+sandbox.today = function () { return F.TODAY; };
+MESSAGES = F.MESSAGES;
+SHEET.__data.length = 1;            // fresh ledger, header row only
+props.digestKeys = undefined;
+
+var d1 = sandbox.build(true);
+var t1 = sandbox.render(d1);
+
+/* Items are numbered straight through, so a reply can name one unambiguously. */
+var numbered = t1.split('\n').filter(function (line) { return /^\s*\d+\. \[/.test(line); });
+assert.strictEqual(numbered.length, d1.result.open.length, 'every open item carries a number');
+numbered.forEach(function (line, i) {
+  assert.strictEqual(parseInt(line, 10), i + 1, 'numbering runs 1..n across sections: ' + line);
+});
+assert.ok(/Reply with just its number/.test(t1), 'the digest says how to reject something');
+
+/* The reader replies naming two of them. Found by the number the digest printed —
+   which is not the risk order, because the digest groups by who acts next — and
+   identified by key rather than display text, since three separate meetings all
+   read "No agenda attached". */
+var byNum = function (res, n) { return res.open.filter(function (l) { return l.n === n; })[0]; };
+var k1 = sandbox.loopKey(byNum(d1.result, 1)), k3 = sandbox.loopKey(byNum(d1.result, 3));
+REPLIES = [{ subject: 'Open loops — ' + F.TODAY + ' (15 open, 4 overdue, 15 new)',
+             from: 'Assistant <' + sandbox.CONFIG.sendTo + '>', body: '1 and 3 arent real' }];
+
+var d2 = sandbox.build(true);
+var t2 = sandbox.render(d2);
+assert.strictEqual(d2.marked, 2, 'both numbers in the reply were marked');
+assert.ok(/Took your last reply — 2 items marked wrong/.test(t2),
+  'and the digest confirms it, so the reader knows corrections land');
+var survived = d2.result.open.map(sandbox.loopKey);
+assert.strictEqual(survived.indexOf(k1), -1, 'item 1 of that digest is gone');
+assert.strictEqual(survived.indexOf(k3), -1, 'and so is item 3');
+assert.strictEqual(d2.result.open.length, d1.result.open.length - 2,
+  'exactly two items left, not a whole section');
+
+/* Replying again changes nothing — the rows are already marked. */
+var d3 = sandbox.build(true);
+assert.strictEqual(d3.marked, 0, 'the same reply is not counted twice');
+
+/* A reply from anyone but the person the digest was sent to is ignored. */
+REPLIES = [{ subject: 'Open loops — ' + F.TODAY + ' (x)',
+             from: 'Someone Else <stranger@elsewhere.com>', body: '2 4 6' }];
+var d4 = sandbox.build(true);
+assert.strictEqual(d4.marked, 0, 'only the digest recipient can reject items');
+
+/* A reply quoting a digest we have no record of resolves against nothing. */
+REPLIES = [{ subject: 'Open loops — 2019-01-01 (x)',
+             from: 'Assistant <' + sandbox.CONFIG.sendTo + '>', body: '1 2 3' }];
+assert.strictEqual(sandbox.build(true).marked, 0, 'an unremembered digest marks nothing');
+REPLIES = [];
 
 /* A truncated read must announce itself. Silence here would make a half-read mailbox
  * look like a finished digest, and the half Gmail drops is the oldest. */

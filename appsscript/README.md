@@ -41,8 +41,8 @@ Run `preview`. It logs the digest, emails nobody, and writes nothing to the ledg
 2. **How many items came back?** Fifteen is a list. Ninety is a firehose, and no amount
    of accuracy fixes an unreadable list. Nobody has ever seen this run at real volume.
 3. **How many are wrong?** This is the number the project has never had. Run `installTrigger`,
-   let it arrive daily, and put an `x` in the ledger against everything that isn't real.
-   After a fortnight, `precisionReport`.
+   let it arrive daily, and reply to each digest with the numbers that aren't real. After a
+   fortnight, `precisionReport`.
 
 **Read the result honestly.** A personal inbox is a weak test of *recall* — there are far
 fewer real commitments in it than in an executive's, so finding few proves little. It is a
@@ -109,8 +109,20 @@ only good news in the email, and worth keeping for that reason alone.
 ## The two weeks that decide it
 
 Run it in shadow for a fortnight before anyone depends on it. Marking an item wrong is
-the whole validation loop, so it costs one keystroke: open the ledger, put an `x` in the
-verdict column.
+the whole validation loop, so it has to cost about as much as ignoring one — otherwise
+it does not happen for fourteen days running, which is exactly how long the measurement
+takes.
+
+So the digest numbers its items and you **reply to the email** with the numbers that
+are not real:
+
+```
+3 7
+```
+
+The next run reads that reply, drops those two for good, and says at the top that it
+took the correction. Nothing to open, nothing to log into. The ledger is still there
+if you would rather edit it directly, and both write to the same place.
 
 That does two things. The item never appears in the digest again — a list that cries
 wolf gets ignored by the third day, and you only get one attempt at someone's trust in

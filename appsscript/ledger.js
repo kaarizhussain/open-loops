@@ -113,7 +113,90 @@ function precision(rows) {
   return { total: total, wrong: wrong, byType: byType };
 }
 
+/* --- marking things wrong by replying to the digest ---
+ *
+ * The spreadsheet works, and nobody opens it. Marking a false positive has to cost
+ * about as much as ignoring one or it does not happen for a fortnight running, which
+ * is exactly how long the measurement takes.
+ *
+ * So the digest numbers its items and you reply to the email with the numbers that
+ * are not real. The next run reads the reply and marks them.
+ */
+
+/* Numbers a human typed, bounded by how many items that digest actually had.
+ *
+ * Only standalone numbers count. A date or a time is a run of digits joined by
+ * separators, and "2026-08-25" would otherwise offer up 8 and 25 as marks — people
+ * quote dates when explaining which item they mean, so this is the common case
+ * rather than the corner one.
+ *
+ * ponytail: still takes every in-range standalone integer, so "3 is wrong, the other
+ * 12 look fine" marks 12 as well. The digest asks for bare numbers, and a stray mark
+ * costs one suppressed item that returns the moment the cell is cleared. Require a
+ * leading keyword if that turns out to bite. */
+function parseMarks(text, max) {
+  var out = [], seen = {};
+  // A full stop only disqualifies when it joins two digit runs — "item 4." is a mark,
+  // "3.5" is not, and a sentence ending in a number is how people actually write.
+  (String(text || '').match(/(?<![\d\-\/:]|\d\.)\d+(?![\d\-\/:]|\.\d)/g) || []).forEach(function (s) {
+    var n = +s;
+    if (n >= 1 && n <= max && !seen[n]) { seen[n] = 1; out.push(n); }
+  });
+  return out;
+}
+
+/* Resolve those numbers against the list as it was sent, not as it stands now —
+ * item 3 this morning is not item 3 tomorrow. Returns how many were newly marked. */
+function markWrong(rows, keys, nums) {
+  var byKey = {}, n = 0;
+  rows.forEach(function (r) { byKey[cell(r[COL.key])] = r; });
+  nums.forEach(function (i) {
+    var row = byKey[keys[i - 1]];
+    if (row && !isWrong(row[COL.verdict])) { row[COL.verdict] = 'x'; n++; }
+  });
+  return n;
+}
+
 /* --- the Sheet itself. Everything above this line runs outside Apps Script. --- */
+
+/* What each digest contained, so a reply to it can be resolved. Keyed by the date in
+ * its subject line, which is the only thing a reply reliably carries back. */
+var DIGEST_MEMO = 'digestKeys';
+
+function rememberDigest(date, keys) {
+  var props = PropertiesService.getScriptProperties(), all = {};
+  try { all = JSON.parse(props.getProperty(DIGEST_MEMO) || '{}'); } catch (e) { all = {}; }
+  all[date] = keys;
+  // A week is plenty; a reply older than the memo has nothing left to resolve against.
+  Object.keys(all).sort().slice(0, -7).forEach(function (d) { delete all[d]; });
+  props.setProperty(DIGEST_MEMO, JSON.stringify(all));
+}
+
+function recallDigest(date) {
+  try {
+    var raw = PropertiesService.getScriptProperties().getProperty(DIGEST_MEMO);
+    return JSON.parse(raw || '{}')[date] || [];
+  } catch (e) { return []; }
+}
+
+/* Which replies have already been acted on.
+ *
+ * A reply sits in the mailbox for as long as the search window, so without this it is
+ * re-read on every run for a week — and because the numbering it referred to belongs
+ * to one particular digest, re-applying it against a later, shorter list marks
+ * different items each time. One reply would quietly eat the list.
+ */
+var SEEN_MEMO = 'seenReplies';
+
+function seenReplies() {
+  try { return JSON.parse(PropertiesService.getScriptProperties().getProperty(SEEN_MEMO) || '[]'); }
+  catch (e) { return []; }
+}
+
+function rememberReplies(ids) {
+  // Bounded: an id older than the digest memo has nothing left to resolve against.
+  PropertiesService.getScriptProperties().setProperty(SEEN_MEMO, JSON.stringify(ids.slice(-200)));
+}
 
 function ledgerSheet() {
   var props = PropertiesService.getScriptProperties();
@@ -148,6 +231,7 @@ function writeLedger(sh, rows) {
 if (typeof module !== 'undefined') {
   module.exports = {
     mergeLedger: mergeLedger, precision: precision, isWrong: isWrong, cell: cell,
-    daysApart: daysApart, LEDGER_COLS: LEDGER_COLS, COL: COL
+    daysApart: daysApart, parseMarks: parseMarks, markWrong: markWrong,
+    LEDGER_COLS: LEDGER_COLS, COL: COL
   };
 }
