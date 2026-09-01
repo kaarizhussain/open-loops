@@ -80,28 +80,28 @@ assert.strictEqual(r7.gone.length, 1, 'date-typed cells still compare correctly'
 /* --- marking wrong by replying --- */
 
 /* The shapes a person actually types when told "reply with just its number". */
-assert.deepStrictEqual(L.parseMarks('3 7', 15), [3, 7]);
-assert.deepStrictEqual(L.parseMarks('3, 7', 15), [3, 7]);
-assert.deepStrictEqual(L.parseMarks('3 and 7 arent real', 15), [3, 7]);
-assert.deepStrictEqual(L.parseMarks('#3, #7 please', 15), [3, 7]);
-assert.deepStrictEqual(L.parseMarks('7\n3\n', 15), [7, 3]);
-assert.deepStrictEqual(L.parseMarks('3 3 7', 15), [3, 7], 'a repeated number is one mark');
-assert.deepStrictEqual(L.parseMarks('', 15), [], 'an empty reply marks nothing');
-assert.deepStrictEqual(L.parseMarks('all good thanks', 15), [], 'and so does a reply with no numbers');
+assert.deepStrictEqual(L.parseMarks('3 7', 15).wrong, [3, 7]);
+assert.deepStrictEqual(L.parseMarks('3, 7', 15).wrong, [3, 7]);
+assert.deepStrictEqual(L.parseMarks('3 and 7 arent real', 15).wrong, [3, 7]);
+assert.deepStrictEqual(L.parseMarks('#3, #7 please', 15).wrong, [3, 7]);
+assert.deepStrictEqual(L.parseMarks('7\n3\n', 15).wrong, [7, 3]);
+assert.deepStrictEqual(L.parseMarks('3 3 7', 15).wrong, [3, 7], 'a repeated number is one mark');
+assert.deepStrictEqual(L.parseMarks('', 15).wrong, [], 'an empty reply marks nothing');
+assert.deepStrictEqual(L.parseMarks('all good thanks', 15).wrong, [], 'and so does a reply with no numbers');
 
 /* Out of range is the important one — a quoted digest is full of dates and counts,
  * and 2026 must never be read as a mark. */
-assert.deepStrictEqual(L.parseMarks('0 16 2026 99', 15), [], 'numbers outside the list are ignored');
+assert.deepStrictEqual(L.parseMarks('0 16 2026 99', 15).wrong, [], 'numbers outside the list are ignored');
 
 /* Dates and times are the trap: "2026-08-25" offers up 8 and 25, and people quote
    dates when saying which item they mean. Only standalone numbers count. */
-assert.deepStrictEqual(L.parseMarks('due 2026-08-25, item 4', 15), [4],
+assert.deepStrictEqual(L.parseMarks('due 2026-08-25, item 4', 15).wrong, [4],
   'an ISO date in the reply does not become a mark');
-assert.deepStrictEqual(L.parseMarks('the 08/25 one and 6', 15), [6], 'nor a slashed date');
-assert.deepStrictEqual(L.parseMarks('the 9:15 call, plus 2', 15), [2], 'nor a time');
-assert.deepStrictEqual(L.parseMarks('item 4.', 15), [4], 'a trailing full stop is still a mark');
-assert.deepStrictEqual(L.parseMarks('3 is wrong. 7 too.', 15), [3, 7], 'sentences ending in numbers');
-assert.deepStrictEqual(L.parseMarks('the 3.5 hour one, and 8', 15), [8], 'but a decimal is not two marks');
+assert.deepStrictEqual(L.parseMarks('the 08/25 one and 6', 15).wrong, [6], 'nor a slashed date');
+assert.deepStrictEqual(L.parseMarks('the 9:15 call, plus 2', 15).wrong, [2], 'nor a time');
+assert.deepStrictEqual(L.parseMarks('item 4.', 15).wrong, [4], 'a trailing full stop is still a mark');
+assert.deepStrictEqual(L.parseMarks('3 is wrong. 7 too.', 15).wrong, [3, 7], 'sentences ending in numbers');
+assert.deepStrictEqual(L.parseMarks('the 3.5 hour one, and 8', 15).wrong, [8], 'but a decimal is not two marks');
 
 /* --- resolving those numbers against the list as it was sent --- */
 var sent = ['k-alpha', 'k-beta', 'k-gamma'];
@@ -110,11 +110,11 @@ var led = [
   ['k-beta', '2026-08-01', '2026-08-06', '', 'owed_to_us', 'b@b.com', 'beta', ''],
   ['k-gamma', '2026-08-01', '2026-08-06', '', 'unanswered_ask', 'c@b.com', 'gamma', '']
 ];
-assert.strictEqual(L.markWrong(led, sent, [1, 3]), 2, 'two marks, two rows changed');
+assert.strictEqual(L.applyMarks(led, sent, { wrong: [1, 3] }), 2, 'two marks, two rows changed');
 assert.strictEqual(led[0][COL.verdict], 'x');
 assert.strictEqual(led[1][COL.verdict], '', 'the unmarked one is untouched');
 assert.strictEqual(led[2][COL.verdict], 'x');
-assert.strictEqual(L.markWrong(led, sent, [1]), 0, 'marking the same item twice changes nothing');
+assert.strictEqual(L.applyMarks(led, sent, { wrong: [1] }), 0, 'marking the same item twice changes nothing');
 
 /* The whole reason the digest's order is recorded: item 1 today is not item 1
    tomorrow, so a stale reply must resolve against the list it was answering. */
@@ -123,23 +123,54 @@ var fresh2 = [
   ['k-alpha', '', '', '', 'owed_by_us', '', 'alpha', ''],
   ['k-beta', '', '', '', 'owed_to_us', '', 'beta', '']
 ];
-L.markWrong(fresh2, reordered, [2]);
+L.applyMarks(fresh2, reordered, { wrong: [2] });
 assert.strictEqual(fresh2[0][COL.verdict], 'x', 'number 2 in that digest was alpha, not beta');
 assert.strictEqual(fresh2[1][COL.verdict], '');
 
 /* A number pointing at nothing must not throw or mark something arbitrary. */
-assert.strictEqual(L.markWrong(fresh2, ['k-missing'], [1]), 0, 'an unknown key marks nothing');
+assert.strictEqual(L.applyMarks(fresh2, ['k-missing'], { wrong: [1] }), 0, 'an unknown key marks nothing');
 
-/* --- precision --- */
+/* --- "real, but I already knew" --- */
+
+/* A line led by k means known rather than wrong. Bare numbers stay a rejection, so
+   the common case costs nothing extra. */
+var both = L.parseMarks('3 7\nk 1 4', 15);
+assert.deepStrictEqual(both.wrong, [3, 7], 'the bare line rejects');
+assert.deepStrictEqual(both.knew, [1, 4], 'the k line marks as already known');
+assert.deepStrictEqual(L.parseMarks('knew 2\nalready 5\n9', 15).knew, [2, 5],
+  'knew and already read the same way');
+assert.deepStrictEqual(L.parseMarks('knew 2\nalready 5\n9', 15).wrong, [9]);
+assert.deepStrictEqual(L.parseMarks('k 1 4', 15).wrong, [], 'a k line rejects nothing');
+
+/* A known item stays open — it is still outstanding, it just stops counting as
+   something the digest told anyone. */
+var kRows = [
+  ['k-a', '', '', '', 'owed_by_us', '', 'a', ''],
+  ['k-b', '', '', '', 'owed_by_us', '', 'b', '']
+];
+L.applyMarks(kRows, ['k-a', 'k-b'], { wrong: [2], knew: [1] });
+assert.strictEqual(kRows[0][COL.verdict], 'k');
+assert.strictEqual(kRows[1][COL.verdict], 'x');
+assert.ok(L.isKnown('k') && L.isKnown('knew') && L.isKnown('already'));
+assert.ok(!L.isKnown('x') && !L.isWrong('k'), 'the two verdicts never overlap');
+
+var kept = L.mergeLedger(kRows, [loop({ threadId: 'k-thread' })], '2026-08-06');
+assert.strictEqual(kept.suppressed, 0, 'nothing is suppressed by a known mark');
+
+/* --- both numbers --- */
 var p = L.precision([
   ['k1', '', '', '', 'owed_by_us', '', '', ''],
   ['k2', '', '', '', 'owed_by_us', '', '', 'x'],
   ['k3', '', '', '', 'unanswered_ask', '', '', ''],
-  ['k4', '', '', '', 'unanswered_ask', '', '', 'wrong']
+  ['k4', '', '', '', 'unanswered_ask', '', '', 'wrong'],
+  ['k5', '', '', '', 'unanswered_ask', '', '', 'k']
 ]);
-assert.strictEqual(p.total, 4);
+assert.strictEqual(p.total, 5);
 assert.strictEqual(p.wrong, 2);
+assert.strictEqual(p.knew, 1, 'known items are counted separately from wrong ones');
+assert.strictEqual(p.news, 2, 'and what is left is what this actually told anyone');
 assert.strictEqual(p.byType.owed_by_us.wrong, 1, 'the wrong-rate is broken out per signal');
-assert.strictEqual(p.byType.unanswered_ask.total, 2);
+assert.strictEqual(p.byType.unanswered_ask.total, 3);
+assert.strictEqual(p.byType.unanswered_ask.knew, 1);
 
 console.log('ledger: OK');

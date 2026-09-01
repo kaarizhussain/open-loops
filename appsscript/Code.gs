@@ -125,6 +125,38 @@ function build(persist) {
 
 var OWNER_ORDER = ['exec', 'them', 'you'];
 
+/* One sentence naming the worst of it, before any counts.
+ *
+ * A digest that opens with how many messages it read is a system reporting on itself.
+ * Someone good at this job opens with the thing you would be most annoyed to discover
+ * on Friday. The ranking already knows which item that is; this only has to say it. */
+function headline(open) {
+  if (!open.length) return 'Nothing outstanding. Genuinely — the list is empty.';
+
+  var late = open.filter(function (l) { return l.status === 'overdue'; })
+                 .sort(function (a, b) { return b.overdueDays - a.overdueDays; });
+  var name = function (l) { return l.subject + (l.rel ? ' (' + l.rel.label + ')' : ''); };
+
+  if (late.length) {
+    var worst = late[0];
+    return late.length === 1
+      ? 'One thing is overdue: ' + name(worst) + ', ' + worst.overdueDays + ' days past.'
+      : late.length + ' are overdue. The oldest by ' + worst.overdueDays +
+        ' days is ' + name(worst) + '.';
+  }
+
+  var today = open.filter(function (l) { return l.status === 'due_today'; });
+  if (today.length) {
+    return 'Nothing overdue. ' + today.length + (today.length === 1 ? ' thing lands' : ' things land') +
+      ' today, starting with ' + name(today[0]) + '.';
+  }
+
+  // No deadline pressure at all, so the useful signal is what has gone quiet longest.
+  var stale = open.slice().sort(function (a, b) { return (b.ageDays || 0) - (a.ageDays || 0); })[0];
+  return 'Nothing overdue and nothing due today. The quietest is ' + name(stale) +
+    ', untouched for ' + stale.ageDays + ' days.';
+}
+
 /* Number the items in the order the digest prints them, and record which loop each
  * number refers to. Stamping `n` on the loop itself means the numbering and the
  * recorded order cannot drift apart — render just prints what this assigned. */
@@ -161,7 +193,7 @@ function applyReplies(rows, persist) {
       if (known[id]) return;                        // already acted on, on an earlier run
       known[id] = 1; seen.push(id);
       // cleanBody strips the quoted digest, or every number in it would count as a mark.
-      marked += markWrong(rows, keys, parseMarks(cleanBody(r.getPlainBody()), keys.length));
+      marked += applyMarks(rows, keys, parseMarks(cleanBody(r.getPlainBody()), keys.length));
     });
   });
 
@@ -175,6 +207,9 @@ function render(b) {
   var r = b.result, open = r.open;
 
   p('OPEN LOOPS — for ' + today());
+  p('');
+  p(headline(open));
+  p('');
   p('Read ' + b.messages.length + ' messages' +
     (b.read && b.read.threads ? ' across ' + b.read.threads + ' threads' : '') +
     ' and ' + b.events.length + ' meetings.');
@@ -249,7 +284,9 @@ function render(b) {
   p('Drafts only — nothing here has been sent. Verify before acting on any of it.');
   p('');
   p("Anything here that isn't real? Reply with just its number — \"3 7\" — and those");
-  p('stop coming back. That reply is also the only record of what this gets wrong.');
+  p('stop coming back. That reply is the only record of what this gets wrong.');
+  p('Already knew about one? Put it on a line starting with k — "k 1 4". It stays on');
+  p('the list; it just stops counting as something this told you.');
   if (b.ledgerUrl) p('Ledger: ' + b.ledgerUrl);
   return L.join('\n');
 }
@@ -264,18 +301,34 @@ function preview() {
 /* How much of it was real. Run it after the fortnight, before anyone depends on this. */
 function precisionReport() {
   var p = precision(readLedger(ledgerSheet()));
-  var L = ['OPEN LOOPS — precision', '',
-           'Tracked ' + p.total + ' items. ' + p.wrong + ' marked wrong.'];
+  var L = ['OPEN LOOPS — how it did', '', 'Tracked ' + p.total + ' items.'];
+
   if (p.total) {
-    var pct = Math.round((1 - p.wrong / p.total) * 100);
-    L.push(pct + '% held up' + (pct < 80 ? ' — under the bar. Fix it or stop.' : '.'));
+    var trust = Math.round((1 - p.wrong / p.total) * 100);
+    var value = Math.round(p.news / p.total * 100);
+    L.push('');
+    L.push('  ' + p.wrong + ' wrong        → ' + trust + '% held up' +
+           (trust < 80 ? '   under the bar. Fix it or stop.' : ''));
+    L.push('  ' + p.knew + ' already known');
+    L.push('  ' + p.news + ' genuinely new → ' + value + '% told you something');
+    L.push('');
+    /* Both numbers are needed. A tidy list of things the reader already knew is
+     * accurate and pointless; a list that finds real misses but cries wolf gets
+     * ignored by the third day. */
+    L.push(trust >= 80 && value >= 20 ? 'Worth someone\'s morning.'
+      : trust < 80 ? 'Not trusted enough yet — the wrong-rate is what to fix first.'
+      : 'Accurate, but it is mostly telling you things you knew. Look further back,'
+        + ' or rank differently, before adding anything.');
   }
-  L.push('', 'By signal:');
+
+  L.push('', 'By signal — real/total, and how many of those were news:');
   Object.keys(p.byType).sort().forEach(function (t) {
     var b = p.byType[t];
-    L.push('  ' + (LABEL[t] || t) + ': ' + (b.total - b.wrong) + '/' + b.total);
+    L.push('  ' + (LABEL[t] || t) + ': ' + (b.total - b.wrong) + '/' + b.total +
+           '  (' + (b.total - b.wrong - b.knew) + ' new)');
   });
-  L.push('', 'Unmarked rows count as correct, so this is the optimistic reading.');
+
+  L.push('', 'Unmarked rows count as both correct and new, so this reads optimistically.');
   var text = L.join('\n');
   Logger.log(text);
   return text;

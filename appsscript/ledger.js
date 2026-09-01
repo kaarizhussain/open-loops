@@ -39,6 +39,14 @@ function isWrong(v) {
   return /^(x|n|no|nope|wrong|false|fp)\b/i.test(cell(v));
 }
 
+/* Real, but the reader already knew about it. Not a rejection — the item stays open
+ * and stays on the list, because it is still outstanding. It only records that
+ * surfacing it added nothing, which is the number that says whether this is useful
+ * rather than merely accurate. */
+function isKnown(v) {
+  return /^(k|knew|known|already)\b/i.test(cell(v));
+}
+
 /* Fold this run's detections into what we already knew.
  *
  * Mutates `rows` (the sheet's contents) and annotates each surviving loop with
@@ -96,21 +104,29 @@ function mergeLedger(rows, loops, today) {
   return { shown: shown, fresh: fresh, suppressed: suppressed, gone: gone };
 }
 
-/* The number the fortnight is for.
+/* The two numbers the fortnight is for.
  *
- * ponytail: an unmarked row counts as correct, which flatters the result. Explicit
- * right/wrong on every item is the honest measure, but nobody sustains it for two
- * weeks, and a test that gets abandoned yields no number at all. Mark the misses.
+ * Precision says whether the list can be trusted. It does not say whether the list is
+ * worth reading — someone with a good memory could get a flawless digest every morning
+ * and gain nothing from it, because they already knew all of it. What this exists to
+ * catch is the thing that fell out of everyone's head three weeks ago, so the count
+ * that matters is how much of it was genuinely news.
+ *
+ * ponytail: an unmarked row counts as both correct and novel, which flatters both
+ * numbers. Explicit judgement on every item is the honest measure and nobody sustains
+ * it for two weeks; a test that gets abandoned yields nothing at all. Mark the misses.
  */
 function precision(rows) {
-  var byType = {}, total = 0, wrong = 0;
+  var byType = {}, total = 0, wrong = 0, knew = 0;
   rows.forEach(function (r) {
     var t = cell(r[COL.type]) || '?';
-    var b = byType[t] || (byType[t] = { total: 0, wrong: 0 });
+    var b = byType[t] || (byType[t] = { total: 0, wrong: 0, knew: 0 });
     b.total++; total++;
     if (isWrong(r[COL.verdict])) { b.wrong++; wrong++; }
+    else if (isKnown(r[COL.verdict])) { b.knew++; knew++; }
   });
-  return { total: total, wrong: wrong, byType: byType };
+  return { total: total, wrong: wrong, knew: knew, byType: byType,
+           news: total - wrong - knew };
 }
 
 /* --- marking things wrong by replying to the digest ---
@@ -135,25 +151,38 @@ function precision(rows) {
  * costs one suppressed item that returns the moment the cell is cleared. Require a
  * leading keyword if that turns out to bite. */
 function parseMarks(text, max) {
-  var out = [], seen = {};
-  // A full stop only disqualifies when it joins two digit runs — "item 4." is a mark,
-  // "3.5" is not, and a sentence ending in a number is how people actually write.
-  (String(text || '').match(/(?<![\d\-\/:]|\d\.)\d+(?![\d\-\/:]|\.\d)/g) || []).forEach(function (s) {
-    var n = +s;
-    if (n >= 1 && n <= max && !seen[n]) { seen[n] = 1; out.push(n); }
+  var wrong = [], knew = [], seen = {};
+  String(text || '').split(/\r?\n/).forEach(function (line) {
+    /* A line led by k / knew / already means "real, but I knew" — the difference
+     * between measuring whether this is trustworthy and whether it is any use.
+     * Bare numbers stay a rejection, so the common case costs nothing extra. */
+    var known = /^\s*(k|knew|known|already)\b/i.test(line);
+    // A full stop only disqualifies when it joins two digit runs — "item 4." is a mark,
+    // "3.5" is not, and a sentence ending in a number is how people actually write.
+    (line.match(/(?<![\d\-\/:]|\d\.)\d+(?![\d\-\/:]|\.\d)/g) || []).forEach(function (s) {
+      var n = +s;
+      if (n < 1 || n > max || seen[n]) return;
+      seen[n] = 1;
+      (known ? knew : wrong).push(n);
+    });
   });
-  return out;
+  return { wrong: wrong, knew: knew };
 }
 
 /* Resolve those numbers against the list as it was sent, not as it stands now —
- * item 3 this morning is not item 3 tomorrow. Returns how many were newly marked. */
-function markWrong(rows, keys, nums) {
+ * item 3 this morning is not item 3 tomorrow. Returns how many were newly marked.
+ * Only ever fills a blank verdict, so re-reading the same reply changes nothing. */
+function applyMarks(rows, keys, marks) {
   var byKey = {}, n = 0;
   rows.forEach(function (r) { byKey[cell(r[COL.key])] = r; });
-  nums.forEach(function (i) {
-    var row = byKey[keys[i - 1]];
-    if (row && !isWrong(row[COL.verdict])) { row[COL.verdict] = 'x'; n++; }
-  });
+  var set = function (nums, verdict) {
+    (nums || []).forEach(function (i) {
+      var row = byKey[keys[i - 1]];
+      if (row && !cell(row[COL.verdict])) { row[COL.verdict] = verdict; n++; }
+    });
+  };
+  set(marks.wrong, 'x');
+  set(marks.knew, 'k');
   return n;
 }
 
@@ -230,8 +259,8 @@ function writeLedger(sh, rows) {
 
 if (typeof module !== 'undefined') {
   module.exports = {
-    mergeLedger: mergeLedger, precision: precision, isWrong: isWrong, cell: cell,
-    daysApart: daysApart, parseMarks: parseMarks, markWrong: markWrong,
+    mergeLedger: mergeLedger, precision: precision, isWrong: isWrong, isKnown: isKnown,
+    cell: cell, daysApart: daysApart, parseMarks: parseMarks, applyMarks: applyMarks,
     LEDGER_COLS: LEDGER_COLS, COL: COL
   };
 }
