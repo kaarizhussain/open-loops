@@ -157,6 +157,41 @@ assert.ok(!L.isKnown('x') && !L.isWrong('k'), 'the two verdicts never overlap');
 var kept = L.mergeLedger(kRows, [loop({ threadId: 'k-thread' })], '2026-08-06');
 assert.strictEqual(kept.suppressed, 0, 'nothing is suppressed by a known mark');
 
+/* --- retention --- */
+
+var old = function (key, lastSeen) {
+  return [key, '2026-01-01', lastSeen, '', 'owed_by_us', 'a@b.com', 'text', ''];
+};
+var aging = [old('keep', '2026-08-01'), old('drop', '2026-05-01'), old('edge', '2026-05-09')];
+assert.strictEqual(L.pruneLedger(aging, '2026-08-06', 90), 1, 'only the row past the window goes');
+assert.deepStrictEqual(aging.map(function (r) { return r[0]; }), ['keep', 'edge'],
+  'and pruning mutates in place, since that is what gets written back');
+assert.strictEqual(L.pruneLedger(aging, '2026-08-06', 0), 0, 'zero means keep everything');
+
+/* The trap: a row hidden as wrong is still being detected, so its clock has to keep
+   running. If it went stale it would be pruned while live, and return as brand new. */
+var hidden = [['h', '2026-08-01', '2026-08-01', '', 'owed_by_us', 'a@b.com', 'text', 'x']];
+L.mergeLedger(hidden, [loop({ threadId: 'h-thread' })], '2026-11-01');
+hidden[0][COL.key] = L.cell(hidden[0][COL.key]);
+var stillDetected = [['h2', '2026-08-01', '2026-08-01', '', 'owed_by_us', '', 'text', 'x']];
+var live = loop({ threadId: 't1' });
+stillDetected[0][COL.key] = global.loopKey(live);
+L.mergeLedger(stillDetected, [live], '2026-11-01');
+assert.strictEqual(stillDetected[0][COL.last_seen], '2026-11-01',
+  'a suppressed row is still touched by the run that detected it');
+assert.strictEqual(L.pruneLedger(stillDetected, '2026-11-01', 90), 0,
+  'so retention does not delete a live item out from under itself');
+
+/* --- keeping the key but not the words --- */
+var noText = [];
+L.mergeLedger(noText, [loop()], '2026-08-06', { storeText: false });
+assert.ok(noText[0][COL.key], 'the key is kept, so suppression still works');
+assert.strictEqual(noText[0][COL.what], '', 'but the sentence is not stored');
+assert.strictEqual(noText[0][COL.who], '', 'nor the counterparty');
+var withText = [];
+L.mergeLedger(withText, [loop()], '2026-08-06');
+assert.ok(withText[0][COL.what], 'text is kept by default');
+
 /* --- both numbers --- */
 var p = L.precision([
   ['k1', '', '', '', 'owed_by_us', '', '', ''],

@@ -30,6 +30,33 @@ var CONFIG = {
   ignoreSenders: ['noreply', 'no-reply', 'donotreply', 'notifications', 'mailer-daemon',
                   'calendar-notification', 'automated'],
 
+  /* What must never be read. Set by whoever owns the mailbox — an executive's inbox
+   * carries comp discussions, HR matters, board threads and worse, and delegated
+   * access is a person with judgement choosing what to open. This is automated
+   * extraction and forwarding, which is a different thing nobody has agreed to.
+   *
+   * Labels are the useful one: apply them in Gmail, and threads carrying them never
+   * enter the pipeline. */
+  exclude: {
+    labels: [],       // e.g. ['Private', 'HR', 'Board']
+    senders: []       // addresses or whole domains, e.g. ['legal@company.com', 'clinic.org']
+  },
+
+  /* Strict allowlist. When non-empty, ONLY correspondence with these addresses or
+   * domains is read, and everything else is invisible. Default-deny — the right
+   * setting for a regulated environment, and unusable for general use. */
+  only: [],
+
+  /* How long the ledger keeps a row after the detector stops matching it. The ledger
+   * holds excerpts of mail, so retention policy and eDiscovery reach it and "forever"
+   * is not an answer anyone accepts. Age runs from when an item was last detected,
+   * so nothing still live is ever pruned. */
+  keepLedgerDays: 90,
+
+  /* Set false to keep the key and the verdict but not the words. Rejecting an item
+   * still works; what is lost is the cleared-items list being readable. */
+  storeText: true,
+
   // Who matters, curated by hand — the tool should not guess this.
   contacts: {
     // 'cfo@yourcompany.com':  { tier: 'exec',        label: 'CFO' },
@@ -60,17 +87,63 @@ function ignored(from) {
 var READ_CAP = 300;
 var lastRead = { threads: 0, capped: false };
 
+/* Gmail search terms need quoting once they contain a space. */
+function term(op, value) {
+  var v = String(value).trim();
+  return op + (/\s/.test(v) ? '"' + v + '"' : v);
+}
+
+/* The exclusions, as query. Cheaper than filtering afterwards and it means the
+ * excluded mail is never fetched in the first place. */
+function scopeQuery() {
+  var ex = CONFIG.exclude || {}, q = '';
+  (ex.labels || []).forEach(function (l) { q += ' -' + term('label:', l); });
+  (ex.senders || []).forEach(function (s) { q += ' -' + term('from:', s); });
+
+  var only = CONFIG.only || [];
+  if (only.length) {
+    // Braces are Gmail's OR. Either side of the correspondence counts as a match.
+    var parts = [];
+    only.forEach(function (p) { parts.push(term('from:', p), term('to:', p)); });
+    q += ' {' + parts.join(' ') + '}';
+  }
+  return q;
+}
+
+/* A label on any message in a thread hides the whole thread.
+ *
+ * The query alone is not enough. Gmail matches at thread level, so a thread where
+ * only one message carries an excluded label can still come back — the same quirk
+ * its own documentation warns about for -is:starred. Getting this wrong forwards
+ * the one thread somebody specifically marked private, so it is checked twice. */
+function threadExcluded(thread) {
+  var names = (CONFIG.exclude && CONFIG.exclude.labels) || [];
+  if (!names.length) return false;
+  var block = {};
+  names.forEach(function (n) { block[String(n).toLowerCase()] = 1; });
+  return thread.getLabels().some(function (l) { return block[l.getName().toLowerCase()]; });
+}
+
+/* Senders excluded by address or by whole domain. */
+function senderExcluded(from) {
+  return ((CONFIG.exclude && CONFIG.exclude.senders) || []).some(function (s) {
+    var t = String(s).toLowerCase();
+    return from === t || from.split('@')[1] === t;
+  });
+}
+
 function readMessages() {
   var q = 'newer_than:' + CONFIG.lookbackDays + 'd -in:chats -in:spam -in:trash' +
-          ' -category:promotions -category:social';
+          ' -category:promotions -category:social' + scopeQuery();
   var out = [];
   var threads = GmailApp.search(q, 0, READ_CAP);
-  lastRead = { threads: threads.length, capped: threads.length >= READ_CAP };
+  lastRead = { threads: threads.length, capped: threads.length >= READ_CAP, skipped: 0 };
   threads.forEach(function (thread) {
+    if (threadExcluded(thread)) { lastRead.skipped++; return; }
     var tid = thread.getId();
     thread.getMessages().forEach(function (m) {
       var from = addr(m.getFrom());
-      if (ignored(from)) return;
+      if (ignored(from) || senderExcluded(from)) return;
       out.push({
         id: m.getId(), threadId: tid, subject: m.getSubject() || '(no subject)',
         from: from, to: addrList(m.getTo()),
@@ -109,8 +182,10 @@ function build(persist) {
   // Yesterday's corrections land before today's list is built, or a rejected item
   // would appear one more time before disappearing.
   var marked = applyReplies(rows, persist);
-  var ledger = mergeLedger(rows, result.open, opts.today);
+  var ledger = mergeLedger(rows, result.open, opts.today, { storeText: CONFIG.storeText });
   result.open = ledger.shown;
+  // After the merge, so anything still being detected has just had its clock reset.
+  var pruned = pruneLedger(rows, opts.today, CONFIG.keepLedgerDays);
   var keys = digestOrder(result.open);
   if (persist) {
     writeLedger(sh, rows);
@@ -120,7 +195,7 @@ function build(persist) {
   var briefs = meetingBriefs(messages, events, result.open, opts);
   return { messages: messages, events: events, result: result, briefs: briefs,
            ledger: ledger, ledgerUrl: sh.getParent().getUrl(), read: lastRead,
-           marked: marked };
+           marked: marked, pruned: pruned };
 }
 
 var OWNER_ORDER = ['exec', 'them', 'you'];
@@ -270,7 +345,8 @@ function render(b) {
   if (b.ledger && b.ledger.gone.length) {
     p('CLEARED SINCE THE LAST RUN (' + b.ledger.gone.length + ')');
     b.ledger.gone.forEach(function (row) {
-      p('  ' + row[COL.what] + (row[COL.who] ? '  — ' + row[COL.who] : ''));
+      // Blank under storeText:false — say something rather than printing an empty line.
+      p('  ' + (row[COL.what] || '(text not kept)') + (row[COL.who] ? '  — ' + row[COL.who] : ''));
     });
     p('');
   }
