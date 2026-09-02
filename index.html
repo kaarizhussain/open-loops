@@ -300,6 +300,46 @@ function daysBetween(a, b) { return Math.round((toUTC(b) - toUTC(a)) / 86400000)
 function addDays(s, n) { var d = toUTC(s); d.setUTCDate(d.getUTCDate() + n); return iso(d); }
 function domain(addr) { return (addr.split('@')[1] || '').toLowerCase(); }
 
+/* Which side of the table somebody sits on.
+ *
+ * `domain()` was quietly doing two jobs: reading an address's host, and standing in
+ * for "same organisation". The second reading only holds when the domain IS an
+ * organisation. On gmail.com it says every Gmail user in the world is your colleague,
+ * which switched both calendar signals off silently — and, worse, stopped a calendar
+ * hold from closing a promise, because the person on the invite read as internal and
+ * their presence therefore "proved nothing". A booked call that can never close is
+ * the un-clearable item this whole tool is supposed to prevent.
+ *
+ * A real company domain identifies a side. A shared host does not, and on one of
+ * those the only person on your side is you. On a corporate address this returns
+ * exactly what domain() returned, so that path does not change at all.
+ *
+ * An exact table rather than a pattern, because a pattern over these names also
+ * matches outlook.ai, aol.xyz and msn.dev — which are somebody's employer, and whose
+ * staff would have every colleague reclassified as an outsider. */
+var SHARED = {
+  'gmail.com': 1, 'googlemail.com': 1, 'yahoo.com': 1, 'yahoo.co.uk': 1, 'ymail.com': 1,
+  'rocketmail.com': 1, 'hotmail.com': 1, 'hotmail.co.uk': 1, 'outlook.com': 1,
+  'live.com': 1, 'msn.com': 1, 'aol.com': 1, 'icloud.com': 1, 'me.com': 1, 'mac.com': 1,
+  'gmx.com': 1, 'gmx.de': 1, 'web.de': 1, 'proton.me': 1, 'protonmail.com': 1,
+  'fastmail.com': 1, 'tutanota.com': 1, 'zoho.com': 1, 'yandex.com': 1, 'yandex.ru': 1,
+  'mail.com': 1, 'mail.ru': 1, 'qq.com': 1, '163.com': 1, 'naver.com': 1,
+  'hanmail.net': 1, 'daum.net': 1,
+  /* slack.js mints this for anyone whose profile carried no address. Two of them are
+     not colleagues — they are two strangers who both lack an address. */
+  'slack.local': 1
+};
+
+function side(addr) {
+  var a = String(addr || '').toLowerCase().trim();
+  var at = a.lastIndexOf('@');
+  if (at < 0) return a;
+  var host = a.slice(at + 1);
+  if (!SHARED[host]) return host;
+  // Shared host, so the address is the identity. Plus-tags are the same person.
+  return a.slice(0, at).split('+')[0] + '@' + host;
+}
+
 /* A deadline landing on a weekend is really a Friday deadline — nobody is reading it
  * Saturday, so the last working chance is the Friday before. */
 function workingDue(s) {
@@ -480,7 +520,7 @@ function shorten(s, n) {
 }
 
 function detectLoops(messages, events, opts) {
-  var exec = opts.exec.toLowerCase(), today = opts.today, execDomain = domain(exec);
+  var exec = opts.exec.toLowerCase(), today = opts.today, execSide = side(exec);
   /* Who the reader supports. Absent means the historical shape — one unnamed
    * executive — so nothing that does not pass this changes behaviour. An explicit
    * empty list means they support nobody and are running it on their own work. */
@@ -510,7 +550,7 @@ function detectLoops(messages, events, opts) {
     var mark = out.length;
     var counterparty = null;
     msgs.forEach(function (m) {
-      if (!m.out && domain(m.from) !== execDomain && !counterparty) counterparty = m.from;
+      if (!m.out && side(m.from) !== execSide && !counterparty) counterparty = m.from;
     });
     if (!counterparty) {
       msgs.forEach(function (m) {
@@ -595,7 +635,7 @@ function detectLoops(messages, events, opts) {
         bookedBy = events.filter(function (e) {
           if (e.start < day(m.date)) return false;
           // An internal colleague appears on unrelated meetings — their presence proves nothing.
-          if (counterparty && domain(counterparty) !== execDomain && e.attendees.indexOf(counterparty) > -1) return true;
+          if (counterparty && side(counterparty) !== execSide && e.attendees.indexOf(counterparty) > -1) return true;
           return toks.some(function (w) { return e.title.toLowerCase().indexOf(w.toLowerCase()) > -1; });
         })[0];
         /* A promise to get something in the diary is kept by the thing being in the
@@ -668,7 +708,7 @@ function detectLoops(messages, events, opts) {
 
   /* --- meetings: no follow-up after, no agenda before --- */
   events.forEach(function (e) {
-    var ext = e.attendees.filter(function (a) { return domain(a) !== execDomain; });
+    var ext = e.attendees.filter(function (a) { return side(a) !== execSide; });
     if (!ext.length) return;
     var when = day(e.start);
     if (when < today) {
@@ -738,20 +778,20 @@ function detectLoops(messages, events, opts) {
  * an assistant is asked "what do I need before this". Same commitments, read the
  * way you read them the night before. */
 function meetingBriefs(messages, events, open, opts) {
-  var today = opts.today, execDomain = domain(opts.exec.toLowerCase());
+  var today = opts.today, execSide = side(opts.exec);
   return events.map(function (e) {
     if (day(e.start) < today) return null;
-    var ext = e.attendees.filter(function (a) { return domain(a) !== execDomain; });
+    var ext = e.attendees.filter(function (a) { return side(a) !== execSide; });
     if (!ext.length) return null;
-    var doms = ext.map(domain);
+    var sides = ext.map(side);
     var items = open.filter(function (l) {
       if (l.eventId === e.id) return false;         // the agenda flag already says this
-      return l.who && (ext.indexOf(l.who) > -1 || doms.indexOf(domain(l.who)) > -1);
+      return l.who && (ext.indexOf(l.who) > -1 || sides.indexOf(side(l.who)) > -1);
     }).sort(function (a, b) { return b.risk - a.risk; });
     var last = null;
     messages.forEach(function (m) {
       var party = m.from.toLowerCase() === opts.exec.toLowerCase() ? m.to : [m.from];
-      if (party.some(function (p) { return doms.indexOf(domain(p)) > -1; })) {
+      if (party.some(function (p) { return sides.indexOf(side(p)) > -1; })) {
         if (!last || m.date > last) last = m.date;
       }
     });
