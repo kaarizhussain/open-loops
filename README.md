@@ -73,8 +73,11 @@ digest that leads with its own statistics is a system reporting on itself. The t
 piles are the assistant's actual working split: what only the executive can do, what
 someone else owes you, and what you can close out yourself.
 
-The numbers are how you argue with it. Reply with the ones that aren't real and they
-stop coming back; that reply is the only record of what this gets wrong.
+Every line after the first also says what *changed*. The same fifteen items arriving
+every morning is a list nobody reads by Thursday — not because it is inaccurate, but
+because it is identical. Repetition kills a digest faster than error does, so each item
+carries `NEW` or how long it has been sitting there, and anything that dropped off is
+reported once as cleared.
 
 Each item carries the sentence it came from and the rule that fired. On the demo page,
 opening one also gives you a drafted chase note to paste — a list you cannot act on
@@ -86,9 +89,10 @@ without rewriting it is a list you stop opening.
 messages + events
    → commitment extraction     cue phrases, per sentence
    → deadline resolution       "Thursday EOD" → 2026-08-06, relative to send date
-   → closure matching          did a later message in the thread deliver it?
+   → closure matching          did a later message deliver it, and was it that one?
    → silence + meeting checks  unanswered asks, unbooked calls, missing agendas
-   → risk ranking              overdue days, proximity, signal type
+   → risk ranking              overdue days, proximity, signal type, relationship
+   → the ledger                what is new, what cleared, what you already rejected
 ```
 
 The detector is deterministic and dependency-free. It takes a normalized shape, so the
@@ -122,6 +126,49 @@ principals: [{ label: 'Dana',   address: 'dana@northstar.io' },
 
 With several, items route by who was actually on the conversation and the name goes on
 each line. Leaving it out entirely keeps the original behaviour: one unnamed executive.
+
+## How you argue with it
+
+Marking something wrong has to cost about as much as ignoring it, or it does not happen
+for fourteen days running — which is exactly how long it takes to learn anything. So
+the digest numbers its items and you reply to it. Nothing to open, nothing to log into.
+
+```
+3 7            those two are not real commitments
+k 1 4          those are real, but I already knew
+miss b         the spot check found something it walked past
+```
+
+Three replies, three different numbers, and they measure different things:
+
+**Precision** — of what it showed you, how much was real. Whether it can be trusted.
+
+**Novelty** — of what was real, how much you did not already know. Whether it is worth
+reading. Someone with a good memory could get a flawless digest every morning and gain
+nothing from it, and precision alone would call that a success.
+
+**Recall** — how much it walked straight past. Nothing else in the loop can see this: a
+miss produces nothing to reject, so corrections could only ever teach it to be quieter,
+never more thorough. Each digest therefore samples its own silence — a handful of
+messages it found nothing in — and asks whether it should have. The two worst bugs
+found in this detector were both false negatives, invisible to every other number here.
+
+```
+Tracked 63 items.
+   9 wrong        → 86% held up
+  41 already known
+  13 genuinely new → 21% told you something
+Recall so far: about 84% — 3 misses found in 45 messages spot-checked.
+```
+
+Past four rejections of the same phrase, with none of them kept, it stops asking and
+mutes it — announcing the change, listing it in every digest afterwards, and undoing it
+on one line. It learns the kind, not just the instance, because otherwise the same bad
+pattern arrives fresh every morning forever.
+
+**Nothing it learns is hidden.** A detector that rewrites its own rules invisibly is one
+nobody can predict, and predictability is most of the reason this is regexes instead of
+a model.
 
 ## The parts that were actually hard
 
@@ -161,6 +208,23 @@ positive is annoying and visible. These were neither:
 
 The last one is the pattern: anywhere this can't see something, it now says so.
 A list that quietly omits things is worse than one that admits what it missed.
+
+**Real messages found things reading the code did not.** Pointed at an actual Slack
+workspace, four bugs surfaced in the first ten minutes, and none were in the detection
+logic:
+
+- messages came back newest-first and were sorted on a minute-truncated date, so within
+  a busy minute a promise could land *after* its own delivery and never be closed
+- every message sent through an app carries a `*Sent using*` footer, which put identical
+  words in all of them — so every message shared subject matter with every other one
+- thread replies are not in a channel read at all, so anything promised inside a thread
+  was invisible
+- reading a thread returns a *different format* from reading a channel, undocumented,
+  and the adapter would have silently parsed nothing
+
+Then, on a second batch: two items carried deadlines that appeared nowhere in their own
+sentences, inherited from unrelated messages further up the channel. Safe in mail, where
+a thread is one subject. Not in chat, where it is a whole room.
 
 ## Quick start
 
@@ -202,16 +266,35 @@ account, no server and no credential to store. [`SLACK.md`](SLACK.md) does it fo
 with the digest arriving as a DM and corrections typed straight back underneath it.
 
 Both keep a ledger, so each digest leads with what changed rather than repeating
-yesterday's list, and both take corrections by reply — which is what turns the
-false-positive rate into a number instead of an impression.
+yesterday's list, and both take corrections by reply.
+
+**Read less than you can.** Both adapters take an exclusion list, and the Slack one
+takes an allowlist too. An executive's mailbox holds comp discussions and HR matters;
+a workspace holds every DM you have. Delegated access is a person with judgement
+choosing what to open — this is automated extraction and forwarding, which is a
+different thing, and the difference is the entire reason someone might say no.
+
+Both also bound how far back they read. That window is the only thing keeping closure
+matching honest inside an unthreaded channel, and it is a trade rather than a knob:
+anything that ages out stops being detected, and the ledger reads *no longer detected*
+as *cleared*. Too short a window quietly reports long-silent promises as done, which is
+precisely the failure this exists to prevent.
 
 ## What this has not done
 
-**No number in this repo comes from real correspondence.** The detector has been run
-against real Slack messages, which found several bugs in the plumbing, but nobody has
-yet used it for a fortnight and marked what it got wrong. Until someone has, its
-accuracy is unmeasured — and every claim about it here is a claim about the code, not
-about the results.
+**No number in this repo comes from real correspondence.** It has been run against real
+Slack messages, which found six bugs, but nobody has used it for a fortnight and marked
+what it got wrong. Until someone has, its accuracy is unmeasured — every claim here is
+about the code, not about the results.
+
+The machinery for measuring it is built and has been used zero times. That is the
+honest state of it.
+
+**Two of the seven signals have never fired on anything real.** *Agreed, not booked* and
+*Meeting unprepped* compare what was said against a calendar, and the Slack path has
+none — so the first is unsuppressable rather than dark, and the second cannot fire at
+all. A single-person workspace also has no inbound sender, so *They promised* and
+*Unanswered* are untested outside the fixture.
 
 Everything in `src/fixture.js` is invented. Dana Whitfield, Northstar Systems, and every
 counterparty, deal, and email in it are fictional, written to exercise each detector
