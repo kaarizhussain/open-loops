@@ -13,15 +13,11 @@ var path = require('path');
 var cp = require('child_process');
 
 var ROOT = path.join(__dirname, '..');
-var suites = [];
 
-[__dirname, path.join(ROOT, 'appsscript')].forEach(function (dir) {
-  if (!fs.existsSync(dir)) return;
-  fs.readdirSync(dir)
-    .filter(function (f) { return /^test.*\.js$/.test(f) && f !== 'run.js'; })
-    .sort()
-    .forEach(function (f) { suites.push(path.join(dir, f)); });
-});
+var suites = fs.readdirSync(__dirname)
+  .filter(function (f) { return /^test.*\.js$/.test(f) && f !== 'run.js'; })
+  .sort()
+  .map(function (f) { return path.join(__dirname, f); });
 
 var failed = [];
 suites.forEach(function (file) {

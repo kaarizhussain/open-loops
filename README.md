@@ -102,10 +102,11 @@ source is an adapter concern, not an engine concern:
 detectLoops(messages, events, { exec: 'dana@northstar.io', today: '2026-08-06' })
 ```
 
-Two adapters exist. `appsscript/` reads Gmail and Calendar on a timer inside the
-executive's own Google account; [`SLACK.md`](SLACK.md) reads Slack through a connector
-and posts the digest back as a DM. Both produce the same shape and share the same
-renderer, ledger and correction loop.
+One adapter ships: [`SLACK.md`](SLACK.md) reads Slack through a connector and posts the
+digest back as a DM. It is deliberately the only one — a second runtime was maintained
+for a while over Gmail and Calendar, and keeping two consumers honest cost more than the
+second one returned. Writing another is a small job, and *Pointing it at something else*
+below says exactly what it has to produce.
 
 **Deterministic is load-bearing, not a preference.** No model decides what counts as a
 commitment, so the same mailbox produces the same list tomorrow, nothing is sent to a
@@ -243,9 +244,9 @@ The tests live in `test/` and are the documentation for how each part is meant t
 `test.js` for the detector against the demo fixture, `test_slack.js` and `test_store.js`
 for the adapters, `test_ledger.js` for what the digest remembers between runs,
 `test_digest.js` for the rendering, `test_slack_run.js` for the whole Slack path end to
-end. `appsscript/` carries its own two, for the Gmail runtime.
+end.
 
-## Pointing it at a real inbox
+## Pointing it at something else
 
 The engine never touches a mail API. Write an adapter that produces these two shapes and
 nothing in `src/loops.js` changes:
@@ -275,19 +276,15 @@ npx skills add kaarizhussain/open-loops
 it would read so you can strike the ones it should not, writes the config, runs it once,
 and offers to schedule it daily.
 
-[`appsscript/`](appsscript/) is the same detector over Gmail and Google Calendar, as a
-timer inside the executive's own account. It works and is not where the work is going.
+It keeps a ledger, so each digest leads with what changed rather than repeating
+yesterday's list, and it takes corrections by reply.
 
-Both keep a ledger, so each digest leads with what changed rather than repeating
-yesterday's list, and both take corrections by reply.
-
-**Read less than you can.** Both adapters take an exclusion list, and the Slack one
-takes an allowlist too. An executive's mailbox holds comp discussions and HR matters;
+**Read less than you can.** It takes an exclusion list and an allowlist. An executive's mailbox holds comp discussions and HR matters;
 a workspace holds every DM you have. Delegated access is a person with judgement
 choosing what to open — this is automated extraction and forwarding, which is a
 different thing, and the difference is the entire reason someone might say no.
 
-Both also bound how far back they read. That window is the only thing keeping closure
+It also bounds how far back it reads. That window is the only thing keeping closure
 matching honest inside an unthreaded channel, and it is a trade rather than a knob:
 anything that ages out stops being detected, and the ledger reads *no longer detected*
 as *cleared*. Too short a window quietly reports long-silent promises as done, which is
