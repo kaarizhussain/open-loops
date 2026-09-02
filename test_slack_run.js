@@ -175,6 +175,45 @@ assert.ok(/Read 2 messages/.test(fetched),
   'the root is not counted twice, though a thread read repeats it: ' +
   fetched.split('\n').filter(function (l) { return /^Read /.test(l); })[0]);
 
+/* ------------------------- what may be read at all ------------------------- */
+var { inScope, nameMatches } = require('./slack-run.js');
+
+assert.ok(nameMatches('#deals', 'deals'), 'the leading hash is noise on both sides');
+assert.ok(nameMatches('deals', '#deals'));
+assert.ok(nameMatches('#Deals', 'deals'), 'and case is not a scope decision');
+assert.ok(nameMatches('#deals-emea', 'deals-*'), 'a trailing star is a prefix');
+assert.ok(!nameMatches('#deals', 'deals-*'), 'which does not match the bare stem');
+assert.ok(!nameMatches('#hr-private', 'hr'), 'and nothing else is a pattern');
+
+assert.ok(inScope('#deals', {}), 'no rules means everything given is read');
+assert.ok(!inScope('#hr', { exclude: ['hr'] }), 'exclude drops it');
+assert.ok(!inScope('#hr-comp', { exclude: ['hr-*'] }));
+assert.ok(inScope('#deals', { only: ['deals', 'clients'] }), 'only is an allowlist');
+assert.ok(!inScope('#random', { only: ['deals'] }), 'and everything else stops existing');
+assert.ok(!inScope('#deals', { only: ['deals'], exclude: ['deals'] }),
+  'exclude wins over only — the safe direction when the two disagree');
+
+/* Excluding a channel and then reading a thread inside it would be an exclusion that
+   does not exclude. */
+var scoped = JSON.parse(JSON.stringify(input));
+scoped.scope = { exclude: ['#halcyon'] };
+scoped.threads = [{ channel: '#halcyon', root: at(2026, 8, 25, 11), text: [
+  '=== THREAD PARENT MESSAGE ===',
+  'From: Alex Rivera <' + ME + '> (U0EXAMPLE001)',
+  'Message TS: ' + at(2026, 8, 25, 11),
+  "I'll send the scope doc Wednesday."
+].join('\n') }];
+
+var narrowed = main([write(scoped), '--ledger', path.join(dir, 's1.json')]);
+assert.strictEqual(narrowed.indexOf('#halcyon'), -1, 'an excluded channel contributes nothing');
+assert.strictEqual(narrowed.indexOf('scope doc'), -1, 'not even through a thread inside it');
+assert.ok(/left out of scope on purpose/.test(narrowed),
+  'and the digest says it left something out deliberately, not by accident');
+
+/* Out of scope and unread are different things and must read differently. */
+assert.ok(!/were not read/.test(narrowed) || /out of scope/.test(narrowed),
+  'a deliberate omission is not reported as a failure to read');
+
 /* ------------------------------ bad input ------------------------------ */
 assert.throws(function () { main([write({ conversations: [] }), '--ledger', ledger]); },
   /needs "self"/, 'without an address there is no way to tell inbound from outbound');

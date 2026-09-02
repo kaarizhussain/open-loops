@@ -16,12 +16,16 @@ Monday, which is not true of anything that asks a model what counts as a commitm
 
 ## The loop
 
-**1. Fetch.** List the conversations worth reading, then read each one:
+**1. Fetch.** List the conversations, drop the ones out of scope (see below), then read
+what is left:
 
 ```
-slack_list_user_channels(types="public_channel,private_channel,im")
+slack_list_user_channels(types="public_channel,private_channel")
 slack_read_channel(channel_id=…, limit=100)
 ```
+
+Note the missing `im`. Direct messages are opt-in — add them to `types` only when you
+have decided you want them read, rather than because they were in the default.
 
 **Threads are a second fetch.** A channel read announces a root as
 `Thread: 2 replies (latest: …)` and does not include the replies, so anything promised
@@ -57,6 +61,37 @@ quietly leaving them out.
 
 `text` is the connector's response verbatim. The adapter parses it, including the
 `Message TS` line — the human date carries a timezone abbreviation and is ignored.
+
+## What it is allowed to read
+
+**Read less than you can.** The connector will happily hand over every channel and
+every direct message you have access to, and the default should not be all of it.
+Direct messages in particular are the most sensitive thing in a workspace and the
+least likely to be about a commitment anyone is tracking.
+
+```json
+"scope": {
+  "only":    ["deals-*", "#clients"],   // allowlist. Everything else stops existing.
+  "exclude": ["#hr", "#leadership"]     // or blocklist. Exclude wins if both name it.
+}
+```
+
+Names match exactly or by prefix with a trailing star. That is the whole pattern
+language, on purpose — a scope rule nobody can read at a glance is a scope rule nobody
+checks.
+
+**Apply this when choosing what to fetch, not only here.** The runner is handed
+conversations that were already read, so this cannot stop anything reaching it; it is
+the second of two checks. It exists for the same reason the Gmail path checks labels
+twice — the cost of getting it wrong is someone's private conversation appearing in a
+list, and one check is not enough for that.
+
+A thread inherits its channel's scope. Excluding `#hr` and then reading a thread inside
+it would be an exclusion that does not exclude.
+
+Conversations left out on purpose are counted and named as such in the digest, because
+*"deliberately not read"* and *"failed to read"* are different facts and a reader needs
+to tell them apart.
 
 ## Who you support
 

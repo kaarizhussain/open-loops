@@ -38,6 +38,33 @@ var { fileStore } = require('./src/store.js');
 
 var DIGEST_HEADER = /^\s*(?:```)?\s*OPEN LOOPS — for (\d{4}-\d{2}-\d{2})/;
 
+/* Names match exactly, or by prefix with a trailing star: "deals-*". Deliberately not
+ * a general pattern language — a scope rule nobody can read at a glance is a scope
+ * rule nobody checks. */
+function nameMatches(name, pattern) {
+  var n = String(name || '').toLowerCase().replace(/^#/, '');
+  var p = String(pattern || '').toLowerCase().replace(/^#/, '');
+  return p.slice(-1) === '*' ? n.indexOf(p.slice(0, -1)) === 0 : n === p;
+}
+
+/* What may be read at all.
+ *
+ * The runner is handed conversations that were already fetched, so this cannot stop
+ * anything reaching it — the caller has to apply the same rules when choosing what to
+ * read. It is the second of two checks, for the same reason the Gmail path checks
+ * labels twice: the cost of getting it wrong is somebody's private conversation
+ * turning up in a list, and one check is not enough for that.
+ *
+ * `only` is default-deny. `exclude` is default-allow. Neither is a substitute for
+ * fetching less in the first place. */
+function inScope(name, scope) {
+  scope = scope || {};
+  var exclude = scope.exclude || [], only = scope.only || [];
+  if (exclude.some(function (p) { return nameMatches(name, p); })) return false;
+  if (only.length) return only.some(function (p) { return nameMatches(name, p); });
+  return true;
+}
+
 /* Corrections, read out of the self-DM.
  *
  * Walks oldest to newest. A digest sets the numbering that anything after it refers
@@ -84,8 +111,9 @@ function main(argv) {
 
   /* Every conversation becomes messages in the shape loops.js already takes. The
    * channel name stands in for a subject line, which Slack does not have. */
-  var byId = {}, roots = {};
+  var byId = {}, roots = {}, skipped = 0;
   (input.conversations || []).forEach(function (c) {
+    if (!inScope(c.channel, input.scope)) { skipped++; return; }
     parseChannel(c.text, {
       channel: c.channel, members: c.members || [], tzOffset: input.tzOffset || 0
     }).forEach(function (m) {
@@ -102,6 +130,9 @@ function main(argv) {
    * the whole thread on the root's timestamp gives closure matching a real boundary,
    * the only one Slack offers that is as tight as an email thread's. */
   (input.threads || []).forEach(function (t) {
+    // A thread inherits its channel's scope — excluding #hr and then reading a thread
+    // inside it would be an exclusion that does not exclude.
+    if (!inScope(t.channel, input.scope)) { skipped++; return; }
     parseChannel(t.text, {
       channel: t.channel, members: t.members || [], threadId: t.root,
       tzOffset: input.tzOffset || 0
@@ -139,8 +170,8 @@ function main(argv) {
     today: today, source: 'slack',
     messages: messages, events: [], result: result, briefs: [],
     ledger: ledger, marked: replies.marked, principals: input.principals || [],
-    read: { threads: (input.conversations || []).length, capped: false,
-            unfetchedThreads: unfetched.length }
+    read: { threads: (input.conversations || []).length - skipped, capped: false,
+            unfetchedThreads: unfetched.length, skipped: skipped }
   });
 
   // --dry renders without recording the run, so the digest can be read by hand
@@ -163,4 +194,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { main: main, marksFromDm: marksFromDm };
+module.exports = { main: main, marksFromDm: marksFromDm, inScope: inScope, nameMatches: nameMatches };

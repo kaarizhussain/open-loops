@@ -92,7 +92,9 @@ function render(b) {
 
   p('Read ' + b.messages.length + ' messages' +
     (read.threads ? ' across ' + read.threads + (b.source === 'slack' ? ' conversations' : ' threads') : '') +
-    ' and ' + b.events.length + ' meetings.');
+    ' and ' + b.events.length + ' meetings.' +
+    // Deliberately out of scope, which is different from missed — say which.
+    (read.skipped ? ' ' + read.skipped + ' left out of scope on purpose.' : ''));
 
   /* Silent truncation would make a half-read mailbox look like a complete digest, and
    * the half it drops is the oldest — which is exactly where the overdue items are. */
