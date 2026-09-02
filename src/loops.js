@@ -126,7 +126,20 @@ function parseDue(text, from) {
  * survives is the scheduling sense — "let's set up a call Thursday" is an agreement
  * somebody now has to act on, and it was going undetected entirely. Chat leans on it
  * far more than mail does, which is why it surfaced only once this read real Slack. */
-var FIRM = /\b(i'?ll|i will|we'?ll|we will|let me(?!\s+know)|i'?m going to|will (?:send|get|share|review|book|connect|loop|circle|have|put|pull|draft|forward))\b/i;
+/* "have to" and "need to" after a modal is an obligation somebody is under, not a
+ * commitment somebody made. "We will have to go through that again" and "each person
+ * will have to move their data over" are both descriptions of a constraint, and both
+ * were being read as promises — two of the commonest false positives in 3,700 real
+ * emails, and invisible in a fixture because nobody writes that sentence on purpose.
+ *
+ * Excluded per-modal rather than by dropping `have`, because "I will have it to you
+ * Friday" is a genuine promise and has to keep matching.
+ *
+ * Only "have to". "Need to" was in here briefly on a hunch and came straight back out
+ * when it silently stopped detecting "we'll need to redo the onboarding docs" — the
+ * corpus showed "will have to", not "will need to", and "I'll need to check with legal"
+ * is a soft commitment rather than an obligation. Fix what the data showed. */
+var FIRM = /\b(?:(?:i'?ll|i will|we'?ll|we will|i'?m going to)(?!\s+have\s+to\b)|let me(?!\s+know)|will (?:send|get|share|review|book|connect|loop|circle|have(?!\s+to\b)|put|pull|draft|forward))\b/i;
 var LETS = /\b(let'?s (?:schedule|book|set up|find time|meet|sync|talk|discuss|catch up|go over|walk through))\b/i;
 var COMMIT = new RegExp(FIRM.source + '|' + LETS.source, 'i');
 var DELIVER = /\b(attached|here'?s|here is|just sent|sent (?:it|you|over|through)|sending (?:it|over)|done|signed|uploaded|shared|forwarded|all set)\b/i;
