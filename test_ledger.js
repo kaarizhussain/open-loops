@@ -192,6 +192,41 @@ var withText = [];
 L.mergeLedger(withText, [loop()], '2026-08-06');
 assert.ok(withText[0][COL.what], 'text is kept by default');
 
+/* --- learning the kind, not just the instance --- */
+
+/* A phrase is only worth proposing if it separates the misses from the real ones.
+   "i'll send" is in both and says nothing; "at some point" is only in the rejects. */
+var judged = [
+  ['a', '', '', '', 'owed_by_us', '', "We'll revisit pricing at some point.", 'x'],
+  ['b', '', '', '', 'owed_by_us', '', "I'll look at headcount at some point.", 'x'],
+  ['c', '', '', '', 'owed_by_us', '', "I'll send the pricing sheet Thursday.", ''],
+  ['d', '', '', '', 'owed_by_us', '', "I'll send the deck tomorrow.", '']
+];
+var s = L.suggestMutes(judged);
+var got = s.map(function (x) { return x.phrase; });
+assert.ok(got.indexOf('at some point') > -1, 'the phrase common to both rejects is proposed');
+assert.ok(got.every(function (p) { return p.indexOf("i'll send") === -1; }),
+  'a phrase that also appears in kept items is not evidence of anything');
+assert.strictEqual(s.filter(function (x) { return x.phrase === 'at some point'; })[0].count, 2);
+
+/* Overlapping n-grams would otherwise say the same thing three times. */
+assert.ok(got.indexOf('at some') === -1 && got.indexOf('some point') === -1,
+  'only the longest of a nested set survives');
+
+/* One rejection is not a pattern. */
+assert.deepStrictEqual(L.suggestMutes([judged[0], judged[2]]), [],
+  'below the threshold it says nothing rather than guessing');
+
+/* Muting drops matching items outright, before they can become ledger rows. */
+var loops = [
+  { what: "We'll revisit pricing at some point." },
+  { what: "I'll send the pricing sheet Thursday." },
+  { what: 'AT SOME POINT we should talk.' }
+];
+assert.strictEqual(L.applyMutes(loops, ['at some point']).length, 1, 'case does not matter');
+assert.strictEqual(L.applyMutes(loops, [])[0].what, loops[0].what, 'no patterns changes nothing');
+assert.strictEqual(L.applyMutes(loops, ['']).length, 3, 'an empty pattern must not mute everything');
+
 /* --- both numbers --- */
 var p = L.precision([
   ['k1', '', '', '', 'owed_by_us', '', '', ''],

@@ -170,12 +170,19 @@ function main(argv) {
   var dmMessages = input.dm ? parseChannel(input.dm.text, { channel: 'DM', tzOffset: input.tzOffset || 0 }) : [];
   var replies = marksFromDm(dmMessages, store, rows);
 
+  /* Phrases you have decided are never worth surfacing. Applied before the ledger
+   * sees anything, so a muted item is not "suppressed" — it never becomes an item at
+   * all, and does not sit in the ledger being counted as a false positive forever. */
   var opts = { exec: self, today: today, contacts: input.contacts || null,
                // Absent means the historical single unnamed executive; [] means you
                // support nobody, which is the common case for someone running this
                // over their own account.
                principals: input.principals || [] };
   var result = loops.detectLoops(messages, [], opts);
+
+  var beforeMute = result.open.length;
+  result.open = L.applyMutes(result.open, input.mute);
+  var muted = beforeMute - result.open.length;
 
   var ledger = L.mergeLedger(rows, result.open, today, { storeText: input.storeText !== false });
   result.open = ledger.shown;
@@ -187,6 +194,7 @@ function main(argv) {
     today: today, source: 'slack',
     messages: messages, events: [], result: result, briefs: [],
     ledger: ledger, marked: replies.marked, principals: input.principals || [],
+    muted: muted, mutes: L.suggestMutes(rows),
     read: { threads: (input.conversations || []).length - skipped, capped: false,
             unfetchedThreads: unfetched.length, skipped: skipped, windowDays: window }
   });

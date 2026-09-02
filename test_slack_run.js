@@ -175,6 +175,28 @@ assert.ok(/Read 2 messages/.test(fetched),
   'the root is not counted twice, though a thread read repeats it: ' +
   fetched.split('\n').filter(function (l) { return /^Read /.test(l); })[0]);
 
+/* -------------------- muting a kind, not just an instance -------------------- */
+var vague = {
+  self: ME, today: '2026-09-01', tzOffset: 0, principals: [],
+  conversations: [{ channel: '#chat', members: [], text: [
+    me(at(2026, 8, 30, 10), "We'll revisit pricing at some point."),
+    me(at(2026, 8, 30, 11), "I'll send the deck Thursday.")
+  ].join('\n') }]
+};
+var loud = main([write(vague), '--ledger', path.join(dir, 'm1.json')]);
+assert.ok(loud.indexOf('revisit pricing') > -1, 'without a mute it is raised');
+
+vague.mute = ['at some point'];
+var quiet = main([write(vague), '--ledger', path.join(dir, 'm2.json')]);
+assert.strictEqual(quiet.indexOf('revisit pricing'), -1, 'muted by phrase');
+assert.ok(quiet.indexOf('send the deck') > -1, 'and nothing else is touched');
+assert.ok(/1 item was muted by phrase/.test(quiet), 'the digest says it dropped something');
+
+/* Muted items must not reach the ledger at all — otherwise they accumulate there as
+   permanent false positives and drag the precision number down forever. */
+var afterMute = JSON.parse(fs.readFileSync(path.join(dir, 'm2.json'), 'utf8'));
+assert.strictEqual(afterMute.rows.length, 1, 'only the surviving item is tracked');
+
 /* ----------------------------- the read window ----------------------------- */
 
 /* An unthreaded channel has no boundary of its own, so this window is the only thing

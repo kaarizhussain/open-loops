@@ -190,6 +190,21 @@ function render(b) {
   p('stop coming back. That reply is the only record of what this gets wrong.');
   p('Already knew about one? Put it on a line starting with k — "k 1 4". It stays on');
   p('the list; it just stops counting as something this told you.');
+
+  /* What the rejections add up to. Proposed, never applied — a detector that edits
+   * its own rules is one nobody can predict, and predictable is most of the point. */
+  if (b.mutes && b.mutes.length) {
+    p('');
+    p('These turn up in things you rejected and in nothing you kept:');
+    b.mutes.forEach(function (m) {
+      p('  "' + m.phrase + '" — rejected ' + m.count + ' times');
+    });
+    p('Add any of them to `mute` and they stop being raised at all.');
+  }
+  if (b.muted) {
+    p('');
+    p(b.muted + (b.muted === 1 ? ' item was' : ' items were') + ' muted by phrase before this list was built.');
+  }
   if (b.ledgerUrl) p('Ledger: ' + b.ledgerUrl);
   return L.join('\n');
 }

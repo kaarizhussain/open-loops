@@ -163,6 +163,44 @@ Everything after one, until the next, is read as a reply to it.
 Each reply is acted on exactly once. It stays in the DM forever, and re-applying it
 against a later, shorter list would mark a different item every run.
 
+## Learning the kind, not just the instance
+
+A verdict suppresses one row, keyed to one sentence in one conversation. That is right
+for a one-off and useless for a habit. If *"we'll look at that at some point"* is never
+a commitment worth tracking, every fresh instance arrives as a new item and gets
+rejected again, forever.
+
+So rejections are read twice — once as a verdict, once as evidence about phrasing. When
+a phrase turns up repeatedly in things you rejected and in **nothing you kept**, the
+digest proposes it:
+
+```
+These turn up in things you rejected and in nothing you kept:
+  "at some point" — rejected 4 times
+  "when i get a chance" — rejected 3 times
+Add any of them to `mute` and they stop being raised at all.
+```
+
+The second half of that test is what makes it worth reading. *"I'll send"* is all over
+the rejections and all over the real items too, so it means nothing. A phrase that
+appears only in the misses is a pattern the detector is actually wrong about.
+
+```json
+"mute": ["at some point", "when i get a chance"]
+```
+
+Muted items are dropped before the ledger sees them, so they never become items and do
+not sit there being counted as false positives forever.
+
+**Nothing is applied automatically.** The tool proposes, you decide, and what you decide
+lives in config where it can be read and undone. A detector that quietly rewrites its
+own rules is one nobody can predict, and predictability is most of the reason this is
+regexes rather than a model. Matching is plain case-insensitive substring rather than
+regex, for the same reason: a mute list has to be something a person can check.
+
+It says nothing until it has a couple of dozen judged items. Frequency over a handful of
+rows is noise, and a confident wrong suggestion here would mute real commitments.
+
 ## What it does not do yet
 
 **No calendar.** Two of the seven signals — *agreed but not booked*, and *meeting

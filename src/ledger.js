@@ -163,6 +163,82 @@ function pruneLedger(rows, today, keepDays) {
   return dropped;
 }
 
+/* --- learning the kind, not just the instance ---
+ *
+ * A verdict suppresses one row, keyed to one sentence in one conversation. That is
+ * right for a one-off, and useless for a habit: if "we'll need to look at that at
+ * some point" is never a commitment worth tracking, every fresh instance of it
+ * arrives as a new item and gets rejected again, forever.
+ *
+ * So rejections are also read as evidence about phrasing. Nothing is applied
+ * automatically — the tool proposes, a person decides, and what they decide sits in
+ * config where it can be read and undone. A detector that quietly rewrites its own
+ * rules is one nobody can predict or audit, and predictability is most of why this
+ * is regexes rather than a model.
+ */
+
+/* Word n-grams, so suggestions are phrases a person recognises rather than tokens. */
+function phrases(text, n) {
+  var w = String(text || '').toLowerCase().match(/[a-z][a-z']*/g) || [];
+  var out = [];
+  for (var i = 0; i + n <= w.length; i++) out.push(w.slice(i, i + n).join(' '));
+  return out;
+}
+
+/* Phrases that recur in what someone rejected and appear in nothing they kept.
+ *
+ * The second half is what makes it worth reading. "i'll send" is all over the
+ * rejections and all over the real items too, so it says nothing. A phrase that shows
+ * up only in the misses is a pattern the detector is wrong about.
+ *
+ * ponytail: needs a couple of dozen judged rows before it says anything useful, and
+ * says nothing rather than guessing below that. Frequency over a small corpus is
+ * mostly noise, and a confident wrong suggestion here costs more than silence — it
+ * would be muting real commitments. */
+function suggestMutes(rows, minCount) {
+  minCount = minCount || 2;
+  var wrong = {}, kept = {};
+  rows.forEach(function (r) {
+    var bad = isWrong(r[COL.verdict]);
+    [2, 3, 4].forEach(function (n) {
+      phrases(cell(r[COL.what]), n).forEach(function (p) {
+        if (bad) wrong[p] = (wrong[p] || 0) + 1;
+        else kept[p] = 1;
+      });
+    });
+  });
+
+  var found = Object.keys(wrong)
+    .filter(function (p) { return wrong[p] >= minCount && !kept[p]; })
+    .sort(function (a, b) { return wrong[b] - wrong[a] || b.length - a.length; });
+
+  /* Overlapping n-grams say the same thing three times — "at some", "some point",
+   * "at some point". Keep the longest of each nested set. */
+  return found
+    .filter(function (p) {
+      return !found.some(function (q) {
+        return q !== p && q.length > p.length && q.indexOf(p) > -1 && wrong[q] === wrong[p];
+      });
+    })
+    .slice(0, 8)
+    .map(function (p) { return { phrase: p, count: wrong[p] }; });
+}
+
+/* Drop anything whose text contains a muted phrase.
+ *
+ * Substring, case-insensitive, and deliberately not a regex. A mute list is read by
+ * someone deciding whether it is too broad, and a list of regexes is a list nobody
+ * checks. Returns what survives; the caller reports how many did not. */
+function applyMutes(loops, patterns) {
+  var mute = (patterns || []).map(function (p) { return String(p).toLowerCase(); })
+                             .filter(Boolean);
+  if (!mute.length) return loops.slice();
+  return loops.filter(function (l) {
+    var t = String(l.what || '').toLowerCase();
+    return !mute.some(function (p) { return t.indexOf(p) > -1; });
+  });
+}
+
 /* --- marking things wrong by replying to the digest ---
  *
  * The spreadsheet works, and nobody opens it. Marking a false positive has to cost
@@ -224,6 +300,7 @@ if (typeof module !== 'undefined') {
   module.exports = {
     mergeLedger: mergeLedger, precision: precision, isWrong: isWrong, isKnown: isKnown,
     cell: cell, daysApart: daysApart, parseMarks: parseMarks, applyMarks: applyMarks,
-    pruneLedger: pruneLedger, LEDGER_COLS: LEDGER_COLS, COL: COL
+    pruneLedger: pruneLedger, suggestMutes: suggestMutes, applyMutes: applyMutes,
+    phrases: phrases, LEDGER_COLS: LEDGER_COLS, COL: COL
   };
 }
