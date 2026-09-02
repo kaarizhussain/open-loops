@@ -175,6 +175,27 @@ assert.ok(/Read 2 messages/.test(fetched),
   'the root is not counted twice, though a thread read repeats it: ' +
   fetched.split('\n').filter(function (l) { return /^Read /.test(l); })[0]);
 
+/* ----------------------------- the read window ----------------------------- */
+
+/* An unthreaded channel has no boundary of its own, so this window is the only thing
+   bounding closure matching there. It was documented before it existed. */
+var aged = JSON.parse(JSON.stringify(input));
+aged.conversations = [{ channel: '#old', members: [], text: [
+  me(at(2026, 6, 1, 10), "I'll send the archive index next week."),   // three months back
+  me(at(2026, 8, 30, 10), "I'll send the pricing sheet Thursday.")
+].join('\n') }];
+delete aged.threads;
+
+var wide = main([write(aged), '--ledger', path.join(dir, 'w1.json')]);
+assert.ok(wide.indexOf('archive index') > -1, 'with no window, everything is in range');
+
+aged.lookbackDays = 21;
+var narrow = main([write(aged), '--ledger', path.join(dir, 'w2.json')]);
+assert.strictEqual(narrow.indexOf('archive index'), -1, 'the old promise ages out');
+assert.ok(narrow.indexOf('pricing sheet') > -1, 'the recent one stays');
+assert.ok(/going back 21 days/.test(narrow),
+  'and the digest states the boundary everything else was judged inside');
+
 /* ------------------------- what may be read at all ------------------------- */
 var { inScope, nameMatches } = require('./slack-run.js');
 

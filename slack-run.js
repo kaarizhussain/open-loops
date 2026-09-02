@@ -143,6 +143,23 @@ function main(argv) {
   var messages = Object.keys(byId).map(function (k) { return byId[k]; })
     .sort(function (a, b) { return parseFloat(a.id) - parseFloat(b.id); });
 
+  /* How far back to look.
+   *
+   * An unthreaded channel has no conversation boundary of its own, so this window is
+   * the only thing bounding closure matching there: read three weeks, and a delivery
+   * can only be confused with a promise from the same three weeks. Without it that
+   * claim was just a sentence in the documentation.
+   *
+   * ponytail: the window is a real trade, not a free knob. Anything that ages out is
+   * no longer detected, and the ledger reads "no longer detected" as cleared — so too
+   * short a window quietly reports long-silent promises as done, which is the failure
+   * this whole thing exists to prevent. Widen before narrowing. */
+  var window = input.lookbackDays || 0;
+  if (window) {
+    var cut = new Date(new Date(today + 'T00:00:00Z') - window * 864e5).toISOString().slice(0, 10);
+    messages = messages.filter(function (m) { return m.date.slice(0, 10) >= cut; });
+  }
+
   // Roots whose replies nobody fetched. Saying so beats a digest that looks complete.
   var unfetched = Object.keys(roots);
 
@@ -171,7 +188,7 @@ function main(argv) {
     messages: messages, events: [], result: result, briefs: [],
     ledger: ledger, marked: replies.marked, principals: input.principals || [],
     read: { threads: (input.conversations || []).length - skipped, capped: false,
-            unfetchedThreads: unfetched.length, skipped: skipped }
+            unfetchedThreads: unfetched.length, skipped: skipped, windowDays: window }
   });
 
   // --dry renders without recording the run, so the digest can be read by hand

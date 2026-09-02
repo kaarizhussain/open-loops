@@ -92,7 +92,9 @@ function render(b) {
 
   p('Read ' + b.messages.length + ' messages' +
     (read.threads ? ' across ' + read.threads + (b.source === 'slack' ? ' conversations' : ' threads') : '') +
-    ' and ' + b.events.length + ' meetings.' +
+    ' and ' + b.events.length + ' meetings' +
+    // How far back it looked is the boundary everything else is judged inside.
+    (read.windowDays ? ', going back ' + read.windowDays + ' days.' : '.') +
     // Deliberately out of scope, which is different from missed — say which.
     (read.skipped ? ' ' + read.skipped + ' left out of scope on purpose.' : ''));
 

@@ -49,9 +49,14 @@ Also read your own DM — that is where the last digest and any corrections are.
   "threads": [
     { "channel": "#deals", "root": "1788292991.482509", "text": "<slack_read_thread output>" }
   ],
-  "dm": { "channel": "D0…", "text": "<connector output for your self-DM>" }
+  "dm": { "channel": "D0…", "text": "<connector output for your self-DM>" },
+  "lookbackDays": 21
 }
 ```
+
+The self-DM is read whatever the scope rules say — it is where the digest went and
+where corrections come back, not a source of commitments. It is never scanned for
+promises; only for replies to a digest.
 
 A thread read repeats its own root message; it is matched by timestamp rather than
 appended, so nothing is counted twice. Each thread becomes its own conversation
@@ -165,10 +170,19 @@ unprepped* — compare what was said against what is on the calendar. With Slack
 they can never fire, and those are the two that platform assistants are least able to
 replace. The digest says `0 meetings` and means it.
 
-**An unthreaded channel is one wide boundary.** Threads have their own, but plain
-channel talk does not, so the read window is what keeps closure matching honest:
-read three weeks, and a delivery can only be confused with a promise from the same
+**An unthreaded channel is one wide boundary.** Threads have their own; plain channel
+talk does not, so `lookbackDays` is the only thing bounding closure matching there.
+Read three weeks, and a delivery can only be confused with a promise from the same
 three weeks.
+
+Set it when fetching too — `slack_read_channel` takes an `oldest` timestamp, and not
+reading old messages beats reading and discarding them.
+
+**The window is a trade, not a free knob.** Anything that ages out stops being
+detected, and the ledger reads *no longer detected* as *cleared* — so too short a
+window quietly reports long-silent promises as done, which is precisely the failure
+this exists to prevent. Widen before narrowing, and remember that the oldest items are
+the ones most likely to have been forgotten by everyone else too.
 
 **Everything an app posts is signed.** Messages sent through a connector carry a
 `*Sent using* @App` footer. Left in the body it would put identical words in every
