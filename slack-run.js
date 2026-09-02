@@ -342,7 +342,7 @@ function main(argv) {
     ledger: ledger, marked: replies.marked, principals: cfg.supporting,
     muted: muted, mutes: L.suggestMutes(rows).filter(function (s) { return !already[s.phrase]; }),
     learnedNow: fresh, learnedAll: learned,
-    spotCheck: sample, recall: score,
+    spotCheck: sample, recall: score, dark: result.dark,
     read: { threads: (input.conversations || []).length - skipped, capped: false,
             unfetchedThreads: unfetched.length, skipped: skipped, windowDays: window }
   });

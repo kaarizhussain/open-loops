@@ -186,7 +186,7 @@ var TIER_WEIGHT = { investor: 26, exec: 22, key_account: 20, customer: 12, partn
 
 function relationship(addr, contacts) {
   if (!contacts) return null;
-  var a = addr.toLowerCase();
+  var a = String(addr || '').toLowerCase();
   var hit = contacts[a] || contacts[domain(a)];
   if (!hit) return null;
   // `as` overrides the derived display name for role addresses like program@ or hr@.
@@ -270,7 +270,7 @@ function detectLoops(messages, events, opts) {
     });
     if (!counterparty) {
       msgs.forEach(function (m) {
-        if (m.out) m.to.forEach(function (t) { if (!counterparty && t.toLowerCase() !== exec) counterparty = t; });
+        if (m.out) (m.to || []).forEach(function (t) { if (!counterparty && String(t).toLowerCase() !== exec) counterparty = t; });
         else if (!counterparty) counterparty = m.from;
       });
     }
@@ -422,15 +422,49 @@ function detectLoops(messages, events, opts) {
     for (var q = mark; q < out.length; q++) out[q].parties = parties;
   });
 
-  /* --- meetings: no follow-up after, no agenda before --- */
+  /* --- meetings: no follow-up after, no agenda before ---
+   *
+   * no_followup asks whether a recap went out, and the only evidence it has is an
+   * outbound message addressed to somebody who was at the meeting. `to` means two
+   * different things depending on where the messages came from: in mail it is the
+   * delivery list, which answers the question; in Slack it is the channel roster,
+   * which does not — and outside guests are not in your workspace, so the test can
+   * only ever come back false. Every past external meeting then fires forever with
+   * nothing able to clear it, and it fires even when a recap was posted.
+   *
+   * So the detector stops assuming and checks once, against the corpus it was handed:
+   * has ANY outbound message ever been addressed to an external attendee of a meeting
+   * we actually read? If not, `to` is not a delivery list here and the signal has no
+   * evidence to reason about — so it goes dark and the digest says so, rather than
+   * inventing an absence out of a field that was never going to answer.
+   *
+   * Corpus-wide rather than per-meeting, deliberately: per-meeting would silence the
+   * mail case this signal was written for, where meeting somebody new and never
+   * writing to them is the most valuable thing it finds. */
+  var invited = {};
+  events.forEach(function (e) {
+    e.attendees.forEach(function (a) {
+      if (side(a) !== execSide) invited[String(a).toLowerCase()] = 1;
+    });
+  });
+  var canSeeFollowup = messages.some(function (m) {
+    return m.from.toLowerCase() === exec &&
+      (m.to || []).some(function (t) { return invited[String(t).toLowerCase()]; });
+  });
+  var darkFollowup = 0;
+
   events.forEach(function (e) {
     var ext = e.attendees.filter(function (a) { return side(a) !== execSide; });
     if (!ext.length) return;
     var when = day(e.start);
     if (when < today) {
+      if (!canSeeFollowup) {
+        if (daysBetween(when, today) >= 1) darkFollowup++;
+        return;
+      }
       var followed = messages.some(function (m) {
         return m.from.toLowerCase() === exec && day(m.date) >= when &&
-          m.to.some(function (t) { return ext.indexOf(t) > -1; });
+          (m.to || []).some(function (t) { return ext.indexOf(String(t).toLowerCase()) > -1; });
       });
       if (!followed && daysBetween(when, today) >= 1) {
         out.push({ type: 'no_followup', threadId: null, subject: e.title, who: ext[0], byUs: true,
@@ -487,7 +521,7 @@ function detectLoops(messages, events, opts) {
     .sort(function (a, b) { return b.risk - a.risk; });
   var closed = out.filter(function (l) { return l.type === 'closed'; })
     .sort(function (a, b) { return a.closedOn < b.closedOn ? 1 : -1; });
-  return { open: open, closed: closed, today: today };
+  return { open: open, closed: closed, today: today, dark: { no_followup: darkFollowup } };
 }
 
 /* Regroup everything by upcoming meeting. The list answers "what is outstanding";

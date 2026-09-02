@@ -221,6 +221,16 @@ function render(b) {
                                    : ' threads had replies that were not read.') +
       ' Anything promised inside them is missing from this list.');
   }
+  /* A signal with no evidence to reason about must say so. Chat gives a channel
+   * roster where mail gives a recipient list, so "did a recap go out" is a question
+   * this source cannot answer — and a silent nothing there reads identically to a
+   * week where every meeting was followed up on. */
+  if (b.dark && b.dark.no_followup) {
+    p('NOT CHECKED — ' + b.dark.no_followup +
+      (b.dark.no_followup === 1 ? ' past meeting was not checked' : ' past meetings were not checked') +
+      ' for a follow-up. Recaps go out by mail and this run only read chat, so there is' +
+      ' nothing here to tell a sent recap from an unsent one.');
+  }
 
   /* What changed since the last run, high up — the rest of this is the same list it
    * was, and a reader who already knows that will not scan it again. */
