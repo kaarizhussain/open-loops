@@ -27,6 +27,23 @@ Everything lives in one place. Default `~/open-loops-data/`, holding:
 If `checkout/` is missing, clone it. If the directory does not exist, this is a first
 run — do **Setup** below before anything else.
 
+This needs `git` and `node` on their machine. Check before setup rather than after, so
+a missing one surfaces as a sentence instead of a run that dies halfway through.
+
+## Where their data goes
+
+Nowhere. The detector is local code with no network calls in it — the only things that
+reach a network are the Slack and calendar connectors they already have, and the digest
+you post back to their own DM. Say this plainly if they ask, because someone reading
+their employer's Slack is right to ask.
+
+What lands on disk is `ledger.json`, in their working directory. By default it keeps the
+text of the message a commitment was found in, so the digest can quote the line back at
+them. Setting `"storeText": false` in the config keeps the tracking — keys, dates,
+verdicts, accuracy — and drops the words. Offer that to anyone whose workspace holds
+material they would rather not have sitting in a file, and tell them the trade: the
+digest stops being able to show them what was actually said.
+
 ## Setup — first run only
 
 Do not interview them for things the connector already knows.
@@ -157,6 +174,19 @@ directory, their user id, their address, and the whole fetch-run-post loop above
 Tell them two things: scheduled tasks only fire while the app is open, and it is worth
 running the task manually once so the Slack tool approvals get stored on it. Otherwise
 the first automatic run stalls on a permission prompt with nobody watching.
+
+## Changing it, or stopping it
+
+Both are edits to files they own, and it is worth saying so unprompted — a tool that
+looks hard to stop is one people are slower to start.
+
+To change what it reads or who it tracks, edit `openloops.config.json` and run again.
+Adding a channel to `exclude`, adding a name to `supporting`, moving `lookbackDays` —
+all of it takes effect on the next run, and nothing needs rebuilding.
+
+To stop the daily message, delete the scheduled task. The ledger stays where it is, so
+picking it up again later resumes rather than restarts. To remove it altogether, delete
+the working directory. That is all of it.
 
 ## How they correct it
 
