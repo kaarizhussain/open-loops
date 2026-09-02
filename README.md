@@ -292,19 +292,25 @@ precisely the failure this exists to prevent.
 
 ## What this has not done
 
-**No number in this repo comes from real correspondence.** It has been run against real
-Slack messages, which found six bugs, but nobody has used it for a fortnight and marked
-what it got wrong. Until someone has, its accuracy is unmeasured — every claim here is
-about the code, not about the results.
+**Its precision on real correspondence is still unmeasured.** It has now been run over
+3,725 real emails from the Enron corpus (`tools/benchmark.js`), which is a great deal
+better than a fixture — but that corpus carries no labels, so it can report a rate and
+not an accuracy. Nobody has yet used this for a fortnight and marked what it got wrong,
+and until somebody has, every claim here is about the code rather than the results.
 
-The machinery for measuring it is built and has been used zero times. That is the
-honest state of it.
+**What the corpus did establish is a rate, and it is bad: 40.5 items per 100 messages
+read.** Two in five messages produce something. Two guesses about why died on contact
+with it — excluding over-broad phrases moved the number by 1.4%, and 68% of items come
+from mail with exactly one recipient, so filtering distribution lists recovers almost
+nothing. That rate looks close to the true frequency of commitment language in one-to-one
+business email, which means the detector is mostly right and the problem is downstream:
+the digest prints every open item it is handed, so a real mailbox produces a list of 178.
+Selection, not detection, is the open problem.
 
-**Two of the seven signals have never fired on anything real.** *Agreed, not booked* and
-*Meeting unprepped* compare what was said against a calendar, and the Slack path has
-none — so the first is unsuppressable rather than dark, and the second cannot fire at
-all. A single-person workspace also has no inbound sender, so *They promised* and
-*Unanswered* are untested outside the fixture.
+**Three of the seven signals have still never fired on anything real.** *Meeting
+unprepped* and the calendar half of *Agreed, not booked* need a calendar the Slack path
+has not had; *No follow-up sent* needs a recipient list that chat does not carry, and now
+says so rather than firing blind.
 
 Everything in `src/fixture.js` is invented. Dana Whitfield, Northstar Systems, and every
 counterparty, deal, and email in it are fictional, written to exercise each detector

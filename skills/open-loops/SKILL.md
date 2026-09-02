@@ -229,9 +229,15 @@ look further back or rank differently rather than to add anything.
 
 ## What to tell them honestly
 
-It has never been validated against anyone's real correspondence. The machinery for
-measuring that is built and the numbers start at zero. Say so if they ask how accurate
-it is, rather than quoting the demo.
+Nobody has yet run it against their own correspondence for a fortnight and marked what
+it got wrong, so its precision for them is unknown. Say that if they ask how accurate it
+is, rather than quoting the demo.
+
+What is known is a rate, from 3,725 real emails in the Enron corpus: it finds something
+in about two of every five messages. Most of those are real commitment language rather
+than mistakes — people do write "please review this" that often — but it means the list
+is long before it is wrong, and the reader's problem on a busy mailbox is volume rather
+than error. Worth saying up front to anyone whose inbox is heavy.
 
 Two of the seven signals need a calendar, and a workspace with one member cannot
 exercise the two that need somebody else — nothing inbound ever arrives.
