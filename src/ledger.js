@@ -239,6 +239,49 @@ function applyMutes(loops, patterns) {
   });
 }
 
+/* --- how long each person actually takes ---
+ *
+ * Everyone is chased on the same clock, and that clock is whatever they said. But Paul
+ * at Meridian always takes ten days, and flagging him on day three because he said
+ * Friday is worse than not flagging him at all — chasing somebody who is behaving
+ * completely normally costs credibility with exactly the people the tiers say matter
+ * most.
+ *
+ * The ledger already knows this without being told. Every cleared row carries when it
+ * first appeared and when it stopped being detected, and the gap between those is how
+ * long that person took. Nobody has to record anything.
+ */
+function tempos(rows, minSamples) {
+  var min = minSamples || 3, byWho = {};
+
+  rows.forEach(function (r) {
+    // Only what they owed us. How long *we* take says nothing about when to chase them.
+    var type = cell(r[COL.type]);
+    if (type !== 'owed_to_us' && type !== 'awaiting_reply') return;
+
+    var from = cell(r[COL.first_seen]), done = cell(r[COL.gone_on]);
+    if (!from || !done) return;                 // still open, so it says nothing yet
+
+    var who = cell(r[COL.who]).toLowerCase();
+    if (!who) return;
+    var days = daysApart(from, done);
+    if (days < 0) return;
+    (byWho[who] = byWho[who] || []).push(days);
+  });
+
+  /* Median rather than mean: one counterparty who vanished for three months would
+   * otherwise drag their own average past anything useful. */
+  var out = {};
+  Object.keys(byWho).forEach(function (who) {
+    var d = byWho[who].sort(function (a, b) { return a - b; });
+    // Two data points is a coincidence. Below the threshold, say nothing.
+    if (d.length < min) return;
+    var mid = Math.floor(d.length / 2);
+    out[who] = d.length % 2 ? d[mid] : Math.round((d[mid - 1] + d[mid]) / 2);
+  });
+  return out;
+}
+
 /* --- checking what it never showed you ---
  *
  * Every verdict so far is about something that appeared: this item is wrong, this one
@@ -360,7 +403,7 @@ if (typeof module !== 'undefined') {
     mergeLedger: mergeLedger, precision: precision, isWrong: isWrong, isKnown: isKnown,
     cell: cell, daysApart: daysApart, parseMarks: parseMarks, applyMarks: applyMarks,
     pruneLedger: pruneLedger, suggestMutes: suggestMutes, applyMutes: applyMutes,
-    phrases: phrases, sampleQuiet: sampleQuiet, recall: recall,
+    phrases: phrases, sampleQuiet: sampleQuiet, recall: recall, tempos: tempos,
     LEDGER_COLS: LEDGER_COLS, COL: COL
   };
 }

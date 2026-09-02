@@ -687,9 +687,21 @@ function detectLoops(messages, events, opts) {
     else if (over != null && over >= -2) l.status = 'due_soon';
     else l.status = 'open';
 
+    /* How long this person actually takes, learned from what they have delivered
+     * before. Somebody who always takes ten days is not behaving badly on day three,
+     * whatever they said — and chasing someone who is behaving completely normally
+     * costs credibility with exactly the people the tiers say matter most.
+     *
+     * It damps the urgency, never the fact. They said Friday and it is Tuesday, so
+     * the item stays overdue and stays on the list; what waits is the escalation that
+     * would push it to the top and put it in front of you as a chase. */
+    var pace = (opts.tempo || {})[String(l.who || '').toLowerCase()];
+    l.usualDays = pace || null;
+    l.earlyForThem = !!(pace && l.status === 'overdue' && l.ageDays < pace);
+
     var r = { owed_by_us: 45, agreed_unscheduled: 40, unanswered_ask: 35, owed_to_us: 30,
               unprepped_meeting: 40, no_followup: 25, awaiting_reply: 20 }[l.type] || 20;
-    if (l.status === 'overdue') r += 45 + Math.min(l.overdueDays, 10) * 4;
+    if (l.status === 'overdue') r += l.earlyForThem ? 10 : 45 + Math.min(l.overdueDays, 10) * 4;
     else if (l.status === 'due_today') r += 40;
     else if (l.status === 'due_soon') r += 22;
     else r += Math.min(l.ageDays, 14) * 2;

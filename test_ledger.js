@@ -227,6 +227,49 @@ assert.strictEqual(L.applyMutes(loops, ['at some point']).length, 1, 'case does 
 assert.strictEqual(L.applyMutes(loops, [])[0].what, loops[0].what, 'no patterns changes nothing');
 assert.strictEqual(L.applyMutes(loops, ['']).length, 3, 'an empty pattern must not mute everything');
 
+/* --- how long each person actually takes --- */
+
+/* Nobody records this. Every cleared row already carries when it appeared and when it
+   stopped being detected, and the gap between them is how long that person took. */
+var hist = function (who, type, from, done) {
+  return ['k' + Math.random(), from, done, done, type, who, 'text', ''];
+};
+var paced = [
+  hist('paul@meridian.com', 'owed_to_us', '2026-08-01', '2026-08-11'),   // 10d
+  hist('paul@meridian.com', 'owed_to_us', '2026-08-05', '2026-08-13'),   //  8d
+  hist('paul@meridian.com', 'awaiting_reply', '2026-08-10', '2026-08-22'), // 12d
+  hist('quick@vendor.com', 'owed_to_us', '2026-08-01', '2026-08-02')     // one sample
+];
+var t = L.tempos(paced);
+assert.strictEqual(t['paul@meridian.com'], 10, 'the median of 8, 10 and 12');
+assert.strictEqual(t['quick@vendor.com'], undefined,
+  'two data points is a coincidence — below the threshold it says nothing');
+
+/* Median rather than mean: one counterparty who vanished for three months would drag
+   their own average past anything useful. */
+var outlier = [
+  hist('a@b.com', 'owed_to_us', '2026-08-01', '2026-08-03'),
+  hist('a@b.com', 'owed_to_us', '2026-08-01', '2026-08-04'),
+  hist('a@b.com', 'owed_to_us', '2026-08-01', '2026-11-01')
+];
+assert.strictEqual(L.tempos(outlier)['a@b.com'], 3, 'the one that vanished does not move it');
+
+/* Only what they owed us. How long we take says nothing about when to chase them. */
+var ours = [
+  hist('a@b.com', 'owed_by_us', '2026-08-01', '2026-08-20'),
+  hist('a@b.com', 'owed_by_us', '2026-08-01', '2026-08-20'),
+  hist('a@b.com', 'owed_by_us', '2026-08-01', '2026-08-20')
+];
+assert.deepStrictEqual(L.tempos(ours), {}, 'our own pace is not their pace');
+
+/* Still-open rows say nothing yet — the gap is only known once it closes. */
+var open2 = [
+  hist('a@b.com', 'owed_to_us', '2026-08-01', ''),
+  hist('a@b.com', 'owed_to_us', '2026-08-01', ''),
+  hist('a@b.com', 'owed_to_us', '2026-08-01', '')
+];
+assert.deepStrictEqual(L.tempos(open2), {}, 'nothing has cleared, so nothing is known');
+
 /* --- both numbers --- */
 var p = L.precision([
   ['k1', '', '', '', 'owed_by_us', '', '', ''],

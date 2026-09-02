@@ -292,6 +292,12 @@ function render(b) {
       p('      ' + (tracked ? tracked + ' · ' : '') + whose +
         (l.rel ? l.rel.label + ' · ' : '') + (l.who ? l.who + ' · ' : '') + l.subject);
       if (l.weekendShift) p('      note: stated ' + l.due + ' is a weekend — last working day is ' + l.workDue);
+      /* Late by the letter, normal for them. Chasing here is the thing that makes an
+       * assistant look careless to the people it matters most with. */
+      if (l.earlyForThem) {
+        p('      note: they usually take ' + l.usualDays + 'd — ' + l.ageDays +
+          'd in, so this is not late for them yet');
+      }
     });
     p('');
   });

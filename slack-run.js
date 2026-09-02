@@ -249,7 +249,9 @@ function main(argv) {
                // Absent means the historical single unnamed executive; [] means you
                // support nobody, which is the common case for someone running this
                // over their own account.
-               principals: input.principals || [] };
+               principals: input.principals || [],
+               // Learned from what has cleared before — nobody records this.
+               tempo: L.tempos(rows) };
   var result = loops.detectLoops(messages, [], opts);
 
   /* What has been muted: what you configured, plus what the tool concluded on its own,

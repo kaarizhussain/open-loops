@@ -195,6 +195,36 @@ r.open.filter(function (l) { return l.owner !== 'exec'; }).forEach(function (l) 
   assert.strictEqual(l.principal, null, 'non-executive items name no principal');
 });
 
+/* ---- chasing on their clock, not only on the stated one ----
+ *
+ * Paul always takes ten days. Flagging him hard on day three because he said Friday is
+ * worse than not flagging him — chasing someone behaving completely normally costs
+ * credibility with exactly the people the tiers say matter most. */
+var withPace = detectLoops(F.MESSAGES, F.EVENTS, {
+  exec: F.EXEC, today: F.TODAY, contacts: F.RELATIONSHIPS,
+  tempo: { 'paul.oyelaran@meridianhealth.com': 30 }
+});
+var paced = withPace.open.filter(function (l) { return l.subject.indexOf('Meridian') > -1 && l.type === 'owed_to_us'; })[0];
+
+assert.strictEqual(paced.status, 'overdue',
+  'it damps the urgency, never the fact — they said Friday and it is not Friday');
+assert.strictEqual(paced.usualDays, 30, 'and says what their normal pace is');
+assert.strictEqual(paced.earlyForThem, true, 'nine days in against a thirty-day habit');
+assert.ok(paced.risk < mer.risk,
+  'so it ranks below the same item with no history: ' + paced.risk + ' vs ' + mer.risk);
+
+/* Past their own pace they are genuinely behind, and the escalation lands. */
+var late = detectLoops(F.MESSAGES, F.EVENTS, {
+  exec: F.EXEC, today: F.TODAY, contacts: F.RELATIONSHIPS,
+  tempo: { 'paul.oyelaran@meridianhealth.com': 2 }
+}).open.filter(function (l) { return l.subject.indexOf('Meridian') > -1 && l.type === 'owed_to_us'; })[0];
+assert.strictEqual(late.earlyForThem, false, 'well past two days');
+assert.strictEqual(late.risk, mer.risk, 'and it ranks exactly as it would with no history');
+
+/* No history for someone means no change at all. */
+assert.strictEqual(mer.usualDays, null, 'unknown pace is null, not a guessed default');
+assert.strictEqual(mer.earlyForThem, false);
+
 /* ---- relationship weighting ---- */
 var inv = find('Halcyon', 'owed_by_us');
 assert.strictEqual(inv.rel.tier, 'investor', 'VC domain should resolve to investor tier');
