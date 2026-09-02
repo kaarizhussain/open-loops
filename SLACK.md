@@ -67,6 +67,23 @@ quietly leaving them out.
 `text` is the connector's response verbatim. The adapter parses it, including the
 `Message TS` line — the human date carries a timezone abbreviation and is ignored.
 
+**3. Run it:**
+
+```bash
+node slack-run.js input.json --ledger ledger.json      # the digest
+node slack-run.js --report --ledger ledger.json        # how it has been doing
+```
+
+Add `--dry` to render without recording the run. Do that first: a real run consumes
+the *new* flags, so previewing by hand afterwards would show a list with nothing marked
+new on it.
+
+**4. Post the output** to your own DM, wrapped in a triple-backtick block so the
+alignment survives Slack's proportional font.
+
+Two settings below shape what step 1 should fetch — `scope` and `principals` — and one,
+`lookbackDays`, bounds how far back any of it looks.
+
 ## What it is allowed to read
 
 **Read less than you can.** The connector will happily hand over every channel and
@@ -118,19 +135,6 @@ With several, items are routed by who was actually on the conversation rather th
 guesswork, and the name goes on each line because one heading cannot carry two. That
 case only really arises when you read your own account and are copied on several
 people's work — which is also the version that needs nobody's permission to set up.
-
-**3. Run it:**
-
-```bash
-node slack-run.js input.json --ledger ledger.json
-```
-
-Add `--dry` to render without recording the run. Do that first: a real run consumes
-the *new* flags, so previewing by hand afterwards would show you a list with nothing
-marked new on it.
-
-**4. Post the output** to your own DM, wrapped in a triple-backtick block so the
-alignment survives Slack's proportional font.
 
 ## Correcting it
 

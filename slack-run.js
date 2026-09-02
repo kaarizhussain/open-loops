@@ -106,7 +106,64 @@ function marksFromDm(messages, store, rows) {
   return { marked: marked, seen: seen, misses: misses, checked: checked };
 }
 
+/* How it has been doing, out of the ledger alone — no fetching, no input file.
+ *
+ * Three numbers because they answer different questions. Precision says whether the
+ * list can be trusted. Novelty says whether it is worth reading: someone with a good
+ * memory could get a flawless digest every morning and gain nothing from it, and
+ * precision alone would call that a success. Recall says how much it walked past,
+ * which nothing else here can see. */
+function report(ledgerPath) {
+  var store = fileStore(ledgerPath);
+  var rows = store.readLedger();
+  var p = L.precision(rows);
+  var audit = store.audit();
+  var out = ['OPEN LOOPS — how it has been doing', '', 'Tracked ' + p.total + ' items.'];
+
+  if (p.total) {
+    var trust = Math.round((1 - p.wrong / p.total) * 100);
+    var value = Math.round(p.news / p.total * 100);
+    out.push('');
+    out.push('  ' + p.wrong + ' wrong          → ' + trust + '% held up' +
+      (trust < 80 ? '   under the bar. Fix it or stop.' : ''));
+    out.push('  ' + p.knew + ' already known');
+    out.push('  ' + p.news + ' genuinely new  → ' + value + '% told you something');
+    out.push('');
+    out.push(trust >= 80 && value >= 20 ? "Worth someone's morning."
+      : trust < 80 ? 'Not trusted enough yet — the wrong-rate is what to fix first.'
+      : 'Accurate, but mostly telling you things you knew. Look further back, or rank'
+        + ' differently, before adding anything.');
+  }
+
+  var r = L.recall(p.total, audit.checked, audit.checked, audit.missed.length);
+  out.push('');
+  out.push(audit.checked
+    ? 'Recall: about ' + r.rate + '% — ' + audit.missed.length + ' misses found in ' +
+      audit.checked + ' spot-checked messages.'
+    : 'Recall: unmeasured. Nothing has been spot-checked yet, so nothing here says'
+      + ' anything about what it walked past.');
+
+  out.push('', 'By signal — real/total, and how many of those were news:');
+  Object.keys(p.byType).sort().forEach(function (t) {
+    var b = p.byType[t];
+    out.push('  ' + (LABEL[t] || t) + ': ' + (b.total - b.wrong) + '/' + b.total +
+      '  (' + (b.total - b.wrong - b.knew) + ' new)');
+  });
+
+  var learned = store.learnedMutes();
+  if (learned.length) {
+    out.push('', 'Muting on its own: ' +
+      learned.map(function (m) { return '"' + m.phrase + '"'; }).join(', '));
+  }
+
+  out.push('', 'Unmarked rows count as both correct and new, so this reads optimistically.');
+  return out.join('\n');
+}
+
 function main(argv) {
+  if (argv[0] === '--report') {
+    return report(argv[argv.indexOf('--ledger') + 1] || 'ledger.json');
+  }
   var inputPath = argv[0];
   if (!inputPath) {
     console.error('usage: node slack-run.js input.json [--ledger ledger.json] [--today YYYY-MM-DD]');

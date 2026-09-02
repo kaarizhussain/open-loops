@@ -374,6 +374,17 @@ assert.ok(/left out of scope on purpose/.test(narrowed),
 assert.ok(!/were not read/.test(narrowed) || /out of scope/.test(narrowed),
   'a deliberate omission is not reported as a failure to read');
 
+/* ------------------------------- the report ------------------------------- */
+var rep = main(['--report', '--ledger', quietLedger]);
+assert.ok(/Tracked \d+ items/.test(rep), 'reads the ledger with no input file at all');
+assert.ok(/Recall: about \d+%/.test(rep), 'and reports recall once anything is spot-checked');
+assert.ok(/By signal/.test(rep), 'broken out per detector, since one usually drags it down');
+
+/* An unmeasured number must say so rather than print a flattering default. */
+var freshRep = main(['--report', '--ledger', path.join(dir, 'never-run.json')]);
+assert.ok(/Recall: unmeasured/.test(freshRep), 'nothing spot-checked means nothing claimed');
+assert.ok(/Tracked 0 items/.test(freshRep), 'and an empty ledger does not throw');
+
 /* ------------------------------ bad input ------------------------------ */
 assert.throws(function () { main([write({ conversations: [] }), '--ledger', ledger]); },
   /needs "self"/, 'without an address there is no way to tell inbound from outbound');
