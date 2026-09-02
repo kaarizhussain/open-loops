@@ -229,8 +229,11 @@ props.digestKeys = undefined;
 var d1 = sandbox.build(true);
 var t1 = sandbox.render(d1);
 
-/* Items are numbered straight through, so a reply can name one unambiguously. */
-var numbered = t1.split('\n').filter(function (line) { return /^\s*\d+\. \[/.test(line); });
+/* Items are numbered straight through, so a reply can name one unambiguously.
+ * Counted below the short list, which cites the same numbers out of order on purpose
+ * and would otherwise look like a break in the sequence. */
+var body1 = t1.split('…and ').slice(1).join('…and ') || t1;
+var numbered = body1.split('\n').filter(function (line) { return /^\s*\d+\. \[/.test(line); });
 assert.strictEqual(numbered.length, d1.result.open.length, 'every open item carries a number');
 numbered.forEach(function (line, i) {
   assert.strictEqual(parseInt(line, 10), i + 1, 'numbering runs 1..n across sections: ' + line);

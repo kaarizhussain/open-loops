@@ -40,10 +40,14 @@ function ownerTitle(key, principals) {
  * Someone good at this job opens with the thing you would be most annoyed to discover
  * on Friday. The ranking already knows which item that is; this only has to say it. */
 /* Enough of a message to judge it, not so much that five of them bury the list. */
-function shortenBody(s) {
+function shortenBody(s, n) {
   var t = String(s || '').replace(/\s+/g, ' ').trim();
-  return t.length > 96 ? t.slice(0, 95).replace(/[,;:\s]+\S*$/, '') + '…' : t;
+  n = n || 96;
+  return t.length > n ? t.slice(0, n - 1).replace(/[,;:\s]+\S*$/, '') + '…' : t;
 }
+
+/* An action list that wraps is not a list you can scan, which is its only job. */
+function pad(s, n) { while (s.length < n) s += ' '; return s; }
 
 function headline(open) {
   if (!open.length) return 'Nothing outstanding. Genuinely — the list is empty.';
@@ -84,6 +88,54 @@ function digestOrder(open) {
     });
   });
   return keys;
+}
+
+/* The short list at the top answers a different question from the long one below it.
+ *
+ * The piles answer "what is outstanding, and who acts next" — a status question. At
+ * nine in the morning the question is "what do I do in the next hour", and no amount of
+ * sorting a forty-item list answers that. This is selection rather than ordering.
+ *
+ * One per counterparty, because chasing three people about five things is three
+ * messages rather than five. Taking the top five by risk alone can hand you five lines
+ * that are all the same conversation, which is one move dressed up as five. */
+function actionList(open, limit) {
+  var seen = {}, out = [];
+  open.forEach(function (l) {
+    if (out.length >= limit) return;
+    var party = String(l.who || l.subject || '').toLowerCase();
+    if (seen[party]) return;
+    seen[party] = 1;
+    out.push(l);
+  });
+  return out;
+}
+
+/* What the move is, rather than what the commitment said. "Chase Meridian" is an
+ * instruction; "We will have their comments back to you by Friday" is a quotation, and
+ * a list of quotations still leaves you working out what to do with each one.
+ *
+ * The verb comes from the signal type, which is the only place it can honestly come
+ * from — three of them name an action outright, and for a plain promise the sentence
+ * already says what was promised, so naming who it is owed to is the useful half. */
+function move(l) {
+  var who = l.rel ? l.rel.label : (l.who || 'them');
+  if (l.type === 'unprepped_meeting') return 'Send an agenda — ' + l.subject;
+  if (l.type === 'no_followup') return 'Send a recap to ' + who;
+  if (l.type === 'agreed_unscheduled') return 'Get it booked — ' + shortenBody(l.what);
+  if (l.type === 'unanswered_ask') return 'Answer ' + who + ' — ' + shortenBody(l.what);
+  if (l.owner === 'them') return 'Chase ' + who + ' — ' + shortenBody(l.what);
+  if (l.owner === 'exec') {
+    return 'Needs ' + (l.principal ? l.principal.label : 'the executive') +
+      ' — ' + shortenBody(l.what);
+  }
+  return who + ' — ' + shortenBody(l.what);
+}
+
+function when(l) {
+  return !l.due ? (l.ageDays > 6 ? 'quiet ' + l.ageDays + 'd' : 'no date')
+    : l.status === 'overdue' ? l.overdueDays + 'd late'
+    : l.status === 'due_today' ? 'today' : 'due ' + l.due;
 }
 
 function render(b) {
@@ -135,6 +187,23 @@ function render(b) {
       ' marked wrong and dropped for good.');
   }
   p('');
+
+  /* Only worth having when the list is long enough that you cannot scan it. Below
+   * that the full list is already the short list, and printing both is just saying
+   * everything twice. */
+  var cap = b.actionList === undefined ? 5 : b.actionList;
+  if (cap && open.length > 8) {
+    var moves = actionList(open, cap);
+    p('DO THESE FIRST — one move each, most pressing first');
+    moves.forEach(function (l) {
+      // Numbered from the full list below, not renumbered — so replying "4" to reject
+      // something means the same thing wherever you read it.
+      p('  ' + (l.n < 10 ? ' ' : '') + l.n + '. ' + pad('[' + when(l) + ']', 12) + ' ' +
+        shortenBody(move(l), 62));
+    });
+    p('  …and ' + (open.length - moves.length) + ' more below.');
+    p('');
+  }
 
   var due = (b.briefs || []).filter(function (x) { return x.prepDue; });
   if (due.length) {
@@ -253,6 +322,6 @@ function render(b) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { render: render, headline: headline, digestOrder: digestOrder, ownerTitle: ownerTitle,
+  module.exports = { render: render, headline: headline, digestOrder: digestOrder, ownerTitle: ownerTitle, actionList: actionList,
                      OWNER_ORDER: OWNER_ORDER };
 }

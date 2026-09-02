@@ -11,7 +11,7 @@ global.OWNER = loops.OWNER;
 global.LABEL = loops.LABEL;
 global.loopKey = loops.loopKey;
 
-var { render, headline, digestOrder } = require('./src/digest.js');
+var { render, headline, digestOrder, actionList } = require('./src/digest.js');
 var F = require('./src/fixture.js');
 
 var opts = { exec: F.EXEC, today: F.TODAY, contacts: F.RELATIONSHIPS };
@@ -34,8 +34,12 @@ assert.ok(!/undefined|NaN|\[object/.test(text), 'nothing leaked through as undef
 
 /* --- numbering is what a reply quotes back, so it has to be exact --- */
 assert.strictEqual(keys.length, result.open.length, 'every open item gets a number');
-var numbered = text.split('\n').filter(function (l) { return /^\s*\d+\. \[/.test(l); });
-assert.strictEqual(numbered.length, keys.length);
+
+/* Measured below the short list, which cites the same numbers out of order on purpose
+   and would otherwise be counted as part of the sequence. */
+var body = text.split('…and ').slice(1).join('…and ') || text;
+var numbered = body.split('\n').filter(function (l) { return /^\s*\d+\. \[/.test(l); });
+assert.strictEqual(numbered.length, keys.length, 'one numbered line per open item');
 numbered.forEach(function (line, i) {
   assert.strictEqual(parseInt(line, 10), i + 1, 'numbering runs 1..n in print order: ' + line);
 });
@@ -58,6 +62,42 @@ assert.ok(/Nothing overdue\. 1 thing lands today/.test(
   headline([mk({ status: 'due_today' })])), 'no overdue falls back to what lands today');
 assert.ok(/quietest is Meridian MSA, untouched for 11 days/.test(
   headline([mk({ ageDays: 11 })])), 'and with no deadlines at all, to what has gone quiet');
+
+/* --- the short list answers a different question from the long one --- */
+
+/* The piles answer "what is outstanding, and who acts next". At nine in the morning
+   the question is "what do I do next", and no amount of sorting forty items answers
+   that — this is selection, not ordering. */
+var head = text.split('DO THESE FIRST')[1].split('\n\n')[0].split('\n').slice(1, -1);
+assert.strictEqual(head.length, 5, 'five moves by default, got: ' + head.join(' | '));
+
+/* Numbered from the full list rather than renumbered, so replying "4" to reject
+   something means the same thing wherever in the digest you read it. */
+var refs = head.map(function (l) { return parseInt(l, 10); });
+assert.ok(refs.every(function (n) { return n >= 1 && n <= result.open.length; }),
+  'every reference points at a real item: ' + refs.join(','));
+assert.ok(refs.some(function (n, i) { return i && n < refs[i - 1]; }),
+  'and they are not in numeric order, because they are ranked by urgency not position');
+
+/* One per counterparty. Chasing three people about five things is three messages, and
+   five lines from one conversation is a single move dressed up as five. */
+var parties = actionList(result.open, 5).map(function (l) { return l.who; });
+assert.strictEqual(new Set(parties).size, parties.length, 'no counterparty appears twice');
+
+/* The verb comes from the signal type, where it can honestly come from. A list of
+   quotations still leaves you working out what to do with each one. */
+assert.ok(/Send an agenda —/.test(text), 'a meeting with no agenda names the action');
+assert.ok(/Chase /.test(text), 'something someone else owes is a chase');
+assert.ok(head.every(function (l) { return l.length <= 82; }),
+  'and nothing wraps — a list that wraps is not one you can scan');
+
+/* Below the threshold the full list already is the short list, and printing both is
+   saying everything twice. */
+var few = { today: F.TODAY, messages: [], events: [], briefs: [],
+  result: { open: result.open.slice(0, 4), closed: [] } };
+assert.strictEqual(render(few).indexOf('DO THESE FIRST'), -1, 'no short list for a short list');
+assert.strictEqual(render({ today: F.TODAY, messages: [], events: [], briefs: [],
+  actionList: 0, result: result }).indexOf('DO THESE FIRST'), -1, 'and it can be turned off');
 
 /* --- things a second runtime will not have --- */
 var bare = render({
