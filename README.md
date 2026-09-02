@@ -261,9 +261,21 @@ Calendar it's `summary`, `start.dateTime`, `attendees[].email`, and whether `des
 is non-empty for `agenda`.
 
 Run it on a schedule and deliver the list wherever the assistant already looks.
-[`appsscript/`](appsscript/) does that for Gmail — a daily job inside the executive's own
-account, no server and no credential to store. [`SLACK.md`](SLACK.md) does it for Slack,
-with the digest arriving as a DM and corrections typed straight back underneath it.
+
+**Slack is the one to use.** [`SLACK.md`](SLACK.md) has it: the digest arrives as a DM
+to yourself and corrections are typed straight back underneath it. Install the skill and
+ask Claude to set it up —
+
+```bash
+npx skills add kaarizhussain/open-loops
+```
+
+— and it reads your address and DM channel off the connector, shows you which channels
+it would read so you can strike the ones it should not, writes the config, runs it once,
+and offers to schedule it daily.
+
+[`appsscript/`](appsscript/) is the same detector over Gmail and Google Calendar, as a
+timer inside the executive's own account. It works and is not where the work is going.
 
 Both keep a ledger, so each digest leads with what changed rather than repeating
 yesterday's list, and both take corrections by reply.

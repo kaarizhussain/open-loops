@@ -16,9 +16,21 @@ Monday, which is not true of anything that asks a model what counts as a commitm
 
 ## Set it up once
 
-Copy `openloops.config.example.json` to `openloops.config.json` and put your address in
-it. Everything else has a default that does something sensible, so this is a valid
-config file:
+**The short way.** Install the skill and ask Claude to set up Open Loops:
+
+```bash
+npx skills add kaarizhussain/open-loops
+```
+
+It reads your address and DM channel straight off the Slack connector, shows you the
+channels it would read so you can strike the ones it should not, asks who you support,
+writes the config, runs it once, and offers to schedule it daily. Nothing below is
+needed unless you want to know what it did.
+
+**The long way**, and what the skill is doing on your behalf: copy
+`openloops.config.example.json` to `openloops.config.json` and put your address in it.
+Everything else has a default that does something sensible, so this is a valid config
+file:
 
 ```json
 { "you": "ea@company.com" }
