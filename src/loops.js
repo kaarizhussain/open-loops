@@ -37,12 +37,32 @@ function nextDow(from, target) {
 /* Deadline language -> ISO date, resolved relative to when the message was sent. */
 function parseDue(text, from) {
   var t = text.toLowerCase();
-  var m = t.match(/\b(?:by|before|on)?\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})\b/);
+  /* The ordinal suffix is optional but must be allowed to be there. Requiring a word
+   * boundary straight after the digits meant "Aug 15th" and "Sept 3rd" — much commoner
+   * than the bare form — matched nothing at all and silently arrived undated. */
+  var m = t.match(/\b(?:by|before|on)?\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b/);
   if (m) {
     var d = toUTC(from);
     var cand = new Date(Date.UTC(d.getUTCFullYear(), MONTHS[m[1]], +m[2]));
     if (cand < d) cand = new Date(Date.UTC(d.getUTCFullYear() + 1, MONTHS[m[1]], +m[2]));
     return iso(cand);
+  }
+
+  /* "by the 15th" — a day with no month, meaning the next one to come round.
+   *
+   * The ordinal suffix is required here rather than optional: it is the only thing
+   * separating a date from a quantity, and "by the 15 remaining" must never become a
+   * deadline. The lookahead covers the ordinals that are not dates at all — a third
+   * floor, a second opinion, a fourth quarter. */
+  var om = t.match(/\b(?:by|before|due|on)\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)\b(?!\s+(?:floor|option|attempt|try|round|quarter|place|party|opinion|version|draft|time))/);
+  if (om) {
+    var dom = +om[1], base = toUTC(from);
+    if (dom >= 1 && dom <= 31) {
+      var next = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), dom));
+      // Already gone this month, so they mean next month's.
+      if (next < base) next = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, dom));
+      return iso(next);
+    }
   }
   if (/\btomorrow\b/.test(t)) return addDays(from, 1);
   if (/\btoday\b|\bthis afternoon\b|\bby eod\b(?!\s+\w+day)/.test(t)) return day(from);

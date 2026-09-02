@@ -9,6 +9,29 @@ assert.strictEqual(parseDue('questionnaire tomorrow', '2026-07-30T13:00'), '2026
 assert.strictEqual(parseDue('connect you with Sana this week', '2026-07-30T18:02'), '2026-07-31');
 assert.strictEqual(parseDue('no deadline mentioned here', '2026-08-01T10:00'), null);
 
+/* ---- ordinals ----
+ *
+ * "Aug 15th" and "Sept 3rd" used to match nothing, because the month rule demanded a
+ * word boundary straight after the digits and "15th" has none. Those are commoner than
+ * the bare form, and they arrived silently undated — a promise with no deadline sinks
+ * to the bottom of the list rather than announcing that its date was dropped. */
+assert.strictEqual(parseDue('Aug 15th', '2026-08-01T10:00'), '2026-08-15');
+assert.strictEqual(parseDue('by Sept 3rd', '2026-09-01T10:00'), '2026-09-03');
+assert.strictEqual(parseDue('Aug 15', '2026-08-01T10:00'), '2026-08-15', 'and the bare form still works');
+
+/* A day with no month means the next one to come round. */
+assert.strictEqual(parseDue('by the 15th', '2026-09-01T10:00'), '2026-09-15');
+assert.strictEqual(parseDue('by the 1st', '2026-09-15T10:00'), '2026-10-01', 'already gone, so next month');
+assert.strictEqual(parseDue('due the 30th', '2026-09-01T10:00'), '2026-09-30');
+
+/* The ordinal suffix is required, because it is the only thing separating a date from
+   a quantity — and some ordinals are not dates at all. */
+assert.strictEqual(parseDue('I have 15 emails to get through', '2026-09-01T10:00'), null);
+['we are on the 3rd floor', 'happy with the 2nd option', 'let us discuss in the 4th quarter']
+  .forEach(function (s) {
+    assert.strictEqual(parseDue(s, '2026-09-01T10:00'), null, 'not a date: ' + s);
+  });
+
 var r = detectLoops(F.MESSAGES, F.EVENTS, { exec: F.EXEC, today: F.TODAY, contacts: F.RELATIONSHIPS });
 var find = function (sub, type) {
   return r.open.filter(function (l) { return l.subject.indexOf(sub) > -1 && (!type || l.type === type); })[0];
@@ -305,15 +328,18 @@ assert.strictEqual(both.closed.length, 2, 'a delivery that names two promises cl
  * where the thread is an entire channel. */
 var ownDates = detectLoops([
   msg('a', '2026-08-03T09:00', "I'm going to draft the onboarding doc and share it EOD tomorrow."),
-  msg('b', '2026-08-03T09:05', "I'll have the revenue numbers over to finance by the 15th."),
-  msg('c', '2026-08-03T09:10', 'We should revisit pricing at some point.')
+  msg('b', '2026-08-03T09:05', "I'll get to the backlog grooming."),
+  msg('c', '2026-08-03T09:10', "I'll have the revenue numbers over to finance by the 15th.")
 ], [], { exec: F.EXEC, today: F.TODAY });
-var borrowed = ownDates.open.filter(function (l) { return l.what.indexOf('revenue numbers') > -1; })[0];
-assert.ok(borrowed, 'the promise is still detected');
-assert.strictEqual(borrowed.due, null,
+var find2 = function (s) {
+  return ownDates.open.filter(function (l) { return l.what.indexOf(s) > -1; })[0];
+};
+assert.ok(find2('backlog'), 'the undated promise is still detected');
+assert.strictEqual(find2('backlog').due, null,
   'but it must not inherit "tomorrow" from a different promise of your own');
-var ownDated = ownDates.open.filter(function (l) { return l.what.indexOf('onboarding') > -1; })[0];
-assert.strictEqual(ownDated.due, '2026-08-04', 'a date in the sentence itself is still read');
+assert.strictEqual(find2('onboarding').due, '2026-08-04', 'a date in the sentence itself is read');
+assert.strictEqual(find2('revenue numbers').due, '2026-08-15',
+  'including a bare ordinal, which used to be borrowed from elsewhere instead');
 
 /* ---- the day moves: arrivals land, resolved things drop ---- */
 var { loopKey } = require('./src/loops.js');
