@@ -59,8 +59,16 @@ function parseDue(text, from) {
   return null;
 }
 
-/* "let me know" is an ask, not a promise — exclude it explicitly. */
-var COMMIT = /\b(i'?ll|i will|we'?ll|we will|let me(?!\s+know)|i'?m going to|will (?:send|get|share|review|book|connect|loop|circle|have|put|pull|draft|forward))\b/i;
+/* "let me know" is an ask, not a promise — exclude it explicitly.
+ *
+ * "let's" is allow-listed against verbs rather than opened up, because most of its uses
+ * are discourse: let's see, let's be honest, let's not get ahead of ourselves. What
+ * survives is the scheduling sense — "let's set up a call Thursday" is an agreement
+ * somebody now has to act on, and it was going undetected entirely. Chat leans on it
+ * far more than mail does, which is why it surfaced only once this read real Slack. */
+var FIRM = /\b(i'?ll|i will|we'?ll|we will|let me(?!\s+know)|i'?m going to|will (?:send|get|share|review|book|connect|loop|circle|have|put|pull|draft|forward))\b/i;
+var LETS = /\b(let'?s (?:schedule|book|set up|find time|meet|sync|talk|discuss|catch up|go over|walk through))\b/i;
+var COMMIT = new RegExp(FIRM.source + '|' + LETS.source, 'i');
 var DELIVER = /\b(attached|here'?s|here is|just sent|sent (?:it|you|over|through)|sending (?:it|over)|done|signed|uploaded|shared|forwarded|all set)\b/i;
 var ASK = /\b(can you|could you|would you|please|need your|need you to|waiting on|any update|following up|checking in|let me know|confirm)\b/i;
 /* An intro is an email, not a meeting — keep those as plain promises. */
@@ -215,7 +223,14 @@ function detectLoops(messages, events, opts) {
      * is when a delivery names nothing. */
     var promises = [];
     msgs.forEach(function (m, i) {
+      var firm = false;
       sentences(m.body).forEach(function (s) {
+        /* "Sure — I'll do the call. Tuesday works, let's find time." is one agreement
+         * said twice, and listing it twice is the noise this cares most about. A
+         * "let's" after your own commitment in the same message is elaboration; a
+         * genuinely separate second commitment says "I'll" again. */
+        if (firm && !FIRM.test(s)) return;
+        if (FIRM.test(s)) firm = true;
         /* No DELIVER check here, deliberately. A bare "attached" never reaches this
          * line — COMMIT already rejected it. The only sentences a DELIVER test could
          * reject are ones that commit *and* use delivery words, and those are promises:

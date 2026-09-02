@@ -60,6 +60,32 @@ var comp = find('comp plan', 'owed_by_us');
 assert.ok(comp, 'comp plan sign-off not detected');
 assert.strictEqual(comp.due, '2026-08-08', 'should inherit "by Aug 8" from the request');
 
+/* ---- "let's" is a commitment when it schedules something ----
+ *
+ * Chat leans on it far more than mail does — "let's set up a call Thursday" is an
+ * agreement somebody now has to act on, and it was going undetected entirely. But most
+ * uses of the word are discourse, so it is allow-listed against verbs rather than
+ * opened up: let's see, let's be honest, let's not get ahead of ourselves. */
+var lets = function (body) {
+  return detectLoops([{ id: 'x', threadId: 'z', subject: 'Thread', from: F.EXEC,
+    to: ['x@acme.com'], date: '2026-08-03T09:00', attach: false, body: body }],
+    [], { exec: F.EXEC, today: F.TODAY }).open;
+};
+assert.strictEqual(lets("Let's schedule a sync for Thursday to walk through the rollout.").length, 1,
+  'an agreement to meet is a commitment somebody has to act on');
+assert.strictEqual(lets("Let's set up a call next week about the pilot.").length, 1);
+['Let\'s see how the numbers land.', "Let's be honest, that timeline was never real.",
+ "Let's not get ahead of ourselves.", 'Great work everyone, let\'s go.'].forEach(function (b) {
+  assert.strictEqual(lets(b).length, 0, 'discourse, not a commitment: ' + b);
+});
+
+/* One agreement stated twice in one message is one item. A "let's" after your own
+   commitment is elaboration; a separate second commitment says "I'll" again. */
+assert.strictEqual(lets("Sure — I'll do the call. Tuesday works, let's find time.").length, 1,
+  'the same agreement restated must not appear twice');
+assert.strictEqual(lets("I'll send the deck today. I'll also book the room.").length, 2,
+  'but two genuine commitments in one message are two items');
+
 /* an outbound proposed date is not a deadline */
 var iron = find('Ironwood', 'awaiting_reply');
 assert.ok(iron && iron.due === null, 'proposed meeting slot should not become a due date');
