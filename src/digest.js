@@ -132,6 +132,56 @@ function move(l) {
   return who + ' — ' + shortenBody(l.what);
 }
 
+/* "paul.oyelaran@meridianhealth.com" → "Paul". Wrong sometimes, and a note that opens
+ * with the wrong name is worse than one that opens with none — so role addresses and
+ * anything too short to be a name get no greeting rather than a guess. */
+var ROLE = /^(info|team|hello|hi|no-?reply|notifications?|support|sales|hr|admin|billing|help|contact|office|accounts|legal|press|careers|jobs)$/i;
+
+function firstName(addr) {
+  var local = String(addr || '').split('@')[0];
+  if (!local || ROLE.test(local)) return null;
+  var first = local.split(/[._+-]/)[0];
+  if (first.length < 2 || /\d/.test(first)) return null;
+  return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
+}
+
+/* The note to send, where sending a note is the move.
+ *
+ * This is the step between reading the list and the list changing. Without it an item
+ * only leaves when a message happens to appear — so anything handled by phone, or done
+ * quietly, nags forever. The alternative fix is a "done" button, and that is worse: it
+ * bypasses closure detection instead of feeding it. Paste this, send it, and the next
+ * run sees your message and closes the loop by itself.
+ *
+ * Not every item gets one. A promise of your own that is not yet late needs doing, not
+ * announcing, and an agenda needs writing rather than mentioning — offering a draft
+ * there would be suggesting a message instead of the work.
+ *
+ * ponytail: the demo page carries its own richer variant with a subject line and
+ * formatted dates, because it renders into a copy button rather than one digest line.
+ * Two implementations, and they will drift; fold them together if a third appears. */
+function draft(l) {
+  var late = l.status === 'overdue' || l.status === 'due_today';
+  var body = {
+    /* Kept short enough to fit one line of the digest without wrapping, which is also
+     * about the length anyone actually sends. A draft you have to edit down is one you
+     * rewrite instead of pasting. */
+    owed_by_us: late ? 'I still owe you this — sending it today, sorry for the lag.' : null,
+    owed_to_us: late
+      ? 'checking in on this — anything holding it up your end?'
+      : 'just confirming this is still on track?',
+    unanswered_ask: 'sorry for the slow reply — coming back to you today.',
+    awaiting_reply: 'bumping this one — any thoughts when you get a moment?',
+    agreed_unscheduled: 'shall I put some time in the diary for this?',
+    no_followup: 'thanks for the time — recapping what we agreed below.',
+    unprepped_meeting: null
+  }[l.type];
+  if (!body) return null;
+  var name = firstName(l.who);
+  // With no greeting the body has to start a sentence rather than continue one.
+  return name ? 'Hi ' + name + ' — ' + body : body.charAt(0).toUpperCase() + body.slice(1);
+}
+
 function when(l) {
   return !l.due ? (l.ageDays > 6 ? 'quiet ' + l.ageDays + 'd' : 'no date')
     : l.status === 'overdue' ? l.overdueDays + 'd late'
@@ -200,6 +250,10 @@ function render(b) {
       // something means the same thing wherever you read it.
       p('  ' + (l.n < 10 ? ' ' : '') + l.n + '. ' + pad('[' + when(l) + ']', 12) + ' ' +
         shortenBody(move(l), 62));
+      // Only where a note is the move. Paste it, send it, and the next run sees the
+      // message and closes the loop without anyone ticking anything.
+      var note = draft(l);
+      if (note) p('        → ' + note);
     });
     p('  …and ' + (open.length - moves.length) + ' more below.');
     p('');
@@ -322,6 +376,6 @@ function render(b) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { render: render, headline: headline, digestOrder: digestOrder, ownerTitle: ownerTitle, actionList: actionList,
+  module.exports = { render: render, headline: headline, digestOrder: digestOrder, ownerTitle: ownerTitle, actionList: actionList, draft: draft, firstName: firstName,
                      OWNER_ORDER: OWNER_ORDER };
 }

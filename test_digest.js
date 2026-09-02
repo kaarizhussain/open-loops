@@ -11,7 +11,7 @@ global.OWNER = loops.OWNER;
 global.LABEL = loops.LABEL;
 global.loopKey = loops.loopKey;
 
-var { render, headline, digestOrder, actionList } = require('./src/digest.js');
+var { render, headline, digestOrder, actionList, draft, firstName } = require('./src/digest.js');
 var F = require('./src/fixture.js');
 
 var opts = { exec: F.EXEC, today: F.TODAY, contacts: F.RELATIONSHIPS };
@@ -68,7 +68,8 @@ assert.ok(/quietest is Meridian MSA, untouched for 11 days/.test(
 /* The piles answer "what is outstanding, and who acts next". At nine in the morning
    the question is "what do I do next", and no amount of sorting forty items answers
    that — this is selection, not ordering. */
-var head = text.split('DO THESE FIRST')[1].split('\n\n')[0].split('\n').slice(1, -1);
+var block = text.split('DO THESE FIRST')[1].split('\n\n')[0].split('\n');
+var head = block.filter(function (l) { return /^\s*\d+\. \[/.test(l); });
 assert.strictEqual(head.length, 5, 'five moves by default, got: ' + head.join(' | '));
 
 /* Numbered from the full list rather than renumbered, so replying "4" to reject
@@ -88,8 +89,9 @@ assert.strictEqual(new Set(parties).size, parties.length, 'no counterparty appea
    quotations still leaves you working out what to do with each one. */
 assert.ok(/Send an agenda —/.test(text), 'a meeting with no agenda names the action');
 assert.ok(/Chase /.test(text), 'something someone else owes is a chase');
-assert.ok(head.every(function (l) { return l.length <= 82; }),
-  'and nothing wraps — a list that wraps is not one you can scan');
+assert.ok(block.every(function (l) { return l.length <= 82; }),
+  'nothing wraps, drafts included — a list that wraps is not one you can scan: ' +
+  block.filter(function (l) { return l.length > 82; }).join(' | '));
 
 /* Below the threshold the full list already is the short list, and printing both is
    saying everything twice. */
@@ -98,6 +100,50 @@ var few = { today: F.TODAY, messages: [], events: [], briefs: [],
 assert.strictEqual(render(few).indexOf('DO THESE FIRST'), -1, 'no short list for a short list');
 assert.strictEqual(render({ today: F.TODAY, messages: [], events: [], briefs: [],
   actionList: 0, result: result }).indexOf('DO THESE FIRST'), -1, 'and it can be turned off');
+
+/* --- the note to send, where sending a note is the move ---
+ *
+ * Without this an item only leaves the list when a message happens to appear, so
+ * anything handled by phone nags forever. Paste it, send it, and the next run sees
+ * your message and closes the loop — which is why this beats a "done" button: it
+ * feeds closure detection instead of bypassing it. */
+var d = function (over) {
+  var l = { type: 'owed_to_us', status: 'overdue', who: 'paul.oyelaran@meridianhealth.com' };
+  Object.keys(over || {}).forEach(function (k) { l[k] = over[k]; });
+  return draft(l);
+};
+
+assert.ok(/^Hi Paul — /.test(d()), 'it opens with a name pulled off the address');
+assert.ok(/holding it up/.test(d()), 'a late inbound promise is a chase');
+assert.ok(/still on track/.test(d({ status: 'open' })), 'one that is not late is a check-in');
+assert.ok(/bumping this one/.test(d({ type: 'awaiting_reply' })));
+assert.ok(/slow reply/.test(d({ type: 'unanswered_ask' })));
+assert.ok(/in the diary/.test(d({ type: 'agreed_unscheduled' })));
+
+/* Not everything needs a note, and offering one where it does not is suggesting a
+   message instead of the work. */
+assert.strictEqual(d({ type: 'unprepped_meeting' }), null, 'an agenda needs writing, not mentioning');
+assert.strictEqual(d({ type: 'owed_by_us', status: 'open' }), null,
+  'a promise of your own that is not yet late needs doing, not announcing');
+assert.ok(/still owe you/.test(d({ type: 'owed_by_us', status: 'overdue' })),
+  'but once it is late, a holding note is the move');
+
+/* A note that opens with the wrong name is worse than one that opens with none. */
+assert.strictEqual(firstName('paul.oyelaran@meridianhealth.com'), 'Paul');
+assert.strictEqual(firstName('DANA@northstar.io'), 'Dana', 'shouting is not a name');
+assert.strictEqual(firstName('j.mercer@solstice.com'), null, 'an initial is not a name');
+assert.strictEqual(firstName('hr@northstar.io'), null, 'nor is a department');
+assert.strictEqual(firstName('noreply@vendor.com'), null);
+assert.strictEqual(firstName('user2@x.com'), null, 'nor anything with a digit in it');
+
+/* With no greeting the body has to start a sentence rather than continue one. */
+var anon = d({ who: 'hr@northstar.io' });
+assert.strictEqual(anon.indexOf('Hi '), -1, 'no greeting when there is no name');
+assert.ok(/^[A-Z]/.test(anon), 'and it still reads as a sentence: ' + anon);
+
+/* In the digest, only on the short list — one line per move, where you are about to
+   act. On every item it would be clutter. */
+assert.ok(/→ Hi \w+ — /.test(text), 'the note appears under the move it belongs to');
 
 /* --- things a second runtime will not have --- */
 var bare = render({
