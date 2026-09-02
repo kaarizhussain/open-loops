@@ -254,9 +254,21 @@ function detectLoops(messages, events, opts) {
 
     promises.forEach(function (pr) {
       var m = pr.m, i = pr.at, s = pr.s, closer = pr.closer;
-      // "I'll review before the deadline" — the date lives in the message being answered.
+      /* "I'll review and get back to you before the deadline" carries no date — it was
+       * in the message being answered. So walk back for it, but only into messages
+       * from the other side.
+       *
+       * A deadline you inherit is one somebody else set and you agreed to. Your own
+       * earlier messages did not set it, and letting a promise borrow a date from
+       * another thing you happened to say is how "I'll have the numbers over by the
+       * 15th" ends up due tomorrow, because tomorrow appeared in an unrelated
+       * sentence further up. Harmless in mail, where a thread is one subject.
+       * Not harmless in chat, where the thread is an entire channel. */
       var due = parseDue(s, m.date);
-      for (var k = i - 1; k >= 0 && !due; k--) due = parseDue(msgs[k].body, msgs[k].date);
+      for (var k = i - 1; k >= 0 && !due; k--) {
+        if (msgs[k].out === m.out) continue;
+        due = parseDue(msgs[k].body, msgs[k].date);
+      }
       var type = m.out ? 'owed_by_us' : 'owed_to_us';
       // The promise and the scheduling language often sit in different sentences.
       if (!closer && m.out && MEETINGY.test(s) && SCHEDULEY.test(m.body)) {

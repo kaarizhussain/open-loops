@@ -266,6 +266,29 @@ var both = detectLoops([
 ], [], { exec: F.EXEC, today: F.TODAY });
 assert.strictEqual(both.closed.length, 2, 'a delivery that names two promises closes two');
 
+/* ---- a deadline is inherited only from the other side ----
+ *
+ * A promise with no date of its own takes one from the message it answers — that is
+ * how "I'll get back to you before the deadline" becomes dated. But a deadline you
+ * inherit is one somebody else set and you agreed to. Your own earlier messages did
+ * not set it, and letting a promise borrow a date from another thing you happened to
+ * say is how "I'll have the numbers over by the 15th" comes out due tomorrow, because
+ * "tomorrow" appeared in an unrelated sentence further up.
+ *
+ * Harmless in mail, where a thread is one subject. Found on real Slack messages,
+ * where the thread is an entire channel. */
+var ownDates = detectLoops([
+  msg('a', '2026-08-03T09:00', "I'm going to draft the onboarding doc and share it EOD tomorrow."),
+  msg('b', '2026-08-03T09:05', "I'll have the revenue numbers over to finance by the 15th."),
+  msg('c', '2026-08-03T09:10', 'We should revisit pricing at some point.')
+], [], { exec: F.EXEC, today: F.TODAY });
+var borrowed = ownDates.open.filter(function (l) { return l.what.indexOf('revenue numbers') > -1; })[0];
+assert.ok(borrowed, 'the promise is still detected');
+assert.strictEqual(borrowed.due, null,
+  'but it must not inherit "tomorrow" from a different promise of your own');
+var ownDated = ownDates.open.filter(function (l) { return l.what.indexOf('onboarding') > -1; })[0];
+assert.strictEqual(ownDated.due, '2026-08-04', 'a date in the sentence itself is still read');
+
 /* ---- the day moves: arrivals land, resolved things drop ---- */
 var { loopKey } = require('./src/loops.js');
 var opts = { exec: F.EXEC, today: F.TODAY, contacts: F.RELATIONSHIPS };
