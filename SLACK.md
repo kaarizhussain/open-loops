@@ -14,6 +14,24 @@ is the point: **a model retrieves and delivers, this decides.** Detection stays
 deterministic — the same conversations produce the same list on Tuesday as they did on
 Monday, which is not true of anything that asks a model what counts as a commitment.
 
+## Set it up once
+
+Copy `openloops.config.example.json` to `openloops.config.json` and put your address in
+it. Everything else has a default that does something sensible, so this is a valid
+config file:
+
+```json
+{ "you": "ea@company.com" }
+```
+
+Settings live there rather than in the run because they are a different kind of thing.
+Who you are, who you support and which channels may be read are stable — written once,
+edited rarely. The conversations fetched this morning are none of those. Anything
+passed on the run still wins, which is what makes *"just for today, look back sixty
+days"* possible without editing the file.
+
+The settings are documented below, each where it matters.
+
 ## The loop
 
 **1. Fetch.** List the conversations, drop the ones out of scope (see below), then read
@@ -37,11 +55,11 @@ slack_read_thread(channel_id=…, message_ts=<the root's Message TS>)
 
 Also read your own DM — that is where the last digest and any corrections are.
 
-**2. Write what came back:**
+**2. Write what came back.** Only what was fetched — the settings are already in the
+config file:
 
 ```json
 {
-  "self": "you@example.com",
   "today": "2026-09-01",
   "conversations": [
     { "channel": "#deals", "members": ["lena@vectorfreight.com"], "text": "<connector output>" }
@@ -50,8 +68,7 @@ Also read your own DM — that is where the last digest and any corrections are.
     { "channel": "#deals", "root": "1788292991.482509", "text": "<slack_read_thread output>" }
   ],
   "dm": { "channel": "D0…", "text": "<connector output for your self-DM>" },
-  "events": "<list_events response, object or raw JSON>",
-  "lookbackDays": 21
+  "events": "<list_events response, object or raw JSON>"
 }
 ```
 
@@ -75,8 +92,8 @@ quietly leaving them out.
 **3. Run it:**
 
 ```bash
-node slack-run.js input.json --ledger ledger.json      # the digest
-node slack-run.js --report --ledger ledger.json        # how it has been doing
+node slack-run.js input.json                     # the digest
+node slack-run.js --report                       # how it has been doing
 ```
 
 Add `--dry` to render without recording the run. Do that first: a real run consumes
@@ -86,8 +103,9 @@ new on it.
 **4. Post the output** to your own DM, wrapped in a triple-backtick block so the
 alignment survives Slack's proportional font.
 
-Two settings below shape what step 1 should fetch — `scope` and `principals` — and one,
-`lookbackDays`, bounds how far back any of it looks.
+Two settings below shape what step 1 should fetch — `channels` and `supporting` — and
+one, `lookbackDays`, bounds how far back any of it looks. All three live in the config
+file.
 
 ## What it is allowed to read
 
@@ -97,8 +115,8 @@ Direct messages in particular are the most sensitive thing in a workspace and th
 least likely to be about a commitment anyone is tracking.
 
 ```json
-"scope": {
-  "only":    ["deals-*", "#clients"],   // allowlist. Everything else stops existing.
+"channels": {
+  "include": ["deals-*", "#clients"],   // allowlist. Everything else stops existing.
   "exclude": ["#hr", "#leadership"]     // or blocklist. Exclude wins if both name it.
 }
 ```
@@ -128,9 +146,9 @@ the digest otherwise sorts your own commitments into a pile headed *needs the
 executive*, which is a heading that lies about what is under it.
 
 ```json
-"principals": []                                   // nobody. Two piles: chase, and yours.
-"principals": [{ "label": "Dana" }]                // one. The pile becomes "Needs Dana".
-"principals": [                                    // several. Each item says whose.
+"supporting": []                                   // nobody. Two piles: chase, and yours.
+"supporting": [{ "label": "Dana" }]                // one. The pile becomes "Needs Dana".
+"supporting": [                                    // several. Each item says whose.
   { "label": "Dana",   "address": "dana@northstar.io" },
   { "label": "Marcus", "address": "marcus@northstar.io" }
 ]

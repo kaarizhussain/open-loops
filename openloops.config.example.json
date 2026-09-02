@@ -1,0 +1,34 @@
+{
+  "_comment": [
+    "Copy to openloops.config.json and edit. Everything except `you` has a default that",
+    "does something sensible, so deleting a line is a valid way to accept the default.",
+    "",
+    "See SLACK.md for what each of these does and why the awkward ones are the way they",
+    "are — `lookbackDays` in particular is a trade rather than a knob."
+  ],
+
+  "you": "you@company.com",
+  "supporting": [],
+
+  "selfDm": "U0XXXXXXXXX",
+  "channels": {
+    "include": [],
+    "exclude": ["#social", "#random"]
+  },
+  "lookbackDays": 21,
+
+  "calendarId": "primary",
+  "useCalendar": true,
+
+  "mute": [],
+  "unmute": [],
+
+  "actionList": 5,
+  "spotCheck": 5,
+
+  "ledger": "ledger.json",
+  "keepLedgerDays": 90,
+  "storeText": true,
+
+  "tzOffset": 0
+}

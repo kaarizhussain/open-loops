@@ -325,8 +325,16 @@ aged.conversations = [{ channel: '#old', members: [], text: [
 ].join('\n') }];
 delete aged.threads;
 
+/* Unbounded is the wrong default for anyone but the person who wrote it, so absent
+   means twenty-one days rather than everything. 0 is how you ask for no window. */
+aged.lookbackDays = 0;
 var wide = main([write(aged), '--ledger', path.join(dir, 'w1.json')]);
-assert.ok(wide.indexOf('archive index') > -1, 'with no window, everything is in range');
+assert.ok(wide.indexOf('archive index') > -1, 'zero means no window at all');
+
+delete aged.lookbackDays;
+assert.strictEqual(
+  main([write(aged), '--ledger', path.join(dir, 'w0.json')]).indexOf('archive index'), -1,
+  'and leaving it out takes the default rather than reading everything ever said');
 
 aged.lookbackDays = 21;
 var narrow = main([write(aged), '--ledger', path.join(dir, 'w2.json')]);
@@ -428,7 +436,8 @@ assert.strictEqual(stillOpen(sighted).indexOf('walk through the renewal'), -1,
 
 /* ------------------------------ bad input ------------------------------ */
 assert.throws(function () { main([write({ conversations: [] }), '--ledger', ledger]); },
-  /needs "self"/, 'without an address there is no way to tell inbound from outbound');
+  /Config is incomplete[\s\S]*"you"/,
+  'without an address there is no way to tell inbound from outbound');
 
 fs.rmSync(dir, { recursive: true, force: true });
 console.log('slack-run: OK');

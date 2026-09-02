@@ -4,3 +4,5 @@ fonts/*.woff2
 
 node_modules/
 .DS_Store
+openloops.config.json
+ledger.json

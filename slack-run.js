@@ -36,6 +36,7 @@ var digest = require('./src/digest.js');
 var { parseChannel } = require('./src/slack.js');
 var { fileStore } = require('./src/store.js');
 var { parseEvents } = require('./src/calendar.js');
+var { settings } = require('./src/config.js');
 
 var DIGEST_HEADER = /^\s*(?:```)?\s*OPEN LOOPS — for (\d{4}-\d{2}-\d{2})/;
 
@@ -162,33 +163,50 @@ function report(ledgerPath) {
 }
 
 function main(argv) {
-  if (argv[0] === '--report') {
-    return report(argv[argv.indexOf('--ledger') + 1] || 'ledger.json');
-  }
-  var inputPath = argv[0];
-  if (!inputPath) {
-    console.error('usage: node slack-run.js input.json [--ledger ledger.json] [--today YYYY-MM-DD]');
-    process.exit(2);
-  }
   var flag = function (name, fallback) {
     var i = argv.indexOf('--' + name);
     return i > -1 && argv[i + 1] ? argv[i + 1] : fallback;
   };
+  var configPath = flag('config', 'openloops.config.json');
 
+  if (argv[0] === '--report') {
+    var rc = settings(fs, configPath, { you: 'report@localhost' });
+    return report(flag('ledger', rc.ledger));
+  }
+  var inputPath = argv[0];
+  if (!inputPath) {
+    console.error('usage: node slack-run.js input.json [--config openloops.config.json]');
+    console.error('       node slack-run.js --report [--config openloops.config.json]');
+    process.exit(2);
+  }
+
+  /* Settings and the run are separate things. Who you are and what may be read is
+   * stable and belongs in a file; the conversations fetched this morning are not.
+   * `self` is still accepted on the run for the sake of anything that passed it
+   * before there was anywhere else to put it. */
   var input = JSON.parse(fs.readFileSync(inputPath, 'utf8'));
-  var self = String(input.self || '').toLowerCase();
-  if (!self) throw new Error('input.json needs "self" — the address messages are outbound from');
+  var cfg = settings(fs, configPath, {
+    you: input.self || input.you,
+    supporting: input.principals || input.supporting,
+    channels: input.scope,
+    lookbackDays: input.lookbackDays,
+    mute: input.mute, unmute: input.unmute,
+    spotCheck: input.spotCheck, actionList: input.actionList,
+    storeText: input.storeText, keepLedgerDays: input.keepLedgerDays,
+    tzOffset: input.tzOffset
+  });
 
+  var self = cfg.you;
   var today = flag('today', input.today || new Date().toISOString().slice(0, 10));
-  var store = fileStore(flag('ledger', 'ledger.json'));
+  var store = fileStore(flag('ledger', cfg.ledger));
 
   /* Every conversation becomes messages in the shape loops.js already takes. The
    * channel name stands in for a subject line, which Slack does not have. */
   var byId = {}, roots = {}, skipped = 0;
   (input.conversations || []).forEach(function (c) {
-    if (!inScope(c.channel, input.scope)) { skipped++; return; }
+    if (!inScope(c.channel, cfg.channels)) { skipped++; return; }
     parseChannel(c.text, {
-      channel: c.channel, members: c.members || [], tzOffset: input.tzOffset || 0
+      channel: c.channel, members: c.members || [], tzOffset: cfg.tzOffset
     }).forEach(function (m) {
       byId[m.id] = m;
       if (m.hasThread) roots[m.id] = c.channel;   // has replies a channel read omits
@@ -205,10 +223,10 @@ function main(argv) {
   (input.threads || []).forEach(function (t) {
     // A thread inherits its channel's scope — excluding #hr and then reading a thread
     // inside it would be an exclusion that does not exclude.
-    if (!inScope(t.channel, input.scope)) { skipped++; return; }
+    if (!inScope(t.channel, cfg.channels)) { skipped++; return; }
     parseChannel(t.text, {
       channel: t.channel, members: t.members || [], threadId: t.root,
-      tzOffset: input.tzOffset || 0
+      tzOffset: cfg.tzOffset
     }).forEach(function (m) { byId[m.id] = m; });
     delete roots[t.root];
   });
@@ -227,7 +245,7 @@ function main(argv) {
    * no longer detected, and the ledger reads "no longer detected" as cleared — so too
    * short a window quietly reports long-silent promises as done, which is the failure
    * this whole thing exists to prevent. Widen before narrowing. */
-  var window = input.lookbackDays || 0;
+  var window = cfg.lookbackDays;
   if (window) {
     var cut = new Date(new Date(today + 'T00:00:00Z') - window * 864e5).toISOString().slice(0, 10);
     messages = messages.filter(function (m) { return m.date.slice(0, 10) >= cut; });
@@ -240,7 +258,7 @@ function main(argv) {
 
   // Yesterday's corrections land before today's list is built, or a rejected item
   // shows up one more time before disappearing.
-  var dmMessages = input.dm ? parseChannel(input.dm.text, { channel: 'DM', tzOffset: input.tzOffset || 0 }) : [];
+  var dmMessages = input.dm ? parseChannel(input.dm.text, { channel: 'DM', tzOffset: cfg.tzOffset }) : [];
   var replies = marksFromDm(dmMessages, store, rows);
 
   /* Phrases you have decided are never worth surfacing. Applied before the ledger
@@ -255,7 +273,7 @@ function main(argv) {
                // Absent means the historical single unnamed executive; [] means you
                // support nobody, which is the common case for someone running this
                // over their own account.
-               principals: input.principals || [],
+               principals: cfg.supporting,
                // Learned from what has cleared before — nobody records this.
                tempo: L.tempos(rows) };
   var result = loops.detectLoops(messages, events, opts);
@@ -263,11 +281,11 @@ function main(argv) {
   /* What has been muted: what you configured, plus what the tool concluded on its own,
    * minus anything you overruled. `unmute` always wins — a rule the tool taught itself
    * has to be undoable by one line, or it is not really reversible. */
-  var overruled = (input.unmute || []).map(function (s) { return String(s).toLowerCase(); });
+  var overruled = (cfg.unmute || []).map(function (s) { return String(s).toLowerCase(); });
   var learned = store.learnedMutes().filter(function (e) {
     return overruled.indexOf(e.phrase) === -1;
   });
-  var mutes = (input.mute || []).concat(learned.map(function (e) { return e.phrase; }));
+  var mutes = (cfg.mute || []).concat(learned.map(function (e) { return e.phrase; }));
 
   /* Snapshot before anything is muted or suppressed. A message whose item you rejected
    * is not one the detector was silent about — it spoke and you disagreed — so it must
@@ -295,16 +313,16 @@ function main(argv) {
     .filter(function (s) { return !already[s.phrase]; })
     .map(function (s) { return { phrase: s.phrase, count: s.count, since: today }; });
 
-  var ledger = L.mergeLedger(rows, result.open, today, { storeText: input.storeText !== false });
+  var ledger = L.mergeLedger(rows, result.open, today, { storeText: cfg.storeText !== false });
   result.open = ledger.shown;
-  L.pruneLedger(rows, today, input.keepLedgerDays || 90);
+  L.pruneLedger(rows, today, cfg.keepLedgerDays);
 
   var keys = digest.digestOrder(result.open);
 
   /* Sample the silence. Everything else in this loop asks about things that appeared;
    * this is the only question that can say anything about what did not. */
   var audit = store.audit();
-  var checkCount = input.spotCheck === undefined ? 5 : input.spotCheck;
+  var checkCount = cfg.spotCheck;
   var silent = messages.filter(function (m) { return !spoke[m.id]; });
   var sample = L.sampleQuiet(silent, [], checkCount, today);
   var score = L.recall(rows.length, silent.length,
@@ -317,7 +335,7 @@ function main(argv) {
      * assistant is asked "what do I need before this". Same items, read the way you
      * read them the night before. Built and unused until there was a calendar. */
     briefs: loops.meetingBriefs(messages, events, result.open, opts),
-    ledger: ledger, marked: replies.marked, principals: input.principals || [],
+    ledger: ledger, marked: replies.marked, principals: cfg.supporting,
     muted: muted, mutes: L.suggestMutes(rows).filter(function (s) { return !already[s.phrase]; }),
     learnedNow: fresh, learnedAll: learned,
     spotCheck: sample, recall: score,
