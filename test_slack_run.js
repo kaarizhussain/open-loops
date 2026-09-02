@@ -197,6 +197,64 @@ assert.ok(/1 item was muted by phrase/.test(quiet), 'the digest says it dropped 
 var afterMute = JSON.parse(fs.readFileSync(path.join(dir, 'm2.json'), 'utf8'));
 assert.strictEqual(afterMute.rows.length, 1, 'only the surviving item is tracked');
 
+/* ------------------- learning a mute without being told ------------------- */
+
+/* Four rejections of the same phrase, none of them kept, and it mutes itself. The bar
+   is high on purpose: once muted, matching items stop becoming rows, so no further
+   evidence accumulates and a wrong mute would never argue its way back. */
+var learnLedger = path.join(dir, 'learn.json');
+var learnInput = {
+  self: ME, today: '2026-09-01', tzOffset: 0, principals: [],
+  /* Varied on purpose. Four identical sentences would make every n-gram in them equally
+     common, and the longest would win — correct, but it would learn a whole sentence
+     rather than the phrase the sentences share. */
+  conversations: [{ channel: '#chat', members: [], text: [
+    "We'll revisit pricing at some point.",
+    "I'll look at the headcount plan at some point.",
+    "We'll need to redo the onboarding docs at some point.",
+    "I'll get to the backlog grooming at some point.",
+    "I'll send the deck Thursday."
+  ].map(function (body, n) { return me(at(2026, 8, 21 + n, 10), body); }).join('\n') }]
+};
+
+var first = main([write(learnInput), '--ledger', learnLedger]);
+assert.ok(!/LEARNED/.test(first), 'nothing is learned before anything is rejected');
+assert.strictEqual(JSON.parse(fs.readFileSync(learnLedger, 'utf8')).rows.length, 5);
+
+/* Reject the four vague ones, keep the real one. */
+var st = JSON.parse(fs.readFileSync(learnLedger, 'utf8'));
+st.rows.forEach(function (r) { if (/at some point/.test(r[6])) r[7] = 'x'; });
+fs.writeFileSync(learnLedger, JSON.stringify(st));
+
+var second = main([write(learnInput), '--ledger', learnLedger]);
+assert.ok(/LEARNED/.test(second), 'the pattern is learned: ' +
+  second.split('\n').filter(function (l) { return /LEARNED|"at some/.test(l); }).join(' | '));
+assert.ok(/"at some point" — rejected 4 times, kept none/.test(second));
+assert.ok(/Add it to `unmute`/.test(second), 'and the way to undo it is on the page');
+
+var saved = JSON.parse(fs.readFileSync(learnLedger, 'utf8')).learned;
+assert.strictEqual(saved.length, 1, 'recorded in the ledger, not in config');
+assert.strictEqual(saved[0].phrase, 'at some point');
+assert.strictEqual(saved[0].count, 4, 'with the evidence it acted on');
+assert.strictEqual(saved[0].since, '2026-09-01');
+
+/* From now on it applies without being told, and says that it is. */
+var third = main([write(learnInput), '--ledger', learnLedger]);
+assert.ok(!/LEARNED/.test(third), 'announced once, not every run');
+assert.ok(/Currently muting on its own: "at some point"/.test(third),
+  'but standing state that shapes the list stays visible');
+assert.ok(/4 items were muted by phrase/.test(third));
+
+/* Overruling it stops the phrase being muted. The rows themselves stay rejected —
+   those are two different decisions and undoing one must not undo the other. */
+learnInput.unmute = ['at some point'];
+var undone = main([write(learnInput), '--ledger', learnLedger]);
+assert.ok(!/Currently muting on its own/.test(undone), 'unmute wins over what it taught itself');
+assert.ok(!/muted by phrase/.test(undone), 'nothing is being dropped by phrase any more');
+assert.ok(/4 hidden as wrong/.test(undone),
+  'they are held back by their own verdicts now, which is a different fact: ' +
+  undone.split('\n').filter(function (l) { return /open ·/.test(l); })[0]);
+
 /* ----------------------------- the read window ----------------------------- */
 
 /* An unthreaded channel has no boundary of its own, so this window is the only thing

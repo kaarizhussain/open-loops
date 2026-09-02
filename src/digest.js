@@ -191,8 +191,19 @@ function render(b) {
   p('Already knew about one? Put it on a line starting with k — "k 1 4". It stays on');
   p('the list; it just stops counting as something this told you.');
 
-  /* What the rejections add up to. Proposed, never applied — a detector that edits
-   * its own rules is one nobody can predict, and predictable is most of the point. */
+  /* Anything the tool decided for itself is announced the run it happens and listed
+   * in every run after. A rule that changes behaviour and is not on the page is the
+   * one that makes a tool unpredictable — the change itself is fine. */
+  if (b.learnedNow && b.learnedNow.length) {
+    p('');
+    p('LEARNED — these will not be raised again:');
+    b.learnedNow.forEach(function (m) {
+      p('  "' + m.phrase + '" — rejected ' + m.count + ' times, kept none');
+    });
+    p('Wrong about any of them? Add it to `unmute` and it comes straight back.');
+  }
+
+  /* Below the auto bar, so proposed rather than applied. */
   if (b.mutes && b.mutes.length) {
     p('');
     p('These turn up in things you rejected and in nothing you kept:');
@@ -201,9 +212,16 @@ function render(b) {
     });
     p('Add any of them to `mute` and they stop being raised at all.');
   }
+
   if (b.muted) {
     p('');
     p(b.muted + (b.muted === 1 ? ' item was' : ' items were') + ' muted by phrase before this list was built.');
+  }
+
+  // Standing state that shapes every list, so it stays visible rather than implied.
+  if (b.learnedAll && b.learnedAll.length) {
+    p('Currently muting on its own: ' +
+      b.learnedAll.map(function (m) { return '"' + m.phrase + '"'; }).join(', ') + '.');
   }
   if (b.ledgerUrl) p('Ledger: ' + b.ledgerUrl);
   return L.join('\n');

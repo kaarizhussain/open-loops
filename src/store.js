@@ -20,7 +20,7 @@ var fs = require('fs');
 var path = require('path');
 var L = require('./ledger.js');
 
-var EMPTY = { rows: [], digests: {}, seen: [] };
+var EMPTY = { rows: [], digests: {}, seen: [], learned: [] };
 
 function load(file) {
   try {
@@ -28,7 +28,8 @@ function load(file) {
     return {
       rows: Array.isArray(raw.rows) ? raw.rows : [],
       digests: raw.digests && typeof raw.digests === 'object' ? raw.digests : {},
-      seen: Array.isArray(raw.seen) ? raw.seen : []
+      seen: Array.isArray(raw.seen) ? raw.seen : [],
+      learned: Array.isArray(raw.learned) ? raw.learned : []
     };
   } catch (e) {
     // Missing is the normal first run. Corrupt is not, and losing the verdicts in it
@@ -81,6 +82,19 @@ function fileStore(file) {
 
     rememberReplies: function (ids) {
       state.seen = ids.slice(-200);
+      flush();
+    },
+
+    /* Phrases the tool muted on its own, and the evidence it did it on.
+     *
+     * Kept here rather than in config because config is what a person wrote and this
+     * is what the tool concluded — mixing the two makes it impossible to tell which
+     * decisions were yours. Every entry carries its count and date so the reasoning
+     * can be checked, and deleting a line undoes it. */
+    learnedMutes: function () { return state.learned.slice(); },
+
+    remember: function (entries) {
+      state.learned = state.learned.concat(entries);
       flush();
     }
   };

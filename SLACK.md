@@ -192,14 +192,42 @@ appears only in the misses is a pattern the detector is actually wrong about.
 Muted items are dropped before the ledger sees them, so they never become items and do
 not sit there being counted as false positives forever.
 
-**Nothing is applied automatically.** The tool proposes, you decide, and what you decide
-lives in config where it can be read and undone. A detector that quietly rewrites its
-own rules is one nobody can predict, and predictability is most of the reason this is
-regexes rather than a model. Matching is plain case-insensitive substring rather than
-regex, for the same reason: a mute list has to be something a person can check.
+### When it decides for itself
 
-It says nothing until it has a couple of dozen judged items. Frequency over a handful of
-rows is noise, and a confident wrong suggestion here would mute real commitments.
+Past four rejections of the same phrase, with none of them kept, it stops asking and
+mutes it — and says so:
+
+```
+LEARNED — these will not be raised again:
+  "at some point" — rejected 4 times, kept none
+Wrong about any of them? Add it to `unmute` and it comes straight back.
+```
+
+Every run after that carries a standing line — `Currently muting on its own: "at some
+point".` — because a rule that shapes the list and is not on the page is exactly what
+makes a tool unpredictable. The change itself is fine; hiding it is not.
+
+Learned mutes live in the ledger rather than in config, because config is what you
+wrote and this is what the tool concluded, and mixing the two makes it impossible to
+tell later which decisions were yours. Each carries the count and date it acted on, so
+the reasoning can be checked. Deleting the line undoes it; so does `unmute`, which
+always wins.
+
+**Why the bar is four and not two.** Once a phrase is muted, matching items stop
+becoming rows — so no further evidence accumulates in either direction, and a mute that
+was wrong can never argue its way back. That asymmetry is the whole reason for a high
+threshold, a loud announcement, and a one-line undo.
+
+Rejecting a phrase and rejecting an item are also separate decisions. `unmute` stops the
+phrase being muted; it does not un-reject rows you already marked wrong, and those stay
+held back by their own verdicts.
+
+Below the bar it only proposes. And it says nothing at all until it has a couple of
+dozen judged items — frequency over a handful of rows is noise, and a confident wrong
+suggestion here mutes real commitments.
+
+Matching is plain case-insensitive substring rather than regex, on purpose: a mute list
+is something a person has to be able to check at a glance.
 
 ## What it does not do yet
 

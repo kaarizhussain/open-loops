@@ -180,9 +180,34 @@ function main(argv) {
                principals: input.principals || [] };
   var result = loops.detectLoops(messages, [], opts);
 
+  /* What has been muted: what you configured, plus what the tool concluded on its own,
+   * minus anything you overruled. `unmute` always wins — a rule the tool taught itself
+   * has to be undoable by one line, or it is not really reversible. */
+  var overruled = (input.unmute || []).map(function (s) { return String(s).toLowerCase(); });
+  var learned = store.learnedMutes().filter(function (e) {
+    return overruled.indexOf(e.phrase) === -1;
+  });
+  var mutes = (input.mute || []).concat(learned.map(function (e) { return e.phrase; }));
+
   var beforeMute = result.open.length;
-  result.open = L.applyMutes(result.open, input.mute);
+  result.open = L.applyMutes(result.open, mutes);
   var muted = beforeMute - result.open.length;
+
+  /* Learn from what has been rejected since last time.
+   *
+   * The bar is deliberately higher than for a suggestion: four rejections of the same
+   * phrase, and it must appear in nothing that was kept. Once muted, matching items
+   * stop becoming rows — so no further evidence accumulates either way, and a wrong
+   * mute would never argue itself back. That asymmetry is why the threshold is high,
+   * why every one is announced, and why they are listed in every digest afterwards
+   * rather than quietly taking effect. */
+  var already = {};
+  mutes.forEach(function (p) { already[String(p).toLowerCase()] = 1; });
+  store.learnedMutes().forEach(function (e) { already[e.phrase] = 1; });
+
+  var fresh = L.suggestMutes(rows, 4)
+    .filter(function (s) { return !already[s.phrase]; })
+    .map(function (s) { return { phrase: s.phrase, count: s.count, since: today }; });
 
   var ledger = L.mergeLedger(rows, result.open, today, { storeText: input.storeText !== false });
   result.open = ledger.shown;
@@ -194,7 +219,8 @@ function main(argv) {
     today: today, source: 'slack',
     messages: messages, events: [], result: result, briefs: [],
     ledger: ledger, marked: replies.marked, principals: input.principals || [],
-    muted: muted, mutes: L.suggestMutes(rows),
+    muted: muted, mutes: L.suggestMutes(rows).filter(function (s) { return !already[s.phrase]; }),
+    learnedNow: fresh, learnedAll: learned,
     read: { threads: (input.conversations || []).length - skipped, capped: false,
             unfetchedThreads: unfetched.length, skipped: skipped, windowDays: window }
   });
@@ -205,6 +231,7 @@ function main(argv) {
     store.writeLedger(rows);
     store.rememberDigest(today, keys);
     store.rememberReplies(replies.seen);
+    if (fresh.length) store.remember(fresh);
   }
 
   return text;
