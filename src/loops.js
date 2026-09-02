@@ -441,6 +441,31 @@ function detectLoops(messages, events, opts) {
    * Corpus-wide rather than per-meeting, deliberately: per-meeting would silence the
    * mail case this signal was written for, where meeting somebody new and never
    * writing to them is the most valuable thing it finds. */
+  /* Whether a missing agenda on this event is worth saying out loud.
+   *
+   * A standing meeting whose body is empty every week is not seven hundred oversights,
+   * it is how that meeting is run. Firing on each occurrence made an item that printed
+   * NEW every week — loopKey is type|eventId and Google gives every occurrence its own
+   * id — which no rejection could clear, because rejecting one instance clears exactly
+   * that instance, and muting matches on the item's text, which is the same literal
+   * 'No agenda attached' on every unprepped meeting in the workspace. The only place
+   * this can be stopped is here.
+   *
+   * So a series has to earn the nag: if any occurrence in the window carried an agenda,
+   * this is a meeting that normally gets one and a blank week is worth flagging. If none
+   * ever did, stay quiet and report the count instead. One occurrence is enough to arm
+   * it, not two — a fortnight's fetch holds two or three occurrences of a weekly series,
+   * so a higher bar would disarm on the second missed week, which is the week that
+   * matters, and would leave a fortnightly series unarmable for good.
+   *
+   * ponytail: arming lives only inside the calendar window, so a monthly or quarterly
+   * series can never arm from its own history — persist a marker in the ledger if that
+   * starts mattering. */
+  var armed = {};
+  events.forEach(function (e) { if (e.series && e.agenda) armed[e.series] = 1; });
+  var agendaWatched = function (e) { return !e.series || !!armed[e.series]; };
+  var quietSeries = 0;
+
   var invited = {};
   events.forEach(function (e) {
     e.attendees.forEach(function (a) {
@@ -471,6 +496,7 @@ function detectLoops(messages, events, opts) {
           what: 'No recap or next steps sent after the meeting', said: when, due: null, eventId: e.id });
       }
     } else if (!e.agenda && daysBetween(today, when) <= 2) {
+      if (!agendaWatched(e)) { quietSeries++; return; }
       out.push({ type: 'unprepped_meeting', threadId: null, subject: e.title, who: ext[0], byUs: true,
         what: 'No agenda attached', said: today, due: when, eventId: e.id, start: e.start });
     }
@@ -521,7 +547,7 @@ function detectLoops(messages, events, opts) {
     .sort(function (a, b) { return b.risk - a.risk; });
   var closed = out.filter(function (l) { return l.type === 'closed'; })
     .sort(function (a, b) { return a.closedOn < b.closedOn ? 1 : -1; });
-  return { open: open, closed: closed, today: today, dark: { no_followup: darkFollowup } };
+  return { open: open, closed: closed, today: today, dark: { no_followup: darkFollowup, quietSeries: quietSeries } };
 }
 
 /* Regroup everything by upcoming meeting. The list answers "what is outstanding";
@@ -529,6 +555,10 @@ function detectLoops(messages, events, opts) {
  * way you read them the night before. */
 function meetingBriefs(messages, events, open, opts) {
   var today = opts.today, execSide = side(opts.exec);
+  var armed = {};
+  events.forEach(function (e) { if (e.series && e.agenda) armed[e.series] = 1; });
+  // Same rule as detectLoops: a series that never carries an agenda is not nagged.
+  var watched = function (e) { return !e.series || !!armed[e.series]; };
   return events.map(function (e) {
     if (day(e.start) < today) return null;
     var ext = e.attendees.filter(function (a) { return side(a) !== execSide; });
@@ -553,8 +583,8 @@ function meetingBriefs(messages, events, open, opts) {
       attendees: ext, agenda: e.agenda, items: items,
       lastContact: last ? day(last) : null,
       prepBy: prepBy,
-      prepDue: !e.agenda && prepBy <= today,      // runway closes today or has already gone
-      prepLate: !e.agenda && prepBy < today,
+      prepDue: !e.agenda && watched(e) && prepBy <= today,      // runway closes today or has already gone
+      prepLate: !e.agenda && watched(e) && prepBy < today,
       ready: e.agenda && !items.length
     };
   }).filter(Boolean).sort(function (a, b) { return a.start < b.start ? -1 : 1; });

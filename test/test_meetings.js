@@ -63,4 +63,47 @@ assert.doesNotThrow(function () {
               { exec: EXEC, today: '2026-09-02' });
 }, 'an absent `to` is a shape the adapters really produce');
 
+/* --- a standing meeting is not a fresh oversight every week ---
+ *
+ * Google expands a series into one event per occurrence, each with its own id. loopKey
+ * is type|eventId, so a weekly sync with an empty body printed NEW every week and
+ * nothing could stop it: rejecting an occurrence clears that occurrence, and muting
+ * matches the item's text — identical on every unprepped meeting in the workspace, so
+ * it would kill the signal everywhere. Suppression has to happen in the detector. */
+var occurrence = function (id, agenda, start) {
+  return { id: id, series: '_wk', title: 'Weekly sync', start: start,
+           attendees: [EXEC, A], agenda: !!agenda };
+};
+var meetings = function (evs) {
+  var r = detectLoops([], evs, { exec: EXEC, today: '2026-09-02' });
+  return { items: r.open.map(function (l) { return l.subject; }), quiet: r.dark.quietSeries };
+};
+
+assert.deepStrictEqual(
+  meetings([occurrence('i1', false, '2026-08-26T14:00'), occurrence('i2', false, '2026-09-03T14:00')]),
+  { items: [], quiet: 1 },
+  'a series that has never carried an agenda is how that meeting runs, not an oversight');
+
+/* One occurrence with an agenda arms it — this is a meeting that normally gets one,
+   so a blank week is worth flagging. One is enough, not two: a fortnight's fetch holds
+   two or three occurrences of a weekly series, so a higher bar would disarm on the
+   second missed week, which is precisely the week worth catching. */
+assert.deepStrictEqual(
+  meetings([occurrence('i1', true, '2026-08-26T14:00'), occurrence('i2', false, '2026-09-03T14:00')]),
+  { items: ['Weekly sync'], quiet: 0 },
+  'a series that usually gets an agenda is flagged when one is missing');
+
+assert.deepStrictEqual(
+  meetings([{ id: 'o1', series: null, title: 'One-off review', start: '2026-09-03T14:00',
+              attendees: [EXEC, A], agenda: false }]),
+  { items: ['One-off review'], quiet: 0 },
+  'a genuine one-off is always worth saying');
+
+/* Events from a source that knows nothing about recurrence must behave as before. */
+assert.deepStrictEqual(
+  meetings([{ id: 'o2', title: 'No series key at all', start: '2026-09-03T14:00',
+              attendees: [EXEC, A], agenda: false }]),
+  { items: ['No series key at all'], quiet: 0 },
+  'an absent series field is a one-off, not a silenced series');
+
 console.log('meetings: OK');

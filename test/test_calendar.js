@@ -28,6 +28,8 @@ var live = {
 
 var one = parseEvents(live);
 assert.strictEqual(one.length, 1);
+assert.strictEqual(one[0].series, '_74q3ch9p',
+  'the series id was already in the live response and was being thrown away');
 assert.strictEqual(one[0].title, 'Pay gym membership ');
 assert.strictEqual(one[0].start, '2026-01-17T00:00', 'an all-day event starts when the day does');
 assert.deepStrictEqual(one[0].attendees, ['you@example.com'],

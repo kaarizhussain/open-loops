@@ -231,6 +231,16 @@ function render(b) {
       ' for a follow-up. Recaps go out by mail and this run only read chat, so there is' +
       ' nothing here to tell a sent recap from an unsent one.');
   }
+  /* A standing meeting that never carries an agenda is how that meeting is run, not a
+   * fresh oversight every week. Suppressed rather than listed — but said out loud,
+   * because a suppression nobody can see is indistinguishable from a rule that does
+   * not work. */
+  if (b.dark && b.dark.quietSeries) {
+    p('Not listed: ' + b.dark.quietSeries +
+      (b.dark.quietSeries === 1 ? ' recurring meeting has' : ' recurring meetings have') +
+      ' no agenda, and no occurrence of theirs ever has. Put one on any occurrence and' +
+      ' the series starts being checked.');
+  }
 
   /* What changed since the last run, high up — the rest of this is the same list it
    * was, and a reader who already knows that will not scan it again. */

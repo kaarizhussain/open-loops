@@ -65,6 +65,12 @@ function parseEvents(response) {
       title: e.summary || '(no title)',
       start: startOf(e.start),
       attendees: guests(e),
+      /* Google expands a recurring series into one event per occurrence, each with its
+       * own id and all of them carrying the series id. Without this the detector cannot
+       * tell "the weekly sync, again" from "a meeting it has never seen", so a standing
+       * meeting with nothing in its body announced itself as new every week and no
+       * rejection could ever silence more than the single instance rejected. */
+      series: e.recurringEventId || null,
       /* An agenda is a description with something in it. Google omits the key
        * entirely rather than sending an empty string, so this cannot test length
        * without checking the key exists first. */
