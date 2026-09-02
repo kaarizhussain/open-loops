@@ -4,8 +4,8 @@
 var assert = require('assert');
 
 // ledger.js uses loopKey as a free variable, the way it does inside Apps Script.
-global.loopKey = require('./src/loops.js').loopKey;
-var L = require('./src/ledger.js');
+global.loopKey = require('../src/loops.js').loopKey;
+var L = require('../src/ledger.js');
 var COL = L.COL;
 
 var loop = function (over) {

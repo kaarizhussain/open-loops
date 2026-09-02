@@ -7,9 +7,9 @@ var assert = require('assert');
 var fs = require('fs');
 var os = require('os');
 var path = require('path');
-var { main } = require('./slack-run.js');
-global.loopKey = require('./src/loops.js').loopKey;
-var L = require('./src/ledger.js');
+var { main } = require('../slack-run.js');
+global.loopKey = require('../src/loops.js').loopKey;
+var L = require('../src/ledger.js');
 
 var ME = 'you@example.com';
 var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'openloops-slack-'));
@@ -356,7 +356,7 @@ assert.ok(/going back 21 days/.test(narrow),
   'and the digest states the boundary everything else was judged inside');
 
 /* ------------------------- what may be read at all ------------------------- */
-var { inScope, nameMatches } = require('./slack-run.js');
+var { inScope, nameMatches } = require('../slack-run.js');
 
 assert.ok(nameMatches('#deals', 'deals'), 'the leading hash is noise on both sides');
 assert.ok(nameMatches('deals', '#deals'));

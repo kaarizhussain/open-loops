@@ -233,16 +233,17 @@ No dependencies, no install, no API keys.
 ```bash
 git clone https://github.com/kaarizhussain/open-loops.git
 cd open-loops
-node test.js          # the detector, against the demo fixture
+npm test              # every suite
 node build.js         # rebuilds index.html (downloads fonts on first run)
 ```
 
 `index.html` is committed, so you can also just open it in a browser.
 
-Everything else is a test, and they are the documentation for how each part is meant to
-fail: `test_slack.js` and `test_store.js` for the adapters, `test_ledger.js` for what the
-digest remembers between runs, `test_digest.js` for the rendering, `test_slack_run.js`
-for the whole Slack path end to end, and `appsscript/` for the Gmail one.
+The tests live in `test/` and are the documentation for how each part is meant to fail:
+`test.js` for the detector against the demo fixture, `test_slack.js` and `test_store.js`
+for the adapters, `test_ledger.js` for what the digest remembers between runs,
+`test_digest.js` for the rendering, `test_slack_run.js` for the whole Slack path end to
+end. `appsscript/` carries its own two, for the Gmail runtime.
 
 ## Pointing it at a real inbox
 

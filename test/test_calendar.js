@@ -5,7 +5,7 @@
  * events still arriving — are all things a hand-written fixture would have got wrong,
  * because they are what you assume rather than what you check. */
 var assert = require('assert');
-var { parseEvents, startOf, guests } = require('./src/calendar.js');
+var { parseEvents, startOf, guests } = require('../src/calendar.js');
 
 /* --- verbatim from the connector, minus the fields nothing reads --- */
 var live = {
@@ -76,7 +76,7 @@ assert.strictEqual(startOf({}), null, 'neither date nor dateTime is not a start'
 assert.deepStrictEqual(guests({}), [], 'an event with nobody on it has nobody on it');
 
 /* --- the point of all this: the two dark signals light up --- */
-var { detectLoops } = require('./src/loops.js');
+var { detectLoops } = require('../src/loops.js');
 var events = parseEvents({ events: [{
   id: 'qbr', status: 'confirmed', summary: 'Vector Freight — Q3 QBR',
   start: { dateTime: '2026-09-03T14:00:00-04:00' },

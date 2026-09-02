@@ -1,6 +1,6 @@
 var assert = require('assert');
-var { detectLoops, meetingBriefs, parseDue, LABEL, OWNER } = require('./src/loops.js');
-var F = require('./src/fixture.js');
+var { detectLoops, meetingBriefs, parseDue, LABEL, OWNER } = require('../src/loops.js');
+var F = require('../src/fixture.js');
 
 /* date parsing */
 assert.strictEqual(parseDue('by Friday Aug 1 at the latest', '2026-07-28T14:12'), '2026-08-01');
@@ -392,7 +392,7 @@ assert.strictEqual(find2('revenue numbers').due, '2026-08-15',
   'including a bare ordinal, which used to be borrowed from elsewhere instead');
 
 /* ---- the day moves: arrivals land, resolved things drop ---- */
-var { loopKey } = require('./src/loops.js');
+var { loopKey } = require('../src/loops.js');
 var opts = { exec: F.EXEC, today: F.TODAY, contacts: F.RELATIONSHIPS };
 var msgs = F.MESSAGES.slice(), prevKeys = new Set(r.open.map(loopKey));
 var timeline = F.INTRADAY.map(function (cp) {

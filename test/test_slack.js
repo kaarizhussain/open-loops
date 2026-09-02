@@ -6,7 +6,7 @@
  * attachment markers are NOT — no thread existed in the workspace to observe, so
  * those are matched loosely and their absence is the safe case. */
 var assert = require('assert');
-var { parseChannel, cleanText, stamp } = require('./src/slack.js');
+var { parseChannel, cleanText, stamp } = require('../src/slack.js');
 
 var OPTS = { channel: '#deals', members: ['lena@vectorfreight.com'], tzOffset: 0 };
 
@@ -155,7 +155,7 @@ assert.strictEqual(cleanText('Ben &amp; Co &lt;fine&gt;'), 'Ben & Co <fine>');
 assert.strictEqual(cleanText('sent <https://acme.com/pricing-sheet-final|it>'), 'sent it');
 
 /* --- the whole point: it feeds the detector unchanged --- */
-var { detectLoops } = require('./src/loops.js');
+var { detectLoops } = require('../src/loops.js');
 var epoch = function (y, mo, d, h) { return (Date.UTC(y, mo - 1, d, h) / 1000).toFixed(6); };
 
 var convo = [

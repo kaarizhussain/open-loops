@@ -4,15 +4,15 @@
  * be able to produce the same digest without a spreadsheet, a mailbox or a clock.
  * If this file ever needs a Google stub to pass, the extraction has leaked. */
 var assert = require('assert');
-var loops = require('./src/loops.js');
+var loops = require('../src/loops.js');
 
 // Same convention ledger.js uses — the renderer reads these as free variables.
 global.OWNER = loops.OWNER;
 global.LABEL = loops.LABEL;
 global.loopKey = loops.loopKey;
 
-var { render, headline, digestOrder, actionList, draft, firstName } = require('./src/digest.js');
-var F = require('./src/fixture.js');
+var { render, headline, digestOrder, actionList, draft, firstName } = require('../src/digest.js');
+var F = require('../src/fixture.js');
 
 var opts = { exec: F.EXEC, today: F.TODAY, contacts: F.RELATIONSHIPS };
 var result = loops.detectLoops(F.MESSAGES, F.EVENTS, opts);

@@ -5,9 +5,9 @@ var fs = require('fs');
 var os = require('os');
 var path = require('path');
 
-global.loopKey = require('./src/loops.js').loopKey;
-var L = require('./src/ledger.js');
-var { fileStore } = require('./src/store.js');
+global.loopKey = require('../src/loops.js').loopKey;
+var L = require('../src/ledger.js');
+var { fileStore } = require('../src/store.js');
 var COL = L.COL;
 
 var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'openloops-'));

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Finds every commitment in an executive's inbox and calendar, and tells their assistant which ones are about to slip.",
   "scripts": {
-    "test": "node test.js",
+    "test": "node test/run.js",
     "build": "node build.js"
   },
   "keywords": ["executive-assistant", "email", "calendar", "commitment-tracking", "productivity"],

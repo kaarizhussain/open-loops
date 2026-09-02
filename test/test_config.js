@@ -7,7 +7,7 @@ var assert = require('assert');
 var fs = require('fs');
 var os = require('os');
 var path = require('path');
-var { DEFAULTS, merge, loadConfig, settings } = require('./src/config.js');
+var { DEFAULTS, merge, loadConfig, settings } = require('../src/config.js');
 
 var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'openloops-cfg-'));
 var write = function (name, obj) {
@@ -53,7 +53,7 @@ assert.throws(function () { settings(fs, write('g.json', '{ not json'), { you: '
   'but falling back to defaults would quietly read channels somebody had excluded');
 
 /* --- the shipped example has to actually work --- */
-var example = JSON.parse(fs.readFileSync(path.join(__dirname, 'openloops.config.example.json'), 'utf8'));
+var example = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'openloops.config.example.json'), 'utf8'));
 delete example._comment;
 Object.keys(example).forEach(function (k) {
   assert.ok(k in DEFAULTS, 'the example documents a setting that exists: ' + k);
