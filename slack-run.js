@@ -137,7 +137,11 @@ function report(ledgerPath) {
         + ' differently, before adding anything.');
   }
 
-  var r = L.recall(p.total, audit.checked, audit.checked, audit.missed.length);
+  /* audit.quiet is how big the silent pool was when the last digest ran. Without it
+     the extrapolation collapses and the report reads far higher than the digest does
+     off the same ledger. Old ledgers have no such field; fall back rather than crash,
+     and the next digest run writes one. */
+  var r = L.recall(p.total, audit.quiet || audit.checked, audit.checked, audit.missed.length);
   out.push('');
   out.push(audit.checked
     ? 'Recall: about ' + r.rate + '% — ' + audit.missed.length + ' misses found in ' +
@@ -354,7 +358,7 @@ function main(argv) {
       store.recordMisses(replies.misses, replies.checked);
     }
     if (sample.length) {
-      store.rememberAudit(today, sample.map(function (m) { return m.id; }));
+      store.rememberAudit(today, sample.map(function (m) { return m.id; }), silent.length);
     }
   }
 

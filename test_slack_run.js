@@ -249,6 +249,18 @@ assert.strictEqual(st2.audit.missed[0].id, askedIds[1], 'letter b resolves to th
 assert.ok(/Recall so far: about \d+%/.test(scored), 'which becomes a number: ' +
   scored.split('\n').filter(function (l) { return /Recall so far/.test(l); })[0]);
 
+/* And the report has to say the same thing. It reads the ledger alone and never sees
+   the messages, so it must be told how big the silent pool was. Without that the
+   extrapolation collapses to the raw miss count, and the report reads far more
+   flattering than the digest does off the very same rows. */
+var pct = function (text, label) {
+  var m = text.match(new RegExp(label + ': about (\\d+)%'));
+  return m && m[1];
+};
+assert.strictEqual(pct(main(['--report', '--ledger', quietLedger]), 'Recall'),
+  pct(scored, 'Recall so far'),
+  'the report and the digest state the same recall off the same ledger');
+
 /* A reply naming no misses is still evidence — without counting those, the
    denominator only grows when something was wrong and the rate is meaningless. */
 assert.deepStrictEqual(L.parseMarks('miss', 10).missed, [], 'bare "miss" flags nothing');
