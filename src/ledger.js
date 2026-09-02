@@ -239,6 +239,55 @@ function applyMutes(loops, patterns) {
   });
 }
 
+/* --- checking what it never showed you ---
+ *
+ * Every verdict so far is about something that appeared: this item is wrong, this one
+ * I knew. None of it can say anything about what was missed, because a miss produces
+ * nothing to reject. So the correction loop can only ever teach it to be quieter,
+ * never more thorough — and the two worst bugs found in this detector were both
+ * false negatives, invisible to every number it reports.
+ *
+ * The fix is to sample the silence. Show a handful of messages the detector found
+ * nothing in and ask whether it should have. That is the only cheap evidence about
+ * recall there is, and a handful is enough because it is an estimate, not a census.
+ */
+
+/* Deterministic pick, so re-running a day does not reshuffle what was asked about and
+ * an answer given yesterday still lines up with what it answered. */
+function hashId(s) {
+  var h = 2166136261;
+  String(s).split('').forEach(function (c) {
+    h ^= c.charCodeAt(0);
+    h = (h * 16777619) >>> 0;
+  });
+  return h;
+}
+
+function sampleQuiet(messages, loops, n, salt) {
+  var noisy = {};
+  loops.forEach(function (l) { if (l.msgId) noisy[l.msgId] = 1; });
+  return messages
+    .filter(function (m) { return !noisy[m.id] && String(m.body || '').trim().length > 20; })
+    .sort(function (a, b) { return hashId(salt + a.id) - hashId(salt + b.id); })
+    .slice(0, n || 0);
+}
+
+/* Of the silence we sampled, how much of it was not silent.
+ *
+ * ponytail: this is an estimate from a small sample and reads as more precise than it
+ * is. Ten messages a day for a fortnight is a hundred and forty — enough to tell a
+ * detector that misses a third of everything from one that misses almost nothing, and
+ * not enough to put a confidence interval on. Treat it as an order of magnitude. */
+function recall(found, quiet, checked, missed) {
+  if (!checked || !found) return null;
+  var estimatedMisses = quiet * (missed / checked);
+  return {
+    checked: checked, missed: missed, quiet: quiet, found: found,
+    rate: Math.round(found / (found + estimatedMisses) * 100),
+    estimatedMisses: Math.round(estimatedMisses)
+  };
+}
+
 /* --- marking things wrong by replying to the digest ---
  *
  * The spreadsheet works, and nobody opens it. Marking a false positive has to cost
@@ -261,8 +310,18 @@ function applyMutes(loops, patterns) {
  * costs one suppressed item that returns the moment the cell is cleared. Require a
  * leading keyword if that turns out to bite. */
 function parseMarks(text, max) {
-  var wrong = [], knew = [], seen = {};
+  var wrong = [], knew = [], missed = [], seen = {}, seenLetter = {};
   String(text || '').split(/\r?\n/).forEach(function (line) {
+    /* A line led by miss names spot-check entries that did contain a commitment.
+     * Those are lettered rather than numbered precisely so the two cannot be
+     * confused: "3" is always a rejection, "c" is always a miss. */
+    if (/^\s*(m|miss|missed)\b/i.test(line)) {
+      (line.replace(/^\s*\w+/, '').match(/\b[a-z]\b/gi) || []).forEach(function (c) {
+        var L = c.toLowerCase();
+        if (!seenLetter[L]) { seenLetter[L] = 1; missed.push(L); }
+      });
+      return;
+    }
     /* A line led by k / knew / already means "real, but I knew" — the difference
      * between measuring whether this is trustworthy and whether it is any use.
      * Bare numbers stay a rejection, so the common case costs nothing extra. */
@@ -276,7 +335,7 @@ function parseMarks(text, max) {
       (known ? knew : wrong).push(n);
     });
   });
-  return { wrong: wrong, knew: knew };
+  return { wrong: wrong, knew: knew, missed: missed };
 }
 
 /* Resolve those numbers against the list as it was sent, not as it stands now —
@@ -301,6 +360,7 @@ if (typeof module !== 'undefined') {
     mergeLedger: mergeLedger, precision: precision, isWrong: isWrong, isKnown: isKnown,
     cell: cell, daysApart: daysApart, parseMarks: parseMarks, applyMarks: applyMarks,
     pruneLedger: pruneLedger, suggestMutes: suggestMutes, applyMutes: applyMutes,
-    phrases: phrases, LEDGER_COLS: LEDGER_COLS, COL: COL
+    phrases: phrases, sampleQuiet: sampleQuiet, recall: recall,
+    LEDGER_COLS: LEDGER_COLS, COL: COL
   };
 }

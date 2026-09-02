@@ -39,6 +39,12 @@ function ownerTitle(key, principals) {
  * A digest that opens with how many messages it read is a system reporting on itself.
  * Someone good at this job opens with the thing you would be most annoyed to discover
  * on Friday. The ranking already knows which item that is; this only has to say it. */
+/* Enough of a message to judge it, not so much that five of them bury the list. */
+function shortenBody(s) {
+  var t = String(s || '').replace(/\s+/g, ' ').trim();
+  return t.length > 96 ? t.slice(0, 95).replace(/[,;:\s]+\S*$/, '') + '…' : t;
+}
+
 function headline(open) {
   if (!open.length) return 'Nothing outstanding. Genuinely — the list is empty.';
 
@@ -190,6 +196,25 @@ function render(b) {
   p('stop coming back. That reply is the only record of what this gets wrong.');
   p('Already knew about one? Put it on a line starting with k — "k 1 4". It stays on');
   p('the list; it just stops counting as something this told you.');
+
+  /* The only question in here that can say anything about what was missed. Everything
+   * else asks about things that appeared, and a miss produces nothing to reject. */
+  if (b.spotCheck && b.spotCheck.length) {
+    p('');
+    p('SPOT CHECK — it found nothing in these. Did it miss something?');
+    b.spotCheck.forEach(function (m, i) {
+      p('  ' + String.fromCharCode(97 + i) + ') ' + shortenBody(m.body) +
+        '      — ' + (m.subject || ''));
+    });
+    p('Reply "miss b d" for any that did contain a commitment, or "miss" on its own');
+    p('if none did. Saying none is what makes the rest of it evidence.');
+  }
+
+  if (b.recall) {
+    p('');
+    p('Recall so far: about ' + b.recall.rate + '% — ' + b.recall.missed +
+      ' misses found in ' + b.recall.checked + ' messages spot-checked.');
+  }
 
   /* Anything the tool decided for itself is announced the run it happens and listed
    * in every run after. A rule that changes behaviour and is not on the page is the

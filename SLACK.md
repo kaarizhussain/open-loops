@@ -163,6 +163,46 @@ Everything after one, until the next, is read as a reply to it.
 Each reply is acted on exactly once. It stays in the DM forever, and re-applying it
 against a later, shorter list would mark a different item every run.
 
+## Checking what it never showed you
+
+Every correction so far is about something that appeared: this item is wrong, this one
+I already knew. **None of it can say anything about what was missed**, because a miss
+produces nothing to reject. So the loop as described above can only ever teach it to be
+quieter, never more thorough — and the two worst bugs found in this detector were both
+false negatives, invisible to every number it reports.
+
+So each digest also samples the silence:
+
+```
+SPOT CHECK — it found nothing in these. Did it miss something?
+  a) Sending the signed contract now.      — #new-channel
+  b) Let me know your thoughts on the deck when you have a minute.      — #all-open-loops
+Reply "miss b d" for any that did contain a commitment, or "miss" on its own
+if none did. Saying none is what makes the rest of it evidence.
+```
+
+Lettered rather than numbered on purpose: `3` is always a rejection and `c` is always a
+miss, so the two can never be confused in a one-line reply. Both can go in the same
+reply.
+
+**Answering with no misses still counts.** Without recording the clean ones the
+denominator would only grow when something was wrong, and the rate would be
+meaningless. A bare `miss` is a real answer.
+
+```
+Recall so far: about 84% — 3 misses found in 45 messages spot-checked.
+```
+
+Five messages a day for a fortnight is seventy — enough to tell a detector that misses a
+third of everything from one that misses almost nothing, and nowhere near enough to put
+a confidence interval on it. Read it as an order of magnitude. Set `spotCheck` to change
+how many, or `0` to turn it off.
+
+A message the detector *did* find something in is never offered here. It spoke and you
+may disagree — that is a rejection, not a miss, and the two must not be conflated. The
+sample is also stable for a given day, so an answer given tomorrow still lines up with
+what was asked.
+
 ## Learning the kind, not just the instance
 
 A verdict suppresses one row, keyed to one sentence in one conversation. That is right

@@ -73,6 +73,7 @@ function inScope(name, scope) {
  * forever, and re-applying it against a later, shorter list marks different items. */
 function marksFromDm(messages, store, rows) {
   var seen = store.seenReplies(), known = {}, marked = 0, forDate = null;
+  var misses = [], checked = 0;
   seen.forEach(function (id) { known[id] = 1; });
 
   messages.forEach(function (m) {
@@ -81,14 +82,28 @@ function marksFromDm(messages, store, rows) {
     if (!forDate || known[m.id]) return;
 
     var keys = store.recallDigest(forDate);
-    if (!keys.length) return;                     // no memo for that digest
+    var asked = store.audit().asked[forDate] || [];
+    if (!keys.length && !asked.length) return;    // no memo for that digest
 
     known[m.id] = 1;
     seen.push(m.id);
-    marked += L.applyMarks(rows, keys, L.parseMarks(m.body, keys.length));
+
+    var marks = L.parseMarks(m.body, keys.length);
+    marked += L.applyMarks(rows, keys, marks);
+
+    /* Answering the spot check at all is what makes it evidence. A reply that names
+     * no misses still counts everything asked as checked-and-clean; without that the
+     * denominator only ever grows when something was wrong, and the rate is garbage. */
+    if (asked.length) {
+      checked += asked.length;
+      marks.missed.forEach(function (letter) {
+        var at = letter.charCodeAt(0) - 97;
+        if (asked[at]) misses.push({ id: asked[at], on: forDate });
+      });
+    }
   });
 
-  return { marked: marked, seen: seen };
+  return { marked: marked, seen: seen, misses: misses, checked: checked };
 }
 
 function main(argv) {
@@ -189,6 +204,12 @@ function main(argv) {
   });
   var mutes = (input.mute || []).concat(learned.map(function (e) { return e.phrase; }));
 
+  /* Snapshot before anything is muted or suppressed. A message whose item you rejected
+   * is not one the detector was silent about — it spoke and you disagreed — so it must
+   * never come back as "found nothing here, did I miss something?". */
+  var spoke = {};
+  result.open.concat(result.closed).forEach(function (l) { if (l.msgId) spoke[l.msgId] = 1; });
+
   var beforeMute = result.open.length;
   result.open = L.applyMutes(result.open, mutes);
   var muted = beforeMute - result.open.length;
@@ -215,12 +236,22 @@ function main(argv) {
 
   var keys = digest.digestOrder(result.open);
 
+  /* Sample the silence. Everything else in this loop asks about things that appeared;
+   * this is the only question that can say anything about what did not. */
+  var audit = store.audit();
+  var checkCount = input.spotCheck === undefined ? 5 : input.spotCheck;
+  var silent = messages.filter(function (m) { return !spoke[m.id]; });
+  var sample = L.sampleQuiet(silent, [], checkCount, today);
+  var score = L.recall(rows.length, silent.length,
+                       audit.checked + replies.checked, audit.missed.length + replies.misses.length);
+
   var text = digest.render({
     today: today, source: 'slack',
     messages: messages, events: [], result: result, briefs: [],
     ledger: ledger, marked: replies.marked, principals: input.principals || [],
     muted: muted, mutes: L.suggestMutes(rows).filter(function (s) { return !already[s.phrase]; }),
     learnedNow: fresh, learnedAll: learned,
+    spotCheck: sample, recall: score,
     read: { threads: (input.conversations || []).length - skipped, capped: false,
             unfetchedThreads: unfetched.length, skipped: skipped, windowDays: window }
   });
@@ -232,6 +263,12 @@ function main(argv) {
     store.rememberDigest(today, keys);
     store.rememberReplies(replies.seen);
     if (fresh.length) store.remember(fresh);
+    if (replies.checked || replies.misses.length) {
+      store.recordMisses(replies.misses, replies.checked);
+    }
+    if (sample.length) {
+      store.rememberAudit(today, sample.map(function (m) { return m.id; }));
+    }
   }
 
   return text;

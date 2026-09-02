@@ -8,6 +8,8 @@ var fs = require('fs');
 var os = require('os');
 var path = require('path');
 var { main } = require('./slack-run.js');
+global.loopKey = require('./src/loops.js').loopKey;
+var L = require('./src/ledger.js');
 
 var ME = 'you@example.com';
 var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'openloops-slack-'));
@@ -196,6 +198,63 @@ assert.ok(/1 item was muted by phrase/.test(quiet), 'the digest says it dropped 
    permanent false positives and drag the precision number down forever. */
 var afterMute = JSON.parse(fs.readFileSync(path.join(dir, 'm2.json'), 'utf8'));
 assert.strictEqual(afterMute.rows.length, 1, 'only the surviving item is tracked');
+
+/* --------------------- checking what it never showed --------------------- */
+
+/* Everything else in the loop asks about items that appeared. A miss produces nothing
+   to reject, so the only evidence about recall is sampling the silence. */
+var quietLedger = path.join(dir, 'quiet.json');
+var quietInput = {
+  self: ME, today: '2026-09-01', tzOffset: 0, principals: [], spotCheck: 3,
+  conversations: [{ channel: '#chat', members: [], text: [
+    me(at(2026, 8, 28, 9), "I'll send the deck Thursday."),
+    me(at(2026, 8, 28, 10), 'The vendor call went fine, nothing blocking on our side.'),
+    me(at(2026, 8, 28, 11), 'Numbers are up 4% quarter on quarter, worth a mention.'),
+    me(at(2026, 8, 28, 12), 'Reminder that the office is closed Monday for the holiday.'),
+    me(at(2026, 8, 28, 13), 'Docs are updated if anyone needs the new endpoints.')
+  ].join('\n') }]
+};
+
+var checked = main([write(quietInput), '--ledger', quietLedger]);
+assert.ok(/SPOT CHECK/.test(checked), 'it asks about what it stayed silent on');
+var lettered = checked.split('\n').filter(function (l) { return /^\s+[a-c]\) /.test(l); });
+assert.strictEqual(lettered.length, 3, 'three sampled, lettered not numbered');
+assert.ok(/Reply "miss b d"/.test(checked), 'and says how to answer');
+
+/* A message it did find something in is not silence — it spoke and you may disagree,
+   which is a rejection, not a miss. It must never be offered back as unexamined. */
+assert.ok(lettered.every(function (l) { return l.indexOf('send the deck') === -1; }),
+  'the detected message is not among the sampled: ' + lettered.join(' | '));
+
+var askedIds = JSON.parse(fs.readFileSync(quietLedger, 'utf8')).audit.asked['2026-09-01'];
+assert.strictEqual(askedIds.length, 3, 'what was asked is recorded against the digest date');
+
+/* The sample must not reshuffle between runs, or yesterday's answer lines up with
+   nothing. */
+var again2 = main([write(quietInput), '--ledger', path.join(dir, 'quiet2.json')]);
+assert.deepStrictEqual(
+  again2.split('\n').filter(function (l) { return /^\s+[a-c]\) /.test(l); }), lettered,
+  'the same day samples the same messages');
+
+/* Answering it. "miss b" flags one; the rest of what was asked counts as checked. */
+quietInput.dm = { channel: 'D0', text: [
+  me(at(2026, 9, 1, 18), '```\n' + checked + '\n```'),
+  me(at(2026, 9, 1, 19), 'miss b')
+].join('\n') };
+var scored = main([write(quietInput), '--ledger', quietLedger]);
+var st2 = JSON.parse(fs.readFileSync(quietLedger, 'utf8'));
+assert.strictEqual(st2.audit.checked, 3, 'answering counts everything asked, not just the misses');
+assert.strictEqual(st2.audit.missed.length, 1, 'and records the one flagged');
+assert.strictEqual(st2.audit.missed[0].id, askedIds[1], 'letter b resolves to the second asked');
+assert.ok(/Recall so far: about \d+%/.test(scored), 'which becomes a number: ' +
+  scored.split('\n').filter(function (l) { return /Recall so far/.test(l); })[0]);
+
+/* A reply naming no misses is still evidence — without counting those, the
+   denominator only grows when something was wrong and the rate is meaningless. */
+assert.deepStrictEqual(L.parseMarks('miss', 10).missed, [], 'bare "miss" flags nothing');
+assert.deepStrictEqual(L.parseMarks('miss b d', 10).missed, ['b', 'd']);
+assert.deepStrictEqual(L.parseMarks('3 7\nmiss a', 10),
+  { wrong: [3, 7], knew: [], missed: ['a'] }, 'rejections and misses in one reply');
 
 /* ------------------- learning a mute without being told ------------------- */
 

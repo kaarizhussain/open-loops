@@ -20,7 +20,7 @@ var fs = require('fs');
 var path = require('path');
 var L = require('./ledger.js');
 
-var EMPTY = { rows: [], digests: {}, seen: [], learned: [] };
+var EMPTY = { rows: [], digests: {}, seen: [], learned: [], audit: { checked: 0, missed: [], asked: {} } };
 
 function load(file) {
   try {
@@ -29,7 +29,12 @@ function load(file) {
       rows: Array.isArray(raw.rows) ? raw.rows : [],
       digests: raw.digests && typeof raw.digests === 'object' ? raw.digests : {},
       seen: Array.isArray(raw.seen) ? raw.seen : [],
-      learned: Array.isArray(raw.learned) ? raw.learned : []
+      learned: Array.isArray(raw.learned) ? raw.learned : [],
+      audit: raw.audit && typeof raw.audit === 'object'
+        ? { checked: raw.audit.checked || 0,
+            missed: Array.isArray(raw.audit.missed) ? raw.audit.missed : [],
+            asked: raw.audit.asked || {} }
+        : { checked: 0, missed: [], asked: {} }
     };
   } catch (e) {
     // Missing is the normal first run. Corrupt is not, and losing the verdicts in it
@@ -95,6 +100,27 @@ function fileStore(file) {
 
     remember: function (entries) {
       state.learned = state.learned.concat(entries);
+      flush();
+    },
+
+    /* The spot check: what was asked about, and what came back.
+     *
+     * `asked` maps a digest date to the message ids shown that day, so an answer given
+     * tomorrow resolves against what was actually on the page — the same problem the
+     * numbered items have, and the same solution. */
+    audit: function () { return state.audit; },
+
+    rememberAudit: function (date, ids) {
+      state.audit.asked[date] = ids;
+      Object.keys(state.audit.asked).sort().slice(0, -7).forEach(function (d) {
+        delete state.audit.asked[d];
+      });
+      flush();
+    },
+
+    recordMisses: function (entries, checkedDelta) {
+      state.audit.missed = state.audit.missed.concat(entries);
+      state.audit.checked += checkedDelta || 0;
       flush();
     }
   };
