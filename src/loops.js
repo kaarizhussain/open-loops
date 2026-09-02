@@ -359,10 +359,15 @@ function detectLoops(messages, events, opts) {
           });
         }
       }
-    } else if (lastOut > -1 && askIn(msgs[lastOut])) {
-      // We are waiting on them.
-      var ours = msgs[lastOut], oAge = daysBetween(day(ours.date), today);
-      if (oAge >= 2) {
+    } else if (lastOut > -1) {
+      /* We are waiting on them. The oldest ask still unanswered, not the most recent
+       * message — our own later messages must not bury our own earlier question, for
+       * the same reason theirs do not bury theirs. Asking on Monday and saying
+       * something unrelated on Tuesday is how a question goes quiet, not how it
+       * gets answered. */
+      var waiting = msgs.slice(lastIn + 1).filter(function (m) { return m.out && askIn(m); });
+      var ours = waiting[0], oAge = ours && daysBetween(day(ours.date), today);
+      if (ours && oAge >= 2) {
         out.push({
           type: 'awaiting_reply', threadId: tid, subject: ours.subject,
           who: counterparty || ours.to[0], byUs: false,

@@ -113,6 +113,26 @@ assert.strictEqual(lets("I'll send the deck today. I'll also book the room.").le
 var iron = find('Ironwood', 'awaiting_reply');
 assert.ok(iron && iron.due === null, 'proposed meeting slot should not become a due date');
 
+/* Our own later message must not bury our own earlier question.
+ *
+ * The inbound side has always taken the oldest thing still unanswered, on the grounds
+ * that a client who follows up has not thereby answered themselves. The outbound side
+ * looked only at the last message sent — so asking on Saturday and mentioning anything
+ * at all on Monday made the question vanish. That is not a question being answered,
+ * it is precisely how one goes quiet, which is the thing this exists to catch. */
+var buried = detectLoops([
+  { id: 'b1', threadId: 'tb', subject: 'Deck review', from: F.EXEC,
+    to: ['ops@ironwoodmfg.com'], date: '2026-08-01T09:00', attach: false,
+    body: 'Let me know your thoughts on the deck when you have a minute.' },
+  { id: 'b2', threadId: 'tb', subject: 'Deck review', from: F.EXEC,
+    to: ['ops@ironwoodmfg.com'], date: '2026-08-03T09:00', attach: false,
+    body: 'Separately, the offsite venue is confirmed.' }
+], [], { exec: F.EXEC, today: F.TODAY, contacts: F.RELATIONSHIPS });
+var buriedAsk = buried.open.filter(function (l) { return l.type === 'awaiting_reply'; })[0];
+assert.ok(buriedAsk, 'an ask two messages back is still unanswered');
+assert.strictEqual(buriedAsk.msgId, 'b1',
+  'and it is the question that gets reported, not the message that buried it');
+
 /* meeting tomorrow with no agenda, and one today */
 assert.ok(find('Vector Freight', 'unprepped_meeting'), 'QBR has no agenda — should flag');
 assert.ok(find('Larkspur', 'unprepped_meeting'), 'call today has no agenda — should flag');
