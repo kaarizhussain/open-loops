@@ -304,24 +304,32 @@ function detectLoops(messages, events, opts) {
         if (msgs[k].out === m.out) continue;
         due = parseDue(msgs[k].body, msgs[k].date);
       }
-      var type = m.out ? 'owed_by_us' : 'owed_to_us';
+      var type = m.out ? 'owed_by_us' : 'owed_to_us', bookedBy = null;
       // The promise and the scheduling language often sit in different sentences.
       if (!closer && m.out && MEETINGY.test(s) && SCHEDULEY.test(m.body)) {
         var toks = keyTokens(m.subject);
-        var booked = events.some(function (e) {
+        bookedBy = events.filter(function (e) {
           if (e.start < day(m.date)) return false;
           // An internal colleague appears on unrelated meetings — their presence proves nothing.
           if (counterparty && domain(counterparty) !== execDomain && e.attendees.indexOf(counterparty) > -1) return true;
           return toks.some(function (w) { return e.title.toLowerCase().indexOf(w.toLowerCase()) > -1; });
-        });
-        if (!booked) type = 'agreed_unscheduled';
+        })[0];
+        /* A promise to get something in the diary is kept by the thing being in the
+         * diary. Reclassifying it and leaving it open — which is what this used to do —
+         * meant the hold settled the question and the item nagged anyway. This only
+         * applies to promises that were about scheduling in the first place, which is
+         * what the MEETINGY and SCHEDULEY gate above establishes. */
+        if (!bookedBy) type = 'agreed_unscheduled';
       }
       out.push({
-        type: closer ? 'closed' : type, openType: type, threadId: tid, subject: m.subject,
+        type: (closer || bookedBy) ? 'closed' : type, openType: type, threadId: tid,
+        subject: m.subject,
         who: m.out ? (counterparty || m.to[0]) : m.from, byUs: m.out,
         what: shorten(s, 110), said: day(m.date), due: due,
-        closedOn: closer ? day(closer.date) : null,
-        closedBy: closer ? shorten(sentences(closer.body).find(function (x) { return DELIVER.test(x); }) || closer.body, 80) : null,
+        closedOn: closer ? day(closer.date) : bookedBy ? day(bookedBy.start) : null,
+        closedBy: closer
+          ? shorten(sentences(closer.body).find(function (x) { return DELIVER.test(x); }) || closer.body, 80)
+          : bookedBy ? 'In the diary: ' + shorten(bookedBy.title, 60) : null,
         excerpt: s, msgId: m.id
       });
     });

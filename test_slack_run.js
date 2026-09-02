@@ -385,6 +385,47 @@ var freshRep = main(['--report', '--ledger', path.join(dir, 'never-run.json')]);
 assert.ok(/Recall: unmeasured/.test(freshRep), 'nothing spot-checked means nothing claimed');
 assert.ok(/Tracked 0 items/.test(freshRep), 'and an empty ledger does not throw');
 
+/* ------------------------ the calendar, once there is one ------------------------ */
+
+/* Two of the seven signals live in the gap between what was said and what is on the
+   calendar. Without one they cannot fire — and "agreed but not booked" can never be
+   settled either, so it over-reports every agreement forever. */
+var cal = {
+  self: ME, today: '2026-09-02', tzOffset: 0, principals: [],
+  conversations: [{ channel: '#vector', members: ['lena@vectorfreight.com'], text:
+    me(at(2026, 9, 1, 10), "Let's schedule a sync to walk through the renewal.") }]
+};
+
+var blind = main([write(cal), '--ledger', path.join(dir, 'c1.json')]);
+assert.ok(/0 meetings/.test(blind), 'with no calendar it says so');
+assert.ok(blind.indexOf('agenda') === -1, 'and a meeting with no agenda cannot be raised');
+
+cal.events = { events: [{
+  id: 'qbr', status: 'confirmed', summary: 'Vector Freight — Q3 QBR',
+  start: { dateTime: '2026-09-03T14:00:00Z' },
+  organizer: { email: ME },
+  attendees: [{ email: ME }, { email: 'lena@vectorfreight.com' }]
+}] };
+
+var sighted = main([write(cal), '--ledger', path.join(dir, 'c2.json')]);
+assert.ok(/and 1 meetings/.test(sighted), 'the calendar is read: ' +
+  sighted.split('\n').filter(function (l) { return /^Read /.test(l); })[0]);
+assert.ok(/No agenda attached/.test(sighted), 'a meeting tomorrow with an outside guest fires');
+assert.ok(/NEEDS TO GO OUT TODAY/.test(sighted),
+  'and the brief says the agenda has to leave today, since one arriving on the morning'
+  + ' of is too late to prep against');
+
+/* The other direction, and the half a calendar-less run can never do: a promise to get
+   something in the diary is kept by the thing being in the diary. Without a calendar it
+   stays open forever, because nothing can ever settle it. */
+var stillOpen = function (t) { return t.split('CLOSED ITSELF')[0]; };
+assert.ok(stillOpen(blind).indexOf('walk through the renewal') > -1,
+  'outstanding while there is no calendar to settle it against');
+assert.ok(/CLOSED ITSELF[\s\S]*walk through the renewal/.test(sighted),
+  'closed by the hold, not merely reclassified and left on the list');
+assert.strictEqual(stillOpen(sighted).indexOf('walk through the renewal'), -1,
+  'so it is off the open list entirely');
+
 /* ------------------------------ bad input ------------------------------ */
 assert.throws(function () { main([write({ conversations: [] }), '--ledger', ledger]); },
   /needs "self"/, 'without an address there is no way to tell inbound from outbound');

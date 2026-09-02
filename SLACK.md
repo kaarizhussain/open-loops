@@ -50,9 +50,14 @@ Also read your own DM — that is where the last digest and any corrections are.
     { "channel": "#deals", "root": "1788292991.482509", "text": "<slack_read_thread output>" }
   ],
   "dm": { "channel": "D0…", "text": "<connector output for your self-DM>" },
+  "events": "<list_events response, object or raw JSON>",
   "lookbackDays": 21
 }
 ```
+
+`events` is optional and worth having. Fetch it with
+`list_events(startTime=<14 days ago>, endTime=<7 days ahead>, orderBy="startTime")` and
+pass the response straight through.
 
 The self-DM is read whatever the scope rules say — it is where the digest went and
 where corrections come back, not a source of commitments. It is never scanned for
@@ -275,10 +280,11 @@ is something a person has to be able to check at a glance.
 
 ## What it does not do yet
 
-**No calendar.** Two of the seven signals — *agreed but not booked*, and *meeting
-unprepped* — compare what was said against what is on the calendar. With Slack alone
-they can never fire, and those are the two that platform assistants are least able to
-replace. The digest says `0 meetings` and means it.
+**The calendar is optional but it unlocks two signals.** *Agreed but not booked* and
+*meeting unprepped* both compare what was said against what is in the diary. Pass a
+`list_events` response as `events` and they work; leave it out and the second cannot
+fire at all, while the first can never be *settled* — every agreement stays outstanding
+forever, because nothing exists to close it against.
 
 **An unthreaded channel is one wide boundary.** Threads have their own; plain channel
 talk does not, so `lookbackDays` is the only thing bounding closure matching there.

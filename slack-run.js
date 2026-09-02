@@ -35,6 +35,7 @@ global.loopKey = loops.loopKey;
 var digest = require('./src/digest.js');
 var { parseChannel } = require('./src/slack.js');
 var { fileStore } = require('./src/store.js');
+var { parseEvents } = require('./src/calendar.js');
 
 var DIGEST_HEADER = /^\s*(?:```)?\s*OPEN LOOPS — for (\d{4}-\d{2}-\d{2})/;
 
@@ -245,6 +246,11 @@ function main(argv) {
   /* Phrases you have decided are never worth surfacing. Applied before the ledger
    * sees anything, so a muted item is not "suppressed" — it never becomes an item at
    * all, and does not sit in the ledger being counted as a false positive forever. */
+  /* Two of the seven signals live in the gap between what was said and what is on
+   * the calendar. Without this they cannot fire at all — and 'agreed but not booked'
+   * can never be settled, so it over-reports every agreement forever. */
+  var events = parseEvents(input.events);
+
   var opts = { exec: self, today: today, contacts: input.contacts || null,
                // Absent means the historical single unnamed executive; [] means you
                // support nobody, which is the common case for someone running this
@@ -252,7 +258,7 @@ function main(argv) {
                principals: input.principals || [],
                // Learned from what has cleared before — nobody records this.
                tempo: L.tempos(rows) };
-  var result = loops.detectLoops(messages, [], opts);
+  var result = loops.detectLoops(messages, events, opts);
 
   /* What has been muted: what you configured, plus what the tool concluded on its own,
    * minus anything you overruled. `unmute` always wins — a rule the tool taught itself
@@ -306,7 +312,11 @@ function main(argv) {
 
   var text = digest.render({
     today: today, source: 'slack',
-    messages: messages, events: [], result: result, briefs: [],
+    messages: messages, events: events, result: result,
+    /* Regrouped by upcoming meeting: the list answers "what is outstanding", and an
+     * assistant is asked "what do I need before this". Same items, read the way you
+     * read them the night before. Built and unused until there was a calendar. */
+    briefs: loops.meetingBriefs(messages, events, result.open, opts),
     ledger: ledger, marked: replies.marked, principals: input.principals || [],
     muted: muted, mutes: L.suggestMutes(rows).filter(function (s) { return !already[s.phrase]; }),
     learnedNow: fresh, learnedAll: learned,
