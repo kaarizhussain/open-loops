@@ -83,4 +83,30 @@ function booking(exec, other, booked) {
     'and say the diary closed it, not that it vanished: ' + who);
 });
 
+/* --- a curly apostrophe is still an apostrophe ---
+ *
+ * macOS and iOS substitute ' for ' system-wide, and anything pasted out of Word or Docs
+ * carries it. Matching only the straight one made every contraction invisible — and a
+ * missed commitment produces nothing to reject, so the correction loop can never surface
+ * it. The Enron corpus cannot catch this either: 0 of 8,716 messages contain one, because
+ * 2001 mail was plain text. */
+var CURLY = '’';
+[
+  ["I'll send the deck Thursday.", 'owed_by_us'],
+  ["We'll have the signed copy back Friday.", 'owed_by_us'],
+  ["Let's schedule a sync for Thursday to walk through the plan.", 'agreed_unscheduled'],
+  ["I'm going to draft the onboarding doc and share it tomorrow.", 'owed_by_us']
+].forEach(function (c) {
+  var straight = c[0], curly = c[0].replace(/'/g, CURLY);
+  var run = function (body) {
+    return detectLoops([{ id: 'm1', threadId: 't1', subject: 'Rollout', from: 'me@corp.io',
+                          to: ['them@other.io'], date: '2026-08-28T10:00', body: body, attach: false }],
+                       [], { exec: 'me@corp.io', today: '2026-09-02' })
+      .open.map(function (l) { return l.type; });
+  };
+  assert.deepStrictEqual(run(straight), [c[1]], 'straight apostrophe: ' + straight);
+  assert.deepStrictEqual(run(curly), [c[1]],
+    'and the curly one must find the same thing: ' + curly);
+});
+
 console.log('identity: OK');

@@ -423,10 +423,21 @@ function parseDue(text, from) {
  * when it silently stopped detecting "we'll need to redo the onboarding docs" — the
  * corpus showed "will have to", not "will need to", and "I'll need to check with legal"
  * is a soft commitment rather than an obligation. Fix what the data showed. */
-var FIRM = /\b(?:(?:i'?ll|i will|we'?ll|we will|i'?m going to)(?!\s+have\s+to\b)|let me(?!\s+know)|will (?:send|get|share|review|book|connect|loop|circle|have(?!\s+to\b)|put|pull|draft|forward))\b/i;
-var LETS = /\b(let'?s (?:schedule|book|set up|find time|meet|sync|talk|discuss|catch up|go over|walk through))\b/i;
+/* Both apostrophes, because half the world types the curly one without choosing to.
+ * macOS and iOS substitute ' for ' system-wide by default, and anything pasted out of
+ * Word, Docs or Notes carries it. Matching only the straight one meant "I'll send the
+ * deck Thursday" was a commitment and "I’ll send the deck Thursday" was nothing —
+ * every contraction here, silently, with no error and nothing to reject.
+ *
+ * That is the worst shape of bug this can have: a false negative is invisible to the
+ * correction loop, which only ever learns from things it showed you. The Enron corpus
+ * cannot measure it either — 0 of 8,716 messages contain a curly apostrophe, because
+ * 2001 mail was plain text. A benchmark being silent is not the same as a problem
+ * being absent. */
+var FIRM = /\b(?:(?:i['’]?ll|i will|we['’]?ll|we will|i['’]?m going to)(?!\s+have\s+to\b)|let me(?!\s+know)|will (?:send|get|share|review|book|connect|loop|circle|have(?!\s+to\b)|put|pull|draft|forward))\b/i;
+var LETS = /\b(let['’]?s (?:schedule|book|set up|find time|meet|sync|talk|discuss|catch up|go over|walk through))\b/i;
 var COMMIT = new RegExp(FIRM.source + '|' + LETS.source, 'i');
-var DELIVER = /\b(attached|here'?s|here is|just sent|sent (?:it|you|over|through)|sending (?:it|over)|done|signed|uploaded|shared|forwarded|all set)\b/i;
+var DELIVER = /\b(attached|here['’]?s|here is|just sent|sent (?:it|you|over|through)|sending (?:it|over)|done|signed|uploaded|shared|forwarded|all set)\b/i;
 var ASK = /\b(can you|could you|would you|please|need your|need you to|waiting on|any update|following up|checking in|let me know|confirm)\b/i;
 /* An intro is an email, not a meeting — keep those as plain promises. */
 var MEETINGY = /\b(call|meeting|sync|chat|conversation|walk (?:you|them) through)\b/i;
