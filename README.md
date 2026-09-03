@@ -155,12 +155,19 @@ messages it found nothing in — and asks whether it should have. The two worst 
 found in this detector were both false negatives, invisible to every other number here.
 
 ```
+                       ── ILLUSTRATIVE. Not this project's results. ──
 Tracked 63 items.
    9 wrong        → 86% held up
   41 already known
   13 genuinely new → 21% told you something
 Recall so far: about 84% — 3 misses found in 45 messages spot-checked.
 ```
+
+Invented numbers, showing the shape of the report. The real ones are in
+[Evaluation](#evaluation) and they are thinner: five messages spot-checked, not
+forty-five. A reviewer read this block as a result and congratulated the project on it,
+which is a fair warning about how a sample renders inside a document that is otherwise
+trying hard to state what it does not know.
 
 Past four rejections of the same phrase, with none of them kept, it stops asking and
 mutes it — announcing the change, listing it in every digest afterwards, and undoing it
@@ -173,59 +180,15 @@ a model.
 
 ## The parts that were actually hard
 
-**Deadlines live in the wrong message.** *"I'll review and get back to you before the
-deadline"* carries no date — the date was in the message being replied to. The engine walks
-back up the thread to find it, which is the difference between that item showing as *due
-Aug 8* and showing as undated at the bottom of the list.
+Every real bug in this thing was found by running it against real messages, never by
+reading the code. Four separate times, on four different days. A closure rule that let
+the word `signed` mark a future promise as already delivered. Deadlines borrowed from
+unrelated messages further up a channel. An app footer poisoning the topic match. A
+question buried by the sender's own later message, so it vanished instead of ageing.
 
-**A tracker that needs maintaining is worse than no tracker.** Three commitments in the demo
-clear themselves, because a later message in the same thread carried an attachment or
-delivery wording. Without automatic closure you've built a second to-do list that someone
-has to tick off, which is the thing this was supposed to replace.
+None were visible in review, and every one looked obvious afterwards.
 
-**False positives are the whole game.** Three real bugs found while building:
-
-- `"let me know"` matched the commitment pattern — it's an *ask*, the exact opposite
-- An unrelated internal meeting counted as "booked" because a colleague happened to be on it
-- `"Does Thursday work for a call?"` in an outbound message became a deadline, when a
-  proposed slot is not a promise
-
-Any one of those makes the morning digest untrustworthy, and an untrusted digest gets
-ignored by day three.
-
-**The silent failures are worse, because nothing surfaces to tell you.** A false
-positive is annoying and visible. These were neither:
-
-- A bare `"Attached."` closed *every* open promise in a thread, not just the one it
-  answered. Things left the list without being done — the exact failure the closure
-  check was written to prevent. A delivery that names nothing now closes something only
-  when there was one thing it could have meant.
-- The delivery vocabulary contained the word `signed`, so *"we'll have the signed order
-  form back to you Friday"* read as the form having already been sent, and the promise
-  vanished. Tense decides, not vocabulary.
-- The Gmail read capped at 300 threads and said nothing when it hit the limit, so a
-  half-read mailbox produced a digest indistinguishable from a complete one — and the
-  half it drops is the oldest, which is where the overdue items are.
-
-The last one is the pattern: anywhere this can't see something, it now says so.
-A list that quietly omits things is worse than one that admits what it missed.
-
-**Real messages found things reading the code did not.** Pointed at an actual Slack
-workspace, four bugs surfaced in the first ten minutes, and none were in the detection
-logic:
-
-- messages came back newest-first and were sorted on a minute-truncated date, so within
-  a busy minute a promise could land *after* its own delivery and never be closed
-- every message sent through an app carries a `*Sent using*` footer, which put identical
-  words in all of them — so every message shared subject matter with every other one
-- thread replies are not in a channel read at all, so anything promised inside a thread
-  was invisible
-- reading a thread returns a *different format* from reading a channel, undocumented,
-  and the adapter would have silently parsed nothing
-
-Then, on a second batch: two items carried deadlines that appeared nowhere in their own
-sentences, inherited from unrelated messages further up the channel. Safe in mail, where
-a thread is one subject. Not in chat, where it is a whole room.
+→ [**What was actually hard**](docs/failures.md) — the full list, and what each broke.
 
 ## Quick start
 
@@ -248,115 +211,50 @@ end.
 
 ## Pointing it at something else
 
-The engine never touches a mail API. Write an adapter that produces these two shapes and
-nothing in `src/loops.js` changes:
+The engine never touches a mail or chat API. Write an adapter producing these two shapes
+and nothing in `src/loops.js` changes:
 
 ```js
 message = { id, threadId, subject, from, to: [], date: 'YYYY-MM-DDTHH:MM', body, attach: bool }
-event   = { id, title, start: 'YYYY-MM-DDTHH:MM', attendees: [], agenda: bool }
+event   = { id, title, start: 'YYYY-MM-DDTHH:MM', attendees: [], agenda: bool, series }
 ```
 
-Direction is derived from `from` versus the `exec` address, so an adapter never labels
-inbound versus outbound. From the Gmail API that's `payload.headers` plus
-`payload.parts[].body` for text and `payload.parts[].filename` for `attach`; from Google
-Calendar it's `summary`, `start.dateTime`, `attendees[].email`, and whether `description`
-is non-empty for `agenda`.
+Direction is derived from `from` against the reader's own address, so an adapter never
+labels inbound or outbound. Two exist: `src/slack.js`, which ships, and
+`tools/enron.js`, a benchmark harness of about a hundred lines.
 
-Run it on a schedule and deliver the list wherever the assistant already looks.
+→ [**Writing an adapter**](docs/adapters.md) — the field-by-field mapping, and the
+privacy limits that matter more than the shapes do.
 
-**Slack is the one to use.** [`SLACK.md`](SLACK.md) has it: the digest arrives as a DM
-to yourself and corrections are typed straight back underneath it. Install the skill and
-ask Claude to set it up —
+## Evaluation
 
-```bash
-npx skills add kaarizhussain/open-loops
-```
+| What it ran on | Size | Labelled? | What it establishes |
+|---|---|---|---|
+| Demo fixture (`src/fixture.js`) | 25 messages, 5 events | yes, by assertion | that a change has not broken known behaviour |
+| A live Slack workspace | 17 messages, one member | 1 rejection, 1 spot check | that the whole path runs unattended |
+| Enron corpus (`tools/benchmark.js`) | 3,395 emails, 16 mailboxes | **no** | how often it fires — 35.8 items per 100 |
+| Top-of-digest, hand-graded | 79 items, two labellers | yes | that the task is well-posed — kappa 0.76 |
 
-— and it reads your address and DM channel off the connector, shows you which channels
-it would read so you can strike the ones it should not, writes the config, runs it once,
-and offers to schedule it daily.
+**Read the third row carefully.** 35.8 per 100 is a *firing rate*, not an accuracy. That
+corpus has no ground truth, so nothing in it says how many of those were real. It is an
+honest answer to "how noisy is this" and no answer at all to "how right is it".
 
-It keeps a ledger, so each digest leads with what changed rather than repeating
-yesterday's list, and it takes corrections by reply.
+**Precision on real correspondence is still unmeasured.** Nobody has used this for a
+fortnight and marked what it got wrong. Until somebody has, every claim here is about the
+code and none of it is about results. The machinery to measure that is built and has five
+data points in it.
 
-**Read less than you can.** It takes an exclusion list and an allowlist. An executive's mailbox holds comp discussions and HR matters;
-a workspace holds every DM you have. Delegated access is a person with judgement
-choosing what to open — this is automated extraction and forwarding, which is a
-different thing, and the difference is the entire reason someone might say no.
+**Three of the seven signals have never fired on anything real.** Two need a calendar the
+Slack path only just got. *No follow-up sent* needs a recipient list that chat does not
+carry, and now says so rather than firing blind.
 
-It also bounds how far back it reads. That window is the only thing keeping closure
-matching honest inside an unthreaded channel, and it is a trade rather than a knob:
-anything that ages out stops being detected, and the ledger reads *no longer detected*
-as *cleared*. Too short a window quietly reports long-silent promises as done, which is
-precisely the failure this exists to prevent.
+Everything in `src/fixture.js` is invented. Dana Whitfield, Northstar Systems and every
+counterparty in it are fictional, written to exercise each detector including the cases
+that must *not* fire.
 
-## What this has not done
-
-**Its precision on real correspondence is still unmeasured.** It has now been run over
-3,725 real emails from the Enron corpus (`tools/benchmark.js`), which is a great deal
-better than a fixture — but that corpus carries no labels, so it can report a rate and
-not an accuracy. Nobody has yet used this for a fortnight and marked what it got wrong,
-and until somebody has, every claim here is about the code rather than the results.
-
-**What the corpus did establish is a rate, and it is bad: 35.8 items per 100 messages
-read.** More than one message in three produces something. That looks close to the true
-frequency of commitment language in one-to-one business email, which means the detector
-is mostly right and the problem is downstream: the digest prints every open item it is
-handed, so a real mailbox produces a list of 178. Selection, not detection.
-
-**What moved the top of that list was metadata, not text.** A quarter of every item — and
-a quarter of the top eight of each digest — came out of mail the reader had already
-deleted. Respecting that one field did more for the first eight items than four
-successive text heuristics: excluding over-broad phrases (worth 1.4%), filtering
-distribution lists (68% of items come from mail with exactly one recipient, so almost
-nothing), hand-written lists of message genres (leaked three times running), and a
-POS-tagged test for whether a promise names an object (cut the rate by a quarter and made
-the top eight *worse*, because a sender's signature parses as the object of "I will be
-back Thursday"). Each was measured. Every attempt to infer intent from the words lost to
-a field that recorded the decision outright.
-
-That last pair is the methodological point worth keeping: **the aggregate rate and the
-quality of the first eight items move independently**, and only one of them is read by a
-human. Optimising the rate is measuring the wrong thing.
-
-**Is "an open loop" even a well-defined thing?** Worth asking before building anything to
-detect one better. Two labellers graded the same 79 top-of-digest items blind, against a
-written rubric — a deliverable, a human required, a specific party owing a specific thing.
-Raw agreement was 91%, which sounds better than it is: with four items in five being
-noise, two labellers who said DROP to everything would agree 62% of the time by luck.
-Corrected for that, **Cohen's kappa was 0.76** — substantial. The concept holds up.
-
-The interesting part was the disagreement, which was **entirely one-directional**: seven
-items one labeller kept and the other dropped, and *zero* the other way. That is not two
-people disagreeing about what a commitment is. It is two people agreeing completely, and
-setting the bar in different places — one about 44% more permissive than the other, and
-consistently so on institutional mail carrying a real instruction.
-
-Which settles an architectural question. **A benchmark can show a filter is consistent;
-it cannot show the threshold is right**, because the threshold is a preference and the
-ground truth encodes whichever one the labeller had. So strictness belongs to the reader
-as something they turn after a fortnight of digests, not as a constant learned from
-whoever labelled the data. That is not built.
-
-One limit on the above: both labellers were language models, which may share priors from
-overlapping training rather than converging on something true. Two working assistants
-might agree less, or disagree in both directions — and that would mean something quite
-different. The measurement stands; its weakness is known.
-
-Read anything from this corpus with one caveat. The bulk-mail headers were stripped when
-it was released — `List-Unsubscribe`, `Precedence`, `Auto-Submitted` — so newsletters and
-automated bounces can only be identified from their text here, while a live adapter
-settles them with one header check. It makes a solved problem look like a hard one, and
-noise measured against it is an overstatement.
-
-**Three of the seven signals have still never fired on anything real.** *Meeting
-unprepped* and the calendar half of *Agreed, not booked* need a calendar the Slack path
-has not had; *No follow-up sent* needs a recipient list that chat does not carry, and now
-says so rather than firing blind.
-
-Everything in `src/fixture.js` is invented. Dana Whitfield, Northstar Systems, and every
-counterparty, deal, and email in it are fictional, written to exercise each detector
-including the cases that should *not* fire. No real inbox was read to build this.
+→ [**Evaluation in full**](docs/evaluation.md) — the corpus work, the seven hypotheses
+that died against it, and why a benchmark can show a filter is consistent but never that
+its threshold is right.
 
 ## License
 
