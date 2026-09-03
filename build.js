@@ -48,8 +48,11 @@ function wrap(inner) {
     '<meta property="og:url" content="' + SITE + '">\n' +
     '<meta property="og:title" content="Open Loops — nothing slips through the cracks">\n' +
     '<meta property="og:description" content="' + BLURB + '">\n' +
-    '<!-- For a link preview on LinkedIn, add a screenshot and uncomment:\n' +
-    '<meta property="og:image" content="' + SITE + 'docs/screenshot.png"> -->\n' +
+    /* The card that shows when the link is pasted into LinkedIn, Slack or a message.
+     * Captured from this very page, so it goes stale the same way index.html does —
+     * re-run the headless capture in docs/ when the layout changes. */
+    '<meta property="og:image" content="' + SITE + 'docs/screenshot.png">\n' +
+    '<meta name="twitter:card" content="summary_large_image">\n' +
     inner.slice(0, cut) + '\n</head>\n<body>' +
     inner.slice(cut) + '\n</body>\n</html>\n';
 }

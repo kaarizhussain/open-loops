@@ -9,9 +9,10 @@ anywhere that knows about it. Open Loops reads the mail and the calendar, extrac
 promises, works out which ones closed on their own, and ranks what's left by how close it
 is to falling over.
 
-**[▶ Live demo](https://kaarizhussain.github.io/open-loops/)** — a synthetic CRO's Thursday morning. Click any row to see the sentence that triggered it.
+[![Open Loops — a synthetic CRO's Thursday morning](docs/screenshot.png)](https://kaarizhussain.github.io/open-loops/)
 
-<!-- Before sharing, drop a screenshot in as: ![Open Loops](docs/screenshot.png) -->
+**[▶ Live demo](https://kaarizhussain.github.io/open-loops/)** — the screen above, running. Click
+any row to see the sentence that triggered it, and why it surfaced.
 
 ---
 
@@ -201,7 +202,20 @@ npm test              # every suite
 node build.js         # rebuilds index.html (downloads fonts on first run)
 ```
 
-`index.html` is committed, so you can also just open it in a browser.
+`index.html` is committed, so you can also just open it in a browser. `npm test` fails if
+it has drifted behind `src/`, because a demo that silently ships an old detector is worse
+than no demo — that happened, and it is the page most people see.
+
+The screenshot at the top is the same page, captured headless. It goes stale the same way
+and nothing checks it, so re-run this when the layout changes:
+
+```bash
+chrome --headless --hide-scrollbars --force-device-scale-factor=2 \
+  --window-size=1440,900 --screenshot=docs/screenshot.png \
+  "file://$PWD/index.html#present"
+```
+
+`#present` suppresses the guided tour, which otherwise covers the app it is touring.
 
 The tests live in `test/` and are the documentation for how each part is meant to fail:
 `test.js` for the detector against the demo fixture, `test_slack.js` and `test_store.js`
