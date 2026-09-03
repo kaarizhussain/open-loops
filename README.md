@@ -319,6 +319,30 @@ That last pair is the methodological point worth keeping: **the aggregate rate a
 quality of the first eight items move independently**, and only one of them is read by a
 human. Optimising the rate is measuring the wrong thing.
 
+**Is "an open loop" even a well-defined thing?** Worth asking before building anything to
+detect one better. Two labellers graded the same 79 top-of-digest items blind, against a
+written rubric — a deliverable, a human required, a specific party owing a specific thing.
+Raw agreement was 91%, which sounds better than it is: with four items in five being
+noise, two labellers who said DROP to everything would agree 62% of the time by luck.
+Corrected for that, **Cohen's kappa was 0.76** — substantial. The concept holds up.
+
+The interesting part was the disagreement, which was **entirely one-directional**: seven
+items one labeller kept and the other dropped, and *zero* the other way. That is not two
+people disagreeing about what a commitment is. It is two people agreeing completely, and
+setting the bar in different places — one about 44% more permissive than the other, and
+consistently so on institutional mail carrying a real instruction.
+
+Which settles an architectural question. **A benchmark can show a filter is consistent;
+it cannot show the threshold is right**, because the threshold is a preference and the
+ground truth encodes whichever one the labeller had. So strictness belongs to the reader
+as something they turn after a fortnight of digests, not as a constant learned from
+whoever labelled the data. That is not built.
+
+One limit on the above: both labellers were language models, which may share priors from
+overlapping training rather than converging on something true. Two working assistants
+might agree less, or disagree in both directions — and that would mean something quite
+different. The measurement stands; its weakness is known.
+
 Read anything from this corpus with one caveat. The bulk-mail headers were stripped when
 it was released — `List-Unsubscribe`, `Precedence`, `Auto-Submitted` — so newsletters and
 automated bounces can only be identified from their text here, while a live adapter
