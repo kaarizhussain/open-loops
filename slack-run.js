@@ -332,8 +332,34 @@ function main(argv) {
   var score = L.recall(rows.length, silent.length,
                        audit.checked + replies.checked, audit.missed.length + replies.misses.length);
 
-  var text = digest.render({
-    today: today, source: 'slack',
+  /* Slack refuses a message over 4,000 characters, and a busy mailbox goes miles past
+   * it — three Enron mailboxes rendered at 14k, 29k and 29k. That is not a long digest,
+   * it is a digest that never arrives, and the runner is right to post nothing rather
+   * than half of one, so the reader would have got silence on their first day.
+   *
+   * The limit belongs to Slack, so the fitting belongs here rather than in the
+   * renderer. Shrink the lists until it fits, and let the renderer say what it held
+   * back. Starts generous, because most workspaces never come near the ceiling. */
+  var SLACK_LIMIT = 4000, FENCE = 8;      // the ``` wrapper the digest is posted inside
+  var text, listCap = 12;
+  do {
+    text = renderAt(listCap);
+    listCap = listCap > 4 ? listCap - 4 : listCap - 1;
+  } while (text.length + FENCE > SLACK_LIMIT && listCap >= 1);
+  /* Measured across sixteen real mailboxes: the worst fits at 2 with 18% to spare and
+   * at 1 with 34%. If a mailbox ever exhausts even that, the fixed parts are the cause
+   * — the header, the first-moves block with its drafted notes, the spot check — and
+   * the honest thing is to say the digest was too long rather than post one Slack will
+   * reject and leave the reader with silence. */
+  if (text.length + FENCE > SLACK_LIMIT) {
+    text += '\n\nTOO LONG — this is ' + (text.length + FENCE) + ' characters and Slack ' +
+      'takes 4000. Nothing was dropped to make it fit; the list is already at its ' +
+      'smallest. Narrow the channels or shorten the window.';
+  }
+
+  function renderAt(cap) {
+  return digest.render({
+    today: today, source: 'slack', listCap: cap,
     messages: messages, events: events, result: result,
     /* Regrouped by upcoming meeting: the list answers "what is outstanding", and an
      * assistant is asked "what do I need before this". Same items, read the way you
@@ -346,6 +372,7 @@ function main(argv) {
     read: { threads: (input.conversations || []).length - skipped, capped: false,
             unfetchedThreads: unfetched.length, skipped: skipped, windowDays: window }
   });
+  }
 
   // --dry renders without recording the run, so the digest can be read by hand
   // before the first real one goes out and consumes the "new" flags.

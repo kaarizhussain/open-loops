@@ -291,11 +291,33 @@ function render(b) {
   }
 
   var many = (b.principals || []).length > 1;
+  /* How many of each pile to actually print.
+   *
+   * Slack refuses a message over 4,000 characters, and a real mailbox goes far past
+   * that: three Enron mailboxes rendered at 14,000, 29,000 and 29,000 characters — the
+   * digest would not have been shortened, it would have failed to send, on somebody's
+   * first day, with the runner correctly refusing to post half of one.
+   *
+   * It never showed up here because a test workspace produces eight items and 2,500
+   * characters, and always has. Nothing about the list was wrong; it just had no
+   * ceiling and had never met a mailbox with a real amount in it.
+   *
+   * The items are already risk-ordered and the ordering is already trusted — it is what
+   * DO THESE FIRST selects on. So this takes the top of each pile and says out loud
+   * what it held back. Saying so is not decoration: a list that quietly stops is
+   * indistinguishable from a quiet week, which is the failure this whole thing exists
+   * to prevent. */
+  /* Off unless asked. The 4,000-character ceiling belongs to Slack, so the fitting is
+   * the Slack runner's job — a renderer that silently truncates by default would hide
+   * items from every other caller too, including the tests that check it shows all of
+   * them. Passing 0 or nothing prints everything. */
+  var perPile = b.listCap === undefined ? 0 : b.listCap;
   OWNER_ORDER.forEach(function (key) {
     var items = open.filter(function (l) { return l.owner === key; });
     if (!items.length) return;
     p(ownerTitle(key, b.principals).toUpperCase() + ' (' + items.length + ') — ' + OWNER[key].note);
-    items.forEach(function (l) {
+    var held = perPile ? items.length - perPile : 0;
+    (perPile ? items.slice(0, perPile) : items).forEach(function (l) {
       var when = !l.due ? 'no date'
         : l.status === 'overdue' ? l.overdueDays + 'd late'
         : l.status === 'due_today' ? 'today' : 'due ' + l.due;
@@ -319,6 +341,13 @@ function render(b) {
           'd in, so this is not late for them yet');
       }
     });
+    /* Never a silent trim. The count is the whole point of the line — "and 187 more"
+     * tells a reader the tool is bounded, where a list that simply ends tells them
+     * nothing and looks complete. */
+    if (held > 0) {
+      p('      … and ' + held + ' more in this pile, ranked below these. ' +
+        'Raise `listCap` to see them.');
+    }
     p('');
   });
 
@@ -335,7 +364,9 @@ function render(b) {
 
   if (r.closed.length) {
     p('CLOSED ITSELF (' + r.closed.length + ')');
-    r.closed.slice(0, 10).forEach(function (l) { p('  ' + l.closedOn + '  ' + l.what); });
+    // Bounded by the same knob as the piles: on a busy mailbox this ran to ten entries
+    // and 700 characters of good news, which is the cheapest thing to shorten.
+    r.closed.slice(0, perPile || 10).forEach(function (l) { p('  ' + l.closedOn + '  ' + l.what); });
     p('');
   }
 

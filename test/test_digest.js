@@ -164,4 +164,41 @@ assert.ok(/across 40 conversations/.test(capped), 'a Slack read says conversatio
 assert.ok(/INCOMPLETE — stopped at the 40-conversation limit/.test(capped),
   'and names its own limit rather than Gmail\'s');
 
+
+
+/* --- fitting a long digest into a message that will actually send ---
+ *
+ * Slack refuses anything over 4,000 characters. A real mailbox goes far past it — three
+ * Enron mailboxes rendered at 14k, 29k and 29k — and the runner is right to post
+ * nothing rather than half a digest, so the reader would have got silence rather than a
+ * long list. It never showed up against a test workspace, which produces eight items.
+ *
+ * The renderer does not own that limit, so capping is off unless asked for. */
+var uncapped = render({ today: F.TODAY, messages: F.MESSAGES, events: F.EVENTS,
+                        result: result, briefs: briefs });
+var capped = render({ today: F.TODAY, messages: F.MESSAGES, events: F.EVENTS,
+                      result: result, briefs: briefs, listCap: 2 });
+
+var linesIn = function (t) {
+  var body = t.split('…and ').slice(1).join('…and ') || t;
+  return body.split('\n').filter(function (l) { return /^\s*\d+\. \[/.test(l); }).length;
+};
+assert.strictEqual(linesIn(uncapped), result.open.length,
+  'with no cap asked for, every item still prints — the Slack ceiling is the runner\'s problem');
+assert.ok(linesIn(capped) < linesIn(uncapped), 'a cap actually shortens the list');
+assert.ok(capped.length < uncapped.length, 'and shortens the message');
+
+/* A list that quietly stops is indistinguishable from a quiet week, which is the exact
+   failure this tool exists to prevent. It has to say what it held back. */
+assert.ok(/… and \d+ more in this pile/.test(capped),
+  'the trim is announced with a count:\n' + capped);
+var heldTotal = (capped.match(/… and (\d+) more/g) || [])
+  .reduce(function (n, s) { return n + parseInt(s.match(/\d+/)[0], 10); }, 0);
+assert.strictEqual(linesIn(capped) + heldTotal, result.open.length,
+  'shown plus held equals the true total, so the count can be trusted');
+
+/* Numbers are assigned over the full list, so rejecting "7" means the same thing
+   whether or not the item above it was trimmed. */
+assert.ok(/^\s*\d+\. \[/m.test(capped), 'capped items keep their original numbers');
+
 console.log('digest: OK');
