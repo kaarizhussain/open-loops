@@ -298,14 +298,32 @@ better than a fixture — but that corpus carries no labels, so it can report a 
 not an accuracy. Nobody has yet used this for a fortnight and marked what it got wrong,
 and until somebody has, every claim here is about the code rather than the results.
 
-**What the corpus did establish is a rate, and it is bad: 40.5 items per 100 messages
-read.** Two in five messages produce something. Two guesses about why died on contact
-with it — excluding over-broad phrases moved the number by 1.4%, and 68% of items come
-from mail with exactly one recipient, so filtering distribution lists recovers almost
-nothing. That rate looks close to the true frequency of commitment language in one-to-one
-business email, which means the detector is mostly right and the problem is downstream:
-the digest prints every open item it is handed, so a real mailbox produces a list of 178.
-Selection, not detection, is the open problem.
+**What the corpus did establish is a rate, and it is bad: 35.8 items per 100 messages
+read.** More than one message in three produces something. That looks close to the true
+frequency of commitment language in one-to-one business email, which means the detector
+is mostly right and the problem is downstream: the digest prints every open item it is
+handed, so a real mailbox produces a list of 178. Selection, not detection.
+
+**What moved the top of that list was metadata, not text.** A quarter of every item — and
+a quarter of the top eight of each digest — came out of mail the reader had already
+deleted. Respecting that one field did more for the first eight items than four
+successive text heuristics: excluding over-broad phrases (worth 1.4%), filtering
+distribution lists (68% of items come from mail with exactly one recipient, so almost
+nothing), hand-written lists of message genres (leaked three times running), and a
+POS-tagged test for whether a promise names an object (cut the rate by a quarter and made
+the top eight *worse*, because a sender's signature parses as the object of "I will be
+back Thursday"). Each was measured. Every attempt to infer intent from the words lost to
+a field that recorded the decision outright.
+
+That last pair is the methodological point worth keeping: **the aggregate rate and the
+quality of the first eight items move independently**, and only one of them is read by a
+human. Optimising the rate is measuring the wrong thing.
+
+Read anything from this corpus with one caveat. The bulk-mail headers were stripped when
+it was released — `List-Unsubscribe`, `Precedence`, `Auto-Submitted` — so newsletters and
+automated bounces can only be identified from their text here, while a live adapter
+settles them with one header check. It makes a solved problem look like a hard one, and
+noise measured against it is an overstatement.
 
 **Three of the seven signals have still never fired on anything real.** *Meeting
 unprepped* and the calendar half of *Agreed, not booked* need a calendar the Slack path

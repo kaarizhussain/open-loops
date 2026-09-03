@@ -97,5 +97,31 @@ assert.strictEqual(box.length, 3);
 assert.strictEqual(E.owner(box), 'robert.badeer@enron.com',
   'the owner comes from their Sent folder, not from whoever wrote to them most');
 
+/* Mail the reader already threw away.
+ *
+ * A quarter of everything this corpus surfaced came out of Deleted Items, including a
+ * quarter of the top of each digest — a travel advert somebody binned in 2001, promoted
+ * to the first thing they would read. An afternoon went into text heuristics trying to
+ * infer what this field says outright, so the default is to respect it. */
+write('deleted_items', '4.', [
+  'Message-ID: <4.JavaMail.evans@thyme>',
+  'Date: Fri, 8 Mar 2002 10:00:00 -0800 (PST)',
+  'From: deals@travel.example.com',
+  'To: robert.badeer@enron.com',
+  'Subject: Get away and save 30%',
+  'X-Folder: \\Robert_Badeer_Mar2002_1\\Badeer, Robert\\Deleted Items',
+  '',
+  "We'll send you the brochure today.",
+  ''
+].join('\n'));
+
+var kept = E.mailbox(dir);
+assert.strictEqual(kept.length, 3, 'the bin is out of scope by default');
+assert.ok(kept.every(function (m) { return m.from !== 'deals@travel.example.com'; }),
+  'and it is specifically the binned message that is gone');
+
+var withBin = E.mailbox(dir, { includeDeleted: true });
+assert.strictEqual(withBin.length, 4, 'but it can be included, to measure what it costs');
+
 fs.rmSync(dir, { recursive: true, force: true });
 console.log('enron: OK');

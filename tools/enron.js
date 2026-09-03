@@ -127,13 +127,34 @@ function parse(file) {
     date: date,
     body: body,
     sent: /sent/i.test(head['x-folder'] || ''),
+    folder: String(head['x-folder'] || ''),
     attach: false          // the released corpus carries no attachments
   };
 }
 
+/* Mail the reader has already thrown away.
+ *
+ * A quarter of everything the detector surfaced from this corpus came out of Deleted
+ * Items, and it was a quarter of the TOP of each digest too — an Expedia advert one of
+ * these people binned in 2001, promoted to the first thing they would read.
+ *
+ * That is not a hard problem wearing a disguise. It is the reader having already made
+ * the decision, in a field the adapter was discarding. Worth stating because an
+ * afternoon went into writing text heuristics to infer what this says outright.
+ *
+ * The same shape exists everywhere else: Gmail has TRASH, SPAM and
+ * CATEGORY_PROMOTIONS; Outlook and Graph have Deleted Items and Junk Email. What this
+ * corpus does NOT have is the bulk-mail headers — List-Unsubscribe, Precedence,
+ * Auto-Submitted — which were stripped when it was released. So it makes a problem
+ * that a live adapter solves with one header check look like text classification, and
+ * anything measured here overstates the difficulty by that much. */
+var BINNED = /(deleted items|junk|spam|trash|bulk mail)/i;
+
 /* Every message in one person's maildir, oldest first, de-duplicated by Message-ID —
-   the same mail appears in several folders (sent, all documents, a project folder). */
-function mailbox(dir) {
+   the same mail appears in several folders (sent, all documents, a project folder).
+   Their bin is excluded by default; pass {includeDeleted: true} to measure it. */
+function mailbox(dir, opts) {
+  var keepBin = opts && opts.includeDeleted;
   var out = [], seen = {};
   var walk = function (d) {
     var entries;
@@ -142,7 +163,10 @@ function mailbox(dir) {
       var p = path.join(d, ent.name);
       if (ent.isDirectory()) return walk(p);
       var m = parse(p);
-      if (m && !seen[m.id]) { seen[m.id] = 1; out.push(m); }
+      if (!m || seen[m.id]) return;
+      if (!keepBin && BINNED.test(m.folder)) return;
+      seen[m.id] = 1;
+      out.push(m);
     });
   };
   walk(dir);
@@ -169,4 +193,4 @@ function owner(messages) {
   return tally(true) || tally(false);
 }
 
-module.exports = { parse: parse, mailbox: mailbox, owner: owner, when: when, unquote: unquote, threadOf: threadOf };
+module.exports = { parse: parse, mailbox: mailbox, owner: owner, when: when, unquote: unquote, threadOf: threadOf, BINNED: BINNED };
