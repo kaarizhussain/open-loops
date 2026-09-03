@@ -5,14 +5,18 @@ closest to falling over.**
 
 An executive assistant's real job isn't scheduling — it's being the safety net. Someone
 promised something three weeks ago in a thread nobody reopened, and there is no system
-anywhere that knows about it. Open Loops reads the mail and the calendar, extracts the
+anywhere that knows about it. Open Loops reads Slack and the calendar, extracts the
 promises, works out which ones closed on their own, and ranks what's left by how close it
 is to falling over.
 
-[![Open Loops — a synthetic CRO's Thursday morning](docs/screenshot.png)](https://kaarizhussain.github.io/open-loops/)
+```bash
+npx skills add kaarizhussain/open-loops
+```
 
-**[▶ Live demo](https://kaarizhussain.github.io/open-loops/)** — the screen above, running. Click
-any row to see the sentence that triggered it, and why it surfaced.
+**That is the whole product: a skill.** There is no app and nothing to log into. It reads
+your channels and your calendar, posts a ranked list to your own Slack DM each evening,
+and you correct it by replying to the message. The output is text, and it looks like
+[What comes out](#what-comes-out) below.
 
 ---
 
@@ -80,9 +84,20 @@ because it is identical. Repetition kills a digest faster than error does, so ea
 carries `NEW` or how long it has been sitting there, and anything that dropped off is
 reported once as cleared.
 
-Each item carries the sentence it came from and the rule that fired. On the demo page,
-opening one also gives you a drafted chase note to paste — a list you cannot act on
-without rewriting it is a list you stop opening.
+Each item carries the sentence it came from and the rule that fired.
+
+### Seeing it without installing it
+
+The text above is the product. This is **not** — it is a browser page that runs the same
+detector over an invented mailbox, so the reasoning can be poked at without connecting
+anything. Nobody who installs the skill sees this screen; it exists because a ranked list
+is easier to argue with when you can click a row and read why it fired.
+
+[![The demo page — the same detector over an invented mailbox](docs/screenshot.png)](https://kaarizhussain.github.io/open-loops/)
+
+**[▶ Try it](https://kaarizhussain.github.io/open-loops/)** — a synthetic CRO's Thursday.
+Click any row for the sentence that triggered it, the rule that fired, and a drafted chase
+note. Every name in it is fictional.
 
 ## How it works
 

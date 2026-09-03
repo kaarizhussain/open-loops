@@ -1,7 +1,7 @@
 {
   "name": "open-loops",
   "version": "1.0.0",
-  "description": "Finds every commitment in an executive's inbox and calendar, and tells their assistant which ones are about to slip.",
+  "description": "Finds the commitments nobody is chasing in Slack and the calendar, and tells an assistant which is closest to falling over.",
   "scripts": {
     "test": "node test/run.js",
     "build": "node build.js"

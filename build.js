@@ -31,8 +31,8 @@ function source(f) {
 }
 
 var SITE = 'https://kaarizhussain.github.io/open-loops/';
-var BLURB = 'Finds every commitment in an executive’s inbox and calendar, ' +
-  'and tells their assistant which ones are about to slip.';
+var BLURB = 'Finds the commitments nobody is chasing in Slack and the calendar, ' +
+  'and tells an assistant which is closest to falling over.';
 
 /* The template is body content plus its own <title>/<style>; wrap it into a real
  * document so the page is valid standalone on GitHub Pages — and so phones get a
