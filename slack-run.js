@@ -158,8 +158,13 @@ function report(ledgerPath) {
 
   var learned = store.learnedMutes();
   if (learned.length) {
-    out.push('', 'Muting on its own: ' +
-      learned.map(function (m) { return '"' + m.phrase + '"'; }).join(', '));
+    /* Say where these came from. They are literal runs of words lifted out of the
+     * reader's own messages — that is how mute learning works — and this report is the
+     * one thing they are likely to paste to somebody else, because it is the only
+     * output that is otherwise pure numbers. Somebody sending "how has it been doing"
+     * to a colleague should not discover afterwards that a client name went with it. */
+    out.push('', 'Muting on its own — these are phrases from your own messages:');
+    out.push('  ' + learned.map(function (m) { return '"' + m.phrase + '"'; }).join(', '));
   }
 
   out.push('', 'Unmarked rows count as both correct and new, so this reads optimistically.');

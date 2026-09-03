@@ -316,6 +316,18 @@ assert.ok(/Currently muting on its own: "at some point"/.test(third),
   'but standing state that shapes the list stays visible');
 assert.ok(/4 items were muted by phrase/.test(third));
 
+/* --report is the one output that is otherwise pure numbers, which makes it the one
+   somebody pastes to a colleague when asked how the thing has been doing. The muted
+   phrases are literal runs of words out of their own messages — that is how mute
+   learning works — so the report has to say where they came from. Nobody should find
+   out afterwards that a client name went along with their accuracy figures. */
+var shared = main(['--report', '--ledger', learnLedger]);
+assert.ok(/phrases from your own messages/.test(shared),
+  'the report warns that the muted phrases are the reader\'s own words:\n' + shared);
+var warnAt = shared.indexOf('phrases from your own messages');
+assert.ok(warnAt > -1 && shared.indexOf('"at some point"', warnAt) > warnAt,
+  'and the warning comes before the phrases, not after them');
+
 /* Overruling it stops the phrase being muted. The rows themselves stay rejected —
    those are two different decisions and undoing one must not undo the other. */
 learnInput.unmute = ['at some point'];
