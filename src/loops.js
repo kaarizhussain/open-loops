@@ -238,11 +238,34 @@ function relationship(addr, contacts) {
 var TOPIC_STOP = /^(the|and|for|you|your|our|their|its|will|would|can|could|should|have|has|had|been|are|was|were|that|this|these|those|with|from|into|over|back|also|some|more|need|want|get|got|give|take|make|send|sent|sending|attach|attached|here|there|just|then|than|when|what|which|who|how|why|about|before|after|once|soon|today|tomorrow|week|day|days|monday|tuesday|wednesday|thursday|friday|saturday|sunday|eod|latest|ahead|team|thanks|thank|please|sure|okay|yes|all|set|done|out|off|via|per|any|one|two|let|know|good|talking|apologies|delay)$/;
 
 function topics(text) {
-  var out = {};
+  var out = [];
   (String(text).toLowerCase().match(/[a-z0-9]{3,}/g) || []).forEach(function (w) {
-    if (!TOPIC_STOP.test(w)) out[w.slice(0, 4)] = 1;
+    if (!TOPIC_STOP.test(w)) out.push(w);
   });
   return out;
+}
+
+/* Two words about the same thing.
+ *
+ * This used to be a four-character prefix, which made "contract" and "contact" the same
+ * subject, along with "revised"/"review" and "proposal"/"property" — and a false match
+ * here closes a promise nobody kept, which the note below calls the worst failure
+ * available. Lengthening the prefix would have traded that for the opposite mistake:
+ * "price" and "pricing" stop matching, and a real delivery stops closing anything.
+ *
+ * So neither. One word has to be a prefix of the other, which is what a shared root
+ * actually looks like — thing/things, curve/curves, report/reporting all hold, while
+ * contact/contract and revised/review do not, because neither contains the other. The
+ * trailing "e" comes off first so price/pricing survives, which is the case the
+ * truncation existed for in the first place.
+ *
+ * Four characters minimum on the shorter word, or every three-letter fragment matches
+ * half the language. */
+function sameTopic(a, b) {
+  if (a === b) return true;
+  var x = a.replace(/e$/, ''), y = b.replace(/e$/, '');
+  var lo = x.length <= y.length ? x : y, hi = x.length <= y.length ? y : x;
+  return lo.length >= 4 && hi.indexOf(lo) === 0;
 }
 /* Three answers, not two:
  *
@@ -258,8 +281,8 @@ function topics(text) {
  * anything else the delivery could have been answering. */
 function topicMatch(promise, delivery) {
   var d = topics(delivery), p = topics(promise);
-  if (!Object.keys(d).length || !Object.keys(p).length) return null;
-  return Object.keys(p).some(function (k) { return d[k]; });
+  if (!d.length || !p.length) return null;
+  return p.some(function (a) { return d.some(function (b) { return sameTopic(a, b); }); });
 }
 
 function sentences(body) {

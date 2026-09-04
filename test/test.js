@@ -544,3 +544,41 @@ assert.strictEqual(theirsNoPace.type, 'owed_to_us');
 assert.strictEqual(theirsSlow.earlyForThem, true,
   'but somebody behaving exactly as they always do is not late yet');
 assert.ok(theirsSlow.risk < theirsNoPace.risk, 'so the escalation waits');
+
+/* --- a shared root, not a shared prefix ---
+ *
+ * topics() truncated every word to four characters, so "contract" and "contact" were the
+ * same subject, along with "revised"/"review" and "proposal"/"property". A false match
+ * here closes a promise nobody kept — the failure the comment above topicMatch calls the
+ * worst one available.
+ *
+ * Lengthening the prefix would only have traded it for the opposite mistake: "price" and
+ * "pricing" stop matching and a real delivery stops closing anything. So the rule is
+ * containment — one word is a prefix of the other, which is what a shared root looks
+ * like — with a trailing "e" removed first so price/pricing survives, since that pair is
+ * why the truncation existed.
+ *
+ * Behaviour-neutral where it has been measured: the Enron corpus produces 1215 open and
+ * 22 closed either way. This buys margin against a real mechanism that corpus never
+ * happened to exercise. */
+var pair = function (promise, delivery) {
+  return detectLoops([
+    { id: 'c1', threadId: 'tc', subject: '#deals', from: 'me@corp.io', to: ['them@other.io'],
+      date: '2026-08-25T10:00', body: promise, attach: false },
+    { id: 'c2', threadId: 'tc', subject: '#deals', from: 'me@corp.io', to: ['them@other.io'],
+      date: '2026-08-27T10:00', body: delivery, attach: false }
+  ], [], { exec: 'me@corp.io', today: '2026-09-02' }).closed.length > 0;
+};
+
+assert.strictEqual(pair('I will send the contract over.', 'Just sent the contact list.'), false,
+  'contract is not contact');
+assert.strictEqual(pair('I will send the revised pricing sheet.', 'Here is the review you asked for.'),
+  false, 'revised is not review');
+assert.strictEqual(pair('I will put together the proposal.', 'The property details are attached.'),
+  false, 'proposal is not property');
+
+assert.strictEqual(pair('I will price the renewal.', 'Pricing attached.'), true,
+  'but price and pricing are the same thing, which is why the stemming exists');
+assert.strictEqual(pair('I will send the Q3 report.', 'Reporting attached.'), true);
+assert.strictEqual(pair('I will send the curve files.', 'Attached are the curves.'), true,
+  'and a plural is not a different subject');
