@@ -51,31 +51,41 @@ function pad(s, n) { while (s.length < n) s += ' '; return s; }
 // The headline is the one line everybody reads, and "1 days past" reads as a bug in it.
 function days(n) { return n + (n === 1 ? ' day' : ' days'); }
 
-function headline(open) {
+function headline(open, source) {
   if (!open.length) return 'Nothing outstanding. Genuinely — the list is empty.';
 
   var late = open.filter(function (l) { return l.status === 'overdue'; })
                  .sort(function (a, b) { return b.overdueDays - a.overdueDays; });
-  var name = function (l) { return l.subject + (l.rel ? ' (' + l.rel.label + ')' : ''); };
+  /* An email subject describes the thing. A Slack "subject" is the channel name, and a
+   * whole workspace shares a handful of those — so this line, which is the one line
+   * everybody reads, said "the oldest by 2 days is #all-open-loops" and named nothing
+   * that was actually late. On Slack the commitment itself is the only identifier. */
+  var name = function (l) {
+    return (source === 'slack' ? shortenBody(l.what, 52) : l.subject) +
+      (l.rel ? ' (' + l.rel.label + ')' : '');
+  };
+  /* A trimmed commitment already ends in an ellipsis, and the sentence around it added
+   * a full stop on top — "share it…." Only close what is still open. */
+  var stop = function (s) { return /[.!?…]$/.test(s) ? s : s + '.'; };
 
   if (late.length) {
     var worst = late[0];
     return late.length === 1
-      ? 'One thing is overdue: ' + name(worst) + ', ' + days(worst.overdueDays) + ' past.'
-      : late.length + ' are overdue. The oldest by ' + days(worst.overdueDays) +
-        ' is ' + name(worst) + '.';
+      ? stop('One thing is overdue: ' + name(worst) + ', ' + days(worst.overdueDays) + ' past')
+      : stop(late.length + ' are overdue. The oldest by ' + days(worst.overdueDays) +
+        ' is ' + name(worst));
   }
 
   var soon = open.filter(function (l) { return l.status === 'due_today'; });
   if (soon.length) {
-    return 'Nothing overdue. ' + soon.length + (soon.length === 1 ? ' thing lands' : ' things land') +
-      ' today, starting with ' + name(soon[0]) + '.';
+    return stop('Nothing overdue. ' + soon.length + (soon.length === 1 ? ' thing lands' : ' things land') +
+      ' today, starting with ' + name(soon[0]));
   }
 
   // No deadline pressure at all, so the useful signal is what has gone quiet longest.
   var stale = open.slice().sort(function (a, b) { return (b.ageDays || 0) - (a.ageDays || 0); })[0];
-  return 'Nothing overdue and nothing due today. The quietest is ' + name(stale) +
-    ', untouched for ' + days(stale.ageDays) + '.';
+  return stop('Nothing overdue and nothing due today. The quietest is ' + name(stale) +
+    ', untouched for ' + days(stale.ageDays));
 }
 
 /* Number the items in the order the digest prints them, and record which loop each
@@ -131,7 +141,12 @@ function move(l) {
     return 'Needs ' + (l.principal ? l.principal.label : 'the executive') +
       ' — ' + shortenBody(l.what);
   }
-  return who + ' — ' + shortenBody(l.what);
+  /* Something you owe, with nothing more specific to say about it than what you said.
+   * The name only leads the line when there is one — `who` falls back to "them", which
+   * every branch above reads correctly ("Chase them", "Answer them") and this one does
+   * not: "them — I'm going to draft the onboarding doc" is a placeholder printed where
+   * a name goes, which is how a digest stops looking like it was written on purpose. */
+  return (l.who || l.rel ? who + ' — ' : '') + shortenBody(l.what);
 }
 
 /* "paul.oyelaran@meridianhealth.com" → "Paul". Wrong sometimes, and a note that opens
@@ -211,7 +226,7 @@ function render(b) {
       ' handed over and no message could be parsed out of any of them. This is not a' +
       ' quiet day. Until it is fixed this digest can say nothing about what is' +
       ' outstanding, so treat the empty list below as unknown rather than clear.'
-    : headline(open));
+    : headline(open, b.source));
   p('');
 
   p('Read ' + b.messages.length + ' messages' +

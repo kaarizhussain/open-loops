@@ -238,4 +238,52 @@ assert.ok(!/READ NOTHING —/.test(partial), 'but this is not a total failure');
 assert.ok(!/NOTHING READ IN/.test(blind),
   'and when nothing parsed at all, the headline says it once rather than twice');
 
+/* --- found by running it against a real Slack workspace ---
+ *
+ * On Slack the "subject" is the channel name, and a workspace has a handful of those.
+ * The headline is the one line everybody reads, and it said "the oldest by 2 days is
+ * #all-open-loops" — naming nothing that was actually late. An email subject describes
+ * the thing, so it stays; on Slack the commitment is the only identifier there is. */
+var headliner = function (source, what) {
+  return render({
+    today: '2026-09-04', source: source, listCap: 12, messages: [{}], events: [],
+    result: { open: [{ type: 'owed_by_us', owner: 'you', status: 'overdue', overdueDays: 2,
+                       what: what, subject: '#all-open-loops', who: '', n: 1 }],
+              closed: [], dark: 0 },
+    briefs: [], ledger: { shown: [], gone: [] }, marked: 0,
+    read: { threads: 2, unread: [], shortRead: [], skipped: 0, windowDays: 21 }
+  }).split('\n')[2];
+};
+var LONG = "I'm going to draft the onboarding doc and share it EOD tomorrow.";
+assert.ok(/onboarding doc/.test(headliner('slack', LONG)),
+  'on Slack the headline names the commitment');
+assert.ok(!/#all-open-loops/.test(headliner('slack', LONG)),
+  'and not the channel, which is shared by everything in it');
+assert.ok(/#all-open-loops/.test(headliner('mail', LONG)),
+  'a mail subject describes the thing, so it is still used');
+/* A trimmed commitment already ends in an ellipsis and the sentence added a stop on
+   top of it — "share it…." */
+assert.ok(!/\.\.\.\.|…\./.test(headliner('slack', LONG)), 'one full stop, not two');
+
+/* `who` falls back to the word "them", which every other move reads correctly ("Chase
+   them", "Answer them") and this one does not — a bare "them — I'm going to draft the
+   onboarding doc" is a placeholder printed where a name goes. */
+var moveLine = function (who) {
+  var out = render({
+    today: '2026-09-04', source: 'slack', listCap: 12, actionList: 5,
+    messages: [{}], events: [],
+    result: { open: new Array(9).fill(0).map(function (_, i) {
+      return { type: 'owed_by_us', owner: 'you', status: 'overdue', overdueDays: 9 - i,
+               what: 'I will draft the onboarding doc.', subject: '#deals', who: who, n: i + 1 };
+    }), closed: [], dark: 0 },
+    briefs: [], ledger: { shown: [], gone: [] }, marked: 0,
+    read: { threads: 1, unread: [], shortRead: [], skipped: 0, windowDays: 21 }
+  }).split('\n');
+  // The first line of the moves block. The headline quotes the same commitment, so
+  // matching on the text alone picks that up instead.
+  return out[out.findIndex(function (s) { return /^DO THESE FIRST/.test(s); }) + 1];
+};
+assert.ok(!/them —/.test(moveLine('')), 'no counterparty means no name, not "them"');
+assert.ok(/lena@corp\.io —/.test(moveLine('lena@corp.io')), 'a real name still leads the line');
+
 console.log('digest: OK');
