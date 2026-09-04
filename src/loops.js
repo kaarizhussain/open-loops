@@ -555,7 +555,18 @@ function detectLoops(messages, events, opts) {
      * It damps the urgency, never the fact. They said Friday and it is Tuesday, so
      * the item stays overdue and stays on the list; what waits is the escalation that
      * would push it to the top and put it in front of you as a chase. */
-    var pace = (opts.tempo || {})[String(l.who || '').toLowerCase()];
+    /* Only where they are the ones who owe it.
+     *
+     * tempos() is built from `owed_to_us` and `awaiting_reply` alone — deliberately, and
+     * its own comment says why: how long we take says nothing about when to chase them.
+     * But the lookup applied it to every item, so a counterparty who habitually takes a
+     * fortnight also excused OUR overdue promises to them. Measured: an item we owed,
+     * three days late, dropped from risk 114 to 55 — less than half — and would have
+     * printed "they usually take 12d, so this is not late for them yet" against a
+     * promise we made and broke. `owed_by_us` carries the highest base weight because
+     * our own commitments matter most; this was quietly reversing that. */
+    var theirs = l.type === 'owed_to_us' || l.type === 'awaiting_reply';
+    var pace = theirs ? (opts.tempo || {})[String(l.who || '').toLowerCase()] : null;
     l.usualDays = pace || null;
     l.earlyForThem = !!(pace && l.status === 'overdue' && l.ageDays < pace);
 

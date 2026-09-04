@@ -488,3 +488,38 @@ console.log('open loops: ' + r.open.length + ' | cleared: ' + r.closed.length + 
 console.log('\ncleared:');
 r.closed.forEach(function (l) { console.log('  ' + l.closedOn + '  ' + l.who + ' — ' + l.what); });
 console.log('\nOK');
+
+/* --- a counterparty's pace excuses them, never us ---
+ *
+ * tempos() learns only from what they owed us, and says why: how long we take says
+ * nothing about when to chase them. But the lookup applied the result to every item, so
+ * somebody who habitually takes a fortnight also damped OUR overdue promises to them —
+ * measured at risk 114 down to 55, and the digest would have printed "they usually take
+ * 12d, so this is not late for them yet" against a promise we made and broke.
+ * `owed_by_us` has the highest base weight precisely because our own commitments matter
+ * most, and this quietly reversed that. */
+var pacer = function (from, to, tempo) {
+  return detectLoops([
+    { id: 'p1', threadId: 'tp', subject: '#deals', from: from, to: [to],
+      date: '2026-08-25T10:00', attach: false,
+      body: 'I will send the revised pricing sheet by Thursday.' },
+    { id: 'p2', threadId: 'tp', subject: '#deals', from: to, to: [from],
+      date: '2026-08-25T11:00', body: 'Great, thanks.', attach: false }
+  ], [], { exec: 'me@corp.io', today: '2026-09-02', tempo: tempo }).open[0];
+};
+var slow = { 'sana@halcyon.io': 12 };
+
+var mineNoPace = pacer('me@corp.io', 'sana@halcyon.io', {});
+var mineSlow = pacer('me@corp.io', 'sana@halcyon.io', slow);
+assert.strictEqual(mineNoPace.type, 'owed_by_us');
+assert.strictEqual(mineSlow.earlyForThem, false,
+  'their delivery pace is not a reason to stop chasing ourselves');
+assert.strictEqual(mineSlow.risk, mineNoPace.risk,
+  'and it must not change the rank of something we owe');
+
+var theirsNoPace = pacer('sana@halcyon.io', 'me@corp.io', {});
+var theirsSlow = pacer('sana@halcyon.io', 'me@corp.io', slow);
+assert.strictEqual(theirsNoPace.type, 'owed_to_us');
+assert.strictEqual(theirsSlow.earlyForThem, true,
+  'but somebody behaving exactly as they always do is not late yet');
+assert.ok(theirsSlow.risk < theirsNoPace.risk, 'so the escalation waits');
