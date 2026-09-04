@@ -72,8 +72,13 @@ function stamp(ts, offsetMinutes) {
 }
 
 /* A join notice is not a commitment, and neither is a channel-purpose change.
- * These arrive as ordinary messages and would otherwise be parsed for promises. */
-var SYSTEM = /\b(has joined the channel|has left the channel|set the channel (?:purpose|topic)|pinned a message|added an integration)\b/i;
+ * These arrive as ordinary messages and would otherwise be parsed for promises.
+ *
+ * Anchored at the end, because a notice IS the whole message. Searched anywhere in the
+ * body — which is what this did — it also matched a sentence that merely mentions one,
+ * and the match discards the message whole: "Sana has joined the channel, so I'll send
+ * her the onboarding pack Thursday" is a commitment that was disappearing entirely. */
+var SYSTEM = /\b(?:has joined the channel|has left the channel|set the channel (?:purpose|topic)|pinned a message|added an integration)\s*[.!]?$/i;
 
 /* Parse one channel or DM read.
  *
@@ -103,7 +108,16 @@ function parseChannel(text, opts) {
 
   var close = function () {
     if (!cur) return;
-    var body = cleanText(cur.body.join('\n'));
+    /* A file dropped in with no comment is a message with nothing left once the
+     * attachment line is consumed, and an empty body is discarded below — so the
+     * commonest way a promise is actually kept produced no record of being kept, and
+     * the item nagged forever. Falling back to the attachment line gives the closure
+     * check something to match a filename against.
+     *
+     * The marker this relies on was never observed on a live workspace (see the note
+     * at the top of test_slack.js), so if the real format differs this changes
+     * nothing rather than guessing at a new one. */
+    var body = cleanText(cur.body.join('\n')) || cleanText(cur.files || '');
     // Drop empties and Slack's own housekeeping notices.
     if (body && !SYSTEM.test(body)) {
       out.push({
@@ -132,7 +146,7 @@ function parseChannel(text, opts) {
   var start = function (name, email, uid) {
     close();
     cur = { name: name || '', email: (email || '').toLowerCase(), uid: uid || '',
-            ts: null, hasThread: false, attach: false, body: [] };
+            ts: null, hasThread: false, attach: false, files: '', body: [] };
   };
 
   lines.forEach(function (line) {
@@ -152,7 +166,7 @@ function parseChannel(text, opts) {
     if (t && !cur.ts) { cur.ts = t[1]; return; }
     if (THREAD_NOTE.test(line)) { cur.hasThread = true; return; }
     if (SENT_VIA.test(line)) return;                  // the app's own footer, not content
-    if (ATTACH_LINE.test(line)) { cur.attach = true; return; }
+    if (ATTACH_LINE.test(line)) { cur.attach = true; cur.files = line; return; }
 
     cur.body.push(line);
   });

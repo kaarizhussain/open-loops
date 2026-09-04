@@ -232,4 +232,46 @@ assert.strictEqual(deck('=== Message from Ray (U0EXAMPLE077) at 2026-09-01 12:00
 assert.strictEqual(deck(NO_EMAIL, { self: 'you@example.com', selfUid: 'D0EXAMPLE001' }).from,
   'U0EXAMPLE001@slack.local', 'a channel id identifies no one, and must not be guessed at');
 
+/* --- a housekeeping notice is the whole message, not a phrase inside one ---
+ *
+ * SYSTEM was searched anywhere in the body, and a match discards the message whole. A
+ * sentence that merely mentions somebody joining took a real commitment with it. */
+var joined = function (line) {
+  return parseChannel([
+    '=== Message from You <you@example.com> (U0EXAMPLE001) at 2026-09-01 12:00:00 EDT ===',
+    'Message TS: 1788271200.000900', line].join('\n'), ME);
+};
+assert.strictEqual(joined('<@U0EXAMPLE001> has joined the channel').length, 0);
+assert.strictEqual(joined('Lena Ortiz has left the channel').length, 0);
+assert.strictEqual(joined('You pinned a message.').length, 0, 'a trailing full stop is still a notice');
+assert.strictEqual(
+  joined("Sana has joined the channel, so I'll send her the onboarding pack Thursday.").length, 1,
+  'a sentence that mentions one carries a commitment and must survive');
+
+/* --- a file dropped in with no comment ---
+ *
+ * Once the attachment line was consumed the message had an empty body, and an empty
+ * body is discarded — so the commonest way a promise is actually kept left no record
+ * of being kept and the item nagged forever.
+ *
+ * The marker is not copied from a live response (see the top of this file); if the real
+ * format differs this fires on nothing rather than on the wrong thing. */
+var upload = function (second) {
+  var t = [['=== Message from You <you@example.com> (U0EXAMPLE001) at 2026-09-01 12:00:00 EDT ===',
+    'Message TS: 1788271200.000100', "I'll send the board deck Thursday."].join('\n'),
+    ['=== Message from You <you@example.com> (U0EXAMPLE001) at 2026-09-02 12:00:00 EDT ===',
+      'Message TS: 1788357600.000200', second].join('\n')].join('\n');
+  var msgs = parseChannel(t, ME);
+  return { parsed: msgs.length,
+           closed: detectLoops(msgs, [], { exec: 'you@example.com', today: '2026-09-02' }).closed.length };
+};
+assert.deepStrictEqual(upload('Files: board-deck.pdf'), { parsed: 2, closed: 1 },
+  'the upload is the delivery, and it clears the promise');
+
+/* The same fallback must not turn a sentence beginning "Files:" into a delivery of
+   whatever was promised earlier — that would be absence read as done, the one failure
+   this whole tool exists to prevent. */
+assert.deepStrictEqual(upload('Files: I will send them all over on Thursday.'),
+  { parsed: 2, closed: 0 }, 'a sentence is not a filename');
+
 console.log('slack: OK');
