@@ -235,13 +235,19 @@ function main(argv) {
 
   /* Every conversation becomes messages in the shape loops.js already takes. The
    * channel name stands in for a subject line, which Slack does not have. */
-  var byId = {}, roots = {}, skipped = 0, skippedThreads = 0;
+  var byId = {}, roots = {}, skipped = 0, skippedThreads = 0, unread = [];
   (input.conversations || []).forEach(function (c) {
     if (!inScope(c.channel, cfg.channels)) { skipped++; return; }
-    parseChannel(c.text, {
+    var got = parseChannel(c.text, {
       channel: c.channel, members: c.members || [], tzOffset: cfg.tzOffset,
       self: cfg.you, selfUid: cfg.selfDm
-    }).forEach(function (m) {
+    });
+    /* Handed over and nothing came out. A fetch that failed and a channel nobody has
+     * posted in look identical from here, so this does not claim which — but the two
+     * are worth different reactions and only one of them is fine, and saying nothing
+     * lets the bad one pass as the good one. */
+    if (!got.length) unread.push(c.channel);
+    got.forEach(function (m) {
       byId[m.id] = m;
       if (m.hasThread) roots[m.id] = c.channel;   // has replies a channel read omits
     });
@@ -452,7 +458,7 @@ function main(argv) {
        conversation count was reduced by it — so skipping a thread under-reported how
        much was read, and enough of them printed a negative number of conversations. */
     read: { threads: (input.conversations || []).length - skipped,
-            capped: shortRead.length > 0, shortRead: shortRead,
+            capped: shortRead.length > 0, shortRead: shortRead, unread: unread,
             windowStart: cut,
             unfetchedThreads: unfetched.length,
             skipped: skipped + skippedThreads, windowDays: window }

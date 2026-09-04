@@ -201,4 +201,41 @@ assert.strictEqual(linesIn(capped) + heldTotal, result.open.length,
    whether or not the item above it was trimmed. */
 assert.ok(/^\s*\d+\. \[/m.test(capped), 'capped items keep their original numbers');
 
+/* --- conversations went in and no message came out ---
+ *
+ * src/slack.js parses a display format nobody documents or promises to keep, and its
+ * own header says so. When that format moves the failure is total and silent: every
+ * channel returns nothing at once, and the digest led with "Nothing outstanding.
+ * Genuinely — the list is empty." That is an assertion of confidence, made by
+ * something that could not read its input, in the one tool whose whole purpose is
+ * catching what silence hides. */
+var blindRun = function (msgCount, convs, unread) {
+  return render({
+    today: '2026-09-04', source: 'slack', listCap: 12,
+    messages: new Array(msgCount).fill({}), events: [],
+    result: { open: [], closed: [], dark: 0 }, briefs: [],
+    ledger: { shown: [], gone: [] }, marked: 0,
+    read: { threads: convs, unread: unread || [], shortRead: [], skipped: 0, windowDays: 21 }
+  });
+};
+var blind = blindRun(0, 3);
+assert.ok(/READ NOTHING/.test(blind), 'it must say it could not read anything');
+assert.ok(!/Genuinely/.test(blind), 'and must not claim the list is genuinely empty');
+assert.ok(/unknown rather than clear/.test(blind), 'an empty list here means unknown');
+
+/* A genuinely quiet day still reads as one — the warning must not fire on every
+   empty list, or it becomes the noise it was added to prevent. */
+var quiet = blindRun(40, 3);
+assert.ok(/Genuinely/.test(quiet), 'nothing outstanding is still allowed to be good news');
+assert.ok(!/READ NOTHING/.test(quiet));
+
+/* One channel empty while others parsed is a different message: it is named, and the
+   headline is left alone. Both causes are stated because they are indistinguishable
+   from in here and only one of them is fine. */
+var partial = blindRun(12, 4, ['#legal', '#ops']);
+assert.ok(/NOTHING READ IN #legal, #ops/.test(partial), 'the empty channels are named');
+assert.ok(!/READ NOTHING —/.test(partial), 'but this is not a total failure');
+assert.ok(!/NOTHING READ IN/.test(blind),
+  'and when nothing parsed at all, the headline says it once rather than twice');
+
 console.log('digest: OK');

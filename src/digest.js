@@ -48,6 +48,8 @@ function shortenBody(s, n) {
 
 /* An action list that wraps is not a list you can scan, which is its only job. */
 function pad(s, n) { while (s.length < n) s += ' '; return s; }
+// The headline is the one line everybody reads, and "1 days past" reads as a bug in it.
+function days(n) { return n + (n === 1 ? ' day' : ' days'); }
 
 function headline(open) {
   if (!open.length) return 'Nothing outstanding. Genuinely — the list is empty.';
@@ -59,9 +61,9 @@ function headline(open) {
   if (late.length) {
     var worst = late[0];
     return late.length === 1
-      ? 'One thing is overdue: ' + name(worst) + ', ' + worst.overdueDays + ' days past.'
-      : late.length + ' are overdue. The oldest by ' + worst.overdueDays +
-        ' days is ' + name(worst) + '.';
+      ? 'One thing is overdue: ' + name(worst) + ', ' + days(worst.overdueDays) + ' past.'
+      : late.length + ' are overdue. The oldest by ' + days(worst.overdueDays) +
+        ' is ' + name(worst) + '.';
   }
 
   var soon = open.filter(function (l) { return l.status === 'due_today'; });
@@ -73,7 +75,7 @@ function headline(open) {
   // No deadline pressure at all, so the useful signal is what has gone quiet longest.
   var stale = open.slice().sort(function (a, b) { return (b.ageDays || 0) - (a.ageDays || 0); })[0];
   return 'Nothing overdue and nothing due today. The quietest is ' + name(stale) +
-    ', untouched for ' + stale.ageDays + ' days.';
+    ', untouched for ' + days(stale.ageDays) + '.';
 }
 
 /* Number the items in the order the digest prints them, and record which loop each
@@ -195,7 +197,21 @@ function render(b) {
 
   p('OPEN LOOPS — for ' + b.today);
   p('');
-  p(headline(open));
+  /* Conversations were handed over and not one message came back out of them.
+   *
+   * "Nothing outstanding. Genuinely" is an assertion of confidence, and this is the
+   * one case where it is certainly false: the reader is being told the list is empty
+   * by something that could not read the input. The likeliest cause is the connector's
+   * display format moving — src/slack.js parses a presentation format nobody documents
+   * or promises to keep — and that failure is total and silent, so every channel comes
+   * back empty at once and the digest looks like a quiet week. */
+  var blind = !b.messages.length && read.threads > 0;
+  p(blind
+    ? 'READ NOTHING — ' + read.threads + ' conversation' + (read.threads === 1 ? ' was' : 's were') +
+      ' handed over and no message could be parsed out of any of them. This is not a' +
+      ' quiet day. Until it is fixed this digest can say nothing about what is' +
+      ' outstanding, so treat the empty list below as unknown rather than clear.'
+    : headline(open));
   p('');
 
   p('Read ' + b.messages.length + ' messages' +
@@ -217,6 +233,16 @@ function render(b) {
    * nobody finished. Saying which channels and how far back is the whole point: a
    * quiet channel and a truncated one look identical from here, and only the reader
    * can tell them apart. */
+  /* Handed over and empty. Only worth a line when some other channel did parse —
+     when none did, the READ NOTHING headline has already said it in stronger terms
+     and naming all of them again is the same news twice. */
+  if (!blind && (read.unread || []).length) {
+    p('NOTHING READ IN ' + read.unread.slice(0, 6).join(', ') +
+      ((read.unread.length > 6) ? ' and ' + (read.unread.length - 6) + ' more' : '') +
+      ' — either nobody has posted there, or the read came back empty. Those look the' +
+      ' same from here, and only one of them is fine.');
+  }
+
   (read.shortRead || []).slice(0, 4).forEach(function (s) {
     p('INCOMPLETE — ' + s.channel + ' was only read back to ' + s.from +
       ', not ' + (read.windowStart || 'the start of the window') +
