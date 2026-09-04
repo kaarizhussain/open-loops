@@ -272,8 +272,31 @@ function main(argv) {
    * short a window quietly reports long-silent promises as done, which is the failure
    * this whole thing exists to prevent. Widen before narrowing. */
   var window = cfg.lookbackDays;
+  var cut = null, shortRead = [];
   if (window) {
-    var cut = new Date(new Date(today + 'T00:00:00Z') - window * 864e5).toISOString().slice(0, 10);
+    cut = new Date(new Date(today + 'T00:00:00Z') - window * 864e5).toISOString().slice(0, 10);
+
+    /* Which conversations did not go back far enough.
+     *
+     * The fetch reads a fixed number of newest messages, so a busy channel returns
+     * three days where the window asks for three weeks. Everything older is simply
+     * absent — and absence is what this reads as CLEARED. A promise made a fortnight
+     * ago in an active channel would be announced as done, by a tool whose entire
+     * purpose is catching the thing nobody finished.
+     *
+     * There is no flag saying a read was truncated, but there is evidence: if the
+     * oldest message a conversation returned is newer than the window start, that
+     * conversation was either silent before then or cut short, and the two are
+     * indistinguishable from here. Say so rather than guess. */
+    var oldestIn = {};
+    messages.forEach(function (m) {
+      var ch = m.subject || '?', d = m.date.slice(0, 10);
+      if (!oldestIn[ch] || d < oldestIn[ch]) oldestIn[ch] = d;
+    });
+    Object.keys(oldestIn).sort().forEach(function (ch) {
+      if (oldestIn[ch] > cut) shortRead.push({ channel: ch, from: oldestIn[ch] });
+    });
+
     messages = messages.filter(function (m) { return m.date.slice(0, 10) >= cut; });
   }
 
@@ -416,7 +439,9 @@ function main(argv) {
     muted: muted, mutes: L.suggestMutes(rows).filter(function (s) { return !already[s.phrase]; }),
     learnedNow: fresh, learnedAll: learned,
     spotCheck: sample, recall: score, dark: result.dark, ignoredReplies: replies.ignored,
-    read: { threads: (input.conversations || []).length - skipped, capped: false,
+    read: { threads: (input.conversations || []).length - skipped,
+            capped: shortRead.length > 0, shortRead: shortRead,
+            windowStart: cut,
             unfetchedThreads: unfetched.length, skipped: skipped, windowDays: window }
   });
   }

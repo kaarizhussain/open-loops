@@ -208,9 +208,24 @@ function render(b) {
 
   /* Silent truncation would make a half-read mailbox look like a complete digest, and
    * the half it drops is the oldest — which is exactly where the overdue items are. */
-  if (read.capped) {
+  /* A read that did not reach the start of the window.
+   *
+   * The fetch takes a fixed number of newest messages, so a busy channel hands back
+   * three days where three weeks were asked for. Everything older is simply absent —
+   * and absence is exactly what the ledger reads as CLEARED. A promise made a
+   * fortnight ago would be reported as done, by a tool built to catch the thing
+   * nobody finished. Saying which channels and how far back is the whole point: a
+   * quiet channel and a truncated one look identical from here, and only the reader
+   * can tell them apart. */
+  (read.shortRead || []).slice(0, 4).forEach(function (s) {
+    p('INCOMPLETE — ' + s.channel + ' was only read back to ' + s.from +
+      ', not ' + (read.windowStart || 'the start of the window') +
+      '. If it is busy rather than quiet, anything older is missing and may be' +
+      ' reported as cleared.');
+  });
+  if (!(read.shortRead || []).length && read.capped) {
     p('INCOMPLETE — stopped at the ' + (read.cap || 'read') + ' limit. The oldest of it was ' +
-      'not read, which is where overdue items live. Narrow the window and rerun.');
+      'not read, which is where overdue items live.');
   }
   /* Replies live behind a separate fetch, so a promise made inside a thread is simply
    * absent rather than wrong. A list that quietly omits things is worse than one that

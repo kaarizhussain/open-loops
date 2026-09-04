@@ -103,6 +103,17 @@ a config full of defaults is one nobody can tell they have edited.
 slack_read_channel(channel_id=…, limit=100, response_format="detailed")
 ```
 
+**Keep paging until you reach the start of the window.** That call returns the newest 100
+messages, so on a busy channel it hands back three days when the config asks for three
+weeks. Everything older is simply missing — and the detector reads missing as *cleared*,
+so a promise made a fortnight ago is announced as done by the one tool built to catch it.
+Follow `next_cursor` until the oldest message is past `lookbackDays`, or the channel runs
+out. The digest prints an INCOMPLETE line naming any channel it only saw part of, so if
+you see one, that channel needed another page.
+
+```
+```
+
 Any message containing a line like `Thread: 2 replies (latest: …)` is a thread root
 whose replies are **not** in the channel read. Fetch each one — a promise made inside a
 thread is invisible otherwise:

@@ -486,5 +486,36 @@ assert.ok(recAudit.quiet > 0, 'and how many messages it found nothing in');
 assert.ok(recAudit.found <= recRows,
   'found is this read, so it can never exceed the ledger — it is a different quantity');
 
+
+/* --- a read that did not reach the start of the window ---
+ *
+ * The fetch takes a fixed number of newest messages, so a busy channel hands back three
+ * days where three weeks were asked for. Everything older is absent, and absence is what
+ * the ledger reads as CLEARED — a promise made a fortnight ago reported as done, by a
+ * tool built to catch the thing nobody finished.
+ *
+ * The renderer has had an INCOMPLETE line for this since it was written. It was wired to
+ * `capped: false`, a hardcoded constant, so on the Slack path it could never fire. */
+var shortIn = {
+  self: ME, today: '2026-09-25', tzOffset: 0, principals: [], lookbackDays: 21,
+  conversations: [
+    { channel: '#busy', members: [], text: [
+      me(at(2026, 9, 24, 9), "I'll send the deck tomorrow."),
+      me(at(2026, 9, 25, 9), "I'll book the room Friday.")
+    ].join('\n') },
+    { channel: '#quiet', members: [], text: [
+      me(at(2026, 9, 1, 8), "I'll circle back with the forecast."),
+      me(at(2026, 9, 24, 11), "I'll confirm the numbers Monday.")
+    ].join('\n') }
+  ],
+  dm: { channel: 'D0', text: '' }
+};
+var shortText = main([write(shortIn), '--ledger', path.join(dir, 'short.json')]);
+assert.ok(/INCOMPLETE — #busy was only read back to 2026-09-24/.test(shortText),
+  'a channel whose oldest message sits inside the window is reported as possibly cut short:\n' +
+  shortText.split('\n').filter(function (l) { return /INCOMPLETE/.test(l); }).join('\n'));
+assert.ok(!/#quiet was only read back/.test(shortText),
+  'but one that reached past the window start is not — it was simply quiet');
+
 fs.rmSync(dir, { recursive: true, force: true });
 console.log('slack-run: OK');
