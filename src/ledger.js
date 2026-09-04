@@ -264,7 +264,7 @@ function applyMutes(loops, patterns) {
  * first appeared and when it stopped being detected, and the gap between those is how
  * long that person took. Nobody has to record anything.
  */
-function tempos(rows, minSamples) {
+function tempos(rows, minSamples, windowDays) {
   var min = minSamples || 3, byWho = {};
 
   rows.forEach(function (r) {
@@ -279,6 +279,13 @@ function tempos(rows, minSamples) {
     if (!who) return;
     var days = daysApart(from, done);
     if (days < 0) return;
+    /* An item stops being detected for two reasons and the ledger records only one of
+     * them: they delivered, or the message aged out of the read window. A sample at or
+     * beyond the window is indistinguishable from the second, and learning from it
+     * teaches that this person takes exactly as long as the window — which then damps
+     * the overdue escalation and stops them being chased at all. Where the two cannot
+     * be told apart, do not learn from it. */
+    if (windowDays && days >= windowDays) return;
     (byWho[who] = byWho[who] || []).push(days);
   });
 

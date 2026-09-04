@@ -4,31 +4,31 @@
     "does something sensible, so deleting a line is a valid way to accept the default.",
     "",
     "See SLACK.md for what each of these does and why the awkward ones are the way they",
-    "are — `lookbackDays` in particular is a trade rather than a knob."
+    "are — `lookbackDays` in particular is a trade rather than a knob.",
+    "",
+    "storeText:false keeps keys, dates and verdicts but writes no message text. Rejecting",
+    "items still works; automatic muting does not, because learning a phrase means",
+    "comparing the sentences of things you rejected and there are none to compare."
   ],
-
   "you": "you@company.com",
   "supporting": [],
-
   "selfDm": "U0XXXXXXXXX",
   "channels": {
     "include": [],
-    "exclude": ["#social", "#random"]
+    "exclude": [
+      "#social",
+      "#random"
+    ]
   },
   "lookbackDays": 21,
-
   "calendarId": "primary",
   "useCalendar": true,
-
   "mute": [],
   "unmute": [],
-
   "actionList": 5,
   "spotCheck": 5,
-
   "ledger": "ledger.json",
   "keepLedgerDays": 90,
   "storeText": true,
-
   "tzOffset": 0
 }

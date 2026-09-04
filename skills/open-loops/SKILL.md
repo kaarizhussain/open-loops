@@ -223,6 +223,12 @@ recall number means nothing.
 Past four rejections of the same phrase it mutes it on its own, announces that it has,
 and lists it in every digest afterwards. `unmute` in the config overrides that.
 
+**This part needs `storeText`.** Learning the phrase means comparing the sentences of
+things they rejected, and `storeText: false` does not keep sentences — so with it on,
+rejections still work exactly as before and nothing is ever muted automatically. Say so
+if you offered them that setting on privacy grounds, rather than letting them wait for a
+feature that will not arrive. `mute` in the config still works by hand.
+
 ## Showing how it has been doing
 
 ```bash

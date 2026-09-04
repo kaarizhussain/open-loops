@@ -82,7 +82,7 @@ function inScope(name, scope) {
  * forever, and re-applying it against a later, shorter list marks different items. */
 function marksFromDm(messages, store, rows) {
   var seen = store.seenReplies(), known = {}, marked = 0, forDate = null;
-  var misses = [], checked = 0, ignored = [];
+  var misses = [], checked = 0, ignored = [], counted = {};
   seen.forEach(function (id) { known[id] = 1; });
 
   messages.forEach(function (m) {
@@ -107,7 +107,14 @@ function marksFromDm(messages, store, rows) {
     /* Answering the spot check at all is what makes it evidence. A reply that names
      * no misses still counts everything asked as checked-and-clean; without that the
      * denominator only ever grows when something was wrong, and the rate is garbage. */
-    if (asked.length) {
+    /* Once per digest, not once per reply.
+     *
+     * The sample belongs to the digest. Two messages underneath one digest are two
+     * replies to the same question, and counting the sample again for the second one
+     * inflates the denominator and flatters recall — most easily by answering the spot
+     * check and then typing anything else at all. */
+    if (asked.length && !counted[forDate]) {
+      counted[forDate] = 1;
       checked += asked.length;
       marks.missed.forEach(function (letter) {
         var at = letter.charCodeAt(0) - 97;
@@ -228,7 +235,7 @@ function main(argv) {
 
   /* Every conversation becomes messages in the shape loops.js already takes. The
    * channel name stands in for a subject line, which Slack does not have. */
-  var byId = {}, roots = {}, skipped = 0;
+  var byId = {}, roots = {}, skipped = 0, skippedThreads = 0;
   (input.conversations || []).forEach(function (c) {
     if (!inScope(c.channel, cfg.channels)) { skipped++; return; }
     parseChannel(c.text, {
@@ -249,7 +256,7 @@ function main(argv) {
   (input.threads || []).forEach(function (t) {
     // A thread inherits its channel's scope — excluding #hr and then reading a thread
     // inside it would be an exclusion that does not exclude.
-    if (!inScope(t.channel, cfg.channels)) { skipped++; return; }
+    if (!inScope(t.channel, cfg.channels)) { skippedThreads++; return; }
     parseChannel(t.text, {
       channel: t.channel, members: t.members || [], threadId: t.root,
       tzOffset: cfg.tzOffset
@@ -324,7 +331,7 @@ function main(argv) {
                // over their own account.
                principals: cfg.supporting,
                // Learned from what has cleared before — nobody records this.
-               tempo: L.tempos(rows) };
+               tempo: L.tempos(rows, 3, cfg.lookbackDays) };
   var result = loops.detectLoops(messages, events, opts);
 
   /* What has been muted: what you configured, plus what the tool concluded on its own,
@@ -439,10 +446,14 @@ function main(argv) {
     muted: muted, mutes: L.suggestMutes(rows).filter(function (s) { return !already[s.phrase]; }),
     learnedNow: fresh, learnedAll: learned,
     spotCheck: sample, recall: score, dark: result.dark, ignoredReplies: replies.ignored,
+    /* Conversations skipped, not threads. One counter served both, and only the
+       conversation count was reduced by it — so skipping a thread under-reported how
+       much was read, and enough of them printed a negative number of conversations. */
     read: { threads: (input.conversations || []).length - skipped,
             capped: shortRead.length > 0, shortRead: shortRead,
             windowStart: cut,
-            unfetchedThreads: unfetched.length, skipped: skipped, windowDays: window }
+            unfetchedThreads: unfetched.length,
+            skipped: skipped + skippedThreads, windowDays: window }
   });
   }
 
