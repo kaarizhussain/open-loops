@@ -612,7 +612,9 @@ function meetingBriefs(messages, events, open, opts) {
     }).sort(function (a, b) { return b.risk - a.risk; });
     var last = null;
     messages.forEach(function (m) {
-      var party = m.from.toLowerCase() === opts.exec.toLowerCase() ? m.to : [m.from];
+      // (m.to || []) — the third of these. An adapter may omit the key entirely on an
+      // outbound message, and .some() on undefined took the whole run down.
+      var party = m.from.toLowerCase() === opts.exec.toLowerCase() ? (m.to || []) : [m.from];
       if (party.some(function (p) { return sides.indexOf(side(p)) > -1; })) {
         if (!last || m.date > last) last = m.date;
       }

@@ -14,7 +14,7 @@
  * one puts an item on the list every morning that the reader has already done and
  * cannot get rid of, which is the exact failure this tool exists to prevent. */
 var assert = require('assert');
-var { detectLoops, side } = require('../src/loops.js');
+var { detectLoops, side, meetingBriefs } = require('../src/loops.js');
 
 /* --- the primitive --- */
 assert.strictEqual(side('dana@northstar.io'), 'northstar.io',
@@ -127,6 +127,14 @@ assert.doesNotThrow(function () {
                  body: 'Let me know your thoughts on the deck when you get a chance.' }],
               [], { exec: 'me@corp.io', today: '2026-09-02' });
 }, 'and an unanswered question of your own in one');
+
+assert.doesNotThrow(function () {
+  meetingBriefs([{ id: 'm1', threadId: 't1', subject: '#deals', from: 'me@corp.io',
+                  date: '2026-09-01T10:00', body: 'I will send the deck.', attach: false }],
+                [{ id: 'e1', title: 'Vendor kickoff', start: '2026-09-03T14:00',
+                   attendees: ['me@corp.io', 'client@other.io'], agenda: false }],
+                [], { exec: 'me@corp.io', today: '2026-09-02' });
+}, 'and the meeting briefs, which reach it by a different route');
 
 /* --- the diary closes a promise whatever case the address arrived in ---
  *
