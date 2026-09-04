@@ -582,3 +582,31 @@ assert.strictEqual(pair('I will price the renewal.', 'Pricing attached.'), true,
 assert.strictEqual(pair('I will send the Q3 report.', 'Reporting attached.'), true);
 assert.strictEqual(pair('I will send the curve files.', 'Attached are the curves.'), true,
   'and a plural is not a different subject');
+
+/* --- a contacts map somebody typed by hand ---
+ *
+ * Keys are matched lowercased on both sides now. "Greg@Halcyon.io" or "Halcyon.io"
+ * silently matched nothing: the tier never applied, the item ranked up to 26 points
+ * lower, and nothing said why. Same shape as an allowlist that quietly allows
+ * everything — the setting looks accepted and does nothing.
+ *
+ * And the tier stands in for a missing label, because three places in the digest print
+ * that field straight into the line, so an entry without one showed the reader the
+ * literal word "undefined". */
+var tiered = function (contacts) {
+  var l = detectLoops([
+    { id: 'r1', threadId: 'tr', subject: '#deals', from: 'greg@halcyon.io', to: ['me@corp.io'],
+      date: '2026-08-25T10:00', attach: false,
+      body: 'I will send the signed agreement over on Thursday.' }
+  ], [], { exec: 'me@corp.io', today: '2026-09-02', contacts: contacts }).open[0];
+  return l && l.rel ? l.rel : null;
+};
+var wanted = { tier: 'investor', label: 'Investor' };
+assert.strictEqual(tiered({ 'greg@halcyon.io': wanted }).weight, 26);
+assert.strictEqual(tiered({ 'Greg@Halcyon.io': wanted }).weight, 26,
+  'an address typed with capitals still matches');
+assert.strictEqual(tiered({ 'Halcyon.IO': wanted }).weight, 26,
+  'and so does a domain');
+assert.strictEqual(tiered({ 'halcyon.io': { tier: 'key_account' } }).label, 'key_account',
+  'a missing label falls back to the tier rather than printing "undefined"');
+assert.strictEqual(tiered(null), null, 'and no contacts map is still no tier');

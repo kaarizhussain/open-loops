@@ -222,10 +222,20 @@ var TIER_WEIGHT = { investor: 26, exec: 22, key_account: 20, customer: 12, partn
 function relationship(addr, contacts) {
   if (!contacts) return null;
   var a = String(addr || '').toLowerCase();
-  var hit = contacts[a] || contacts[domain(a)];
+  /* Keys are matched lowercased on both sides. This is a map a person types by hand
+   * into their config, and "Greg@Halcyon.io" or "Halcyon.io" silently matched nothing —
+   * the tier never applied, the item ranked up to 26 points lower, and no error said
+   * why. The same shape as an allowlist that quietly allows everything: the setting
+   * appears to have been accepted and does nothing. */
+  var lower = {};
+  Object.keys(contacts).forEach(function (k) { lower[String(k).toLowerCase()] = contacts[k]; });
+  var hit = lower[a] || lower[domain(a)];
   if (!hit) return null;
+  /* The tier stands in for a missing label. Three places in the digest print this
+   * straight into the line, so an entry without one put the literal word "undefined"
+   * in front of the reader — a config typo rendering as a bug. */
   // `as` overrides the derived display name for role addresses like program@ or hr@.
-  return { tier: hit.tier, label: hit.label, context: hit.context || null,
+  return { tier: hit.tier, label: hit.label || hit.tier || null, context: hit.context || null,
            as: hit.as || null, weight: TIER_WEIGHT[hit.tier] || 0 };
 }
 
