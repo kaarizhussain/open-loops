@@ -57,13 +57,20 @@ function nameMatches(name, pattern) {
  * labels twice: the cost of getting it wrong is somebody's private conversation
  * turning up in a list, and one check is not enough for that.
  *
- * `only` is default-deny. `exclude` is default-allow. Neither is a substitute for
- * fetching less in the first place. */
+ * `include` is default-deny. `exclude` is default-allow. Neither is a substitute for
+ * fetching less in the first place.
+ *
+ * This read `scope.only` for months while config.js, the example file and SLACK.md all
+ * named the setting `include` — so an allowlist somebody wrote to narrow what gets read
+ * silently narrowed nothing, and every channel handed to the runner was read. The
+ * failure direction is the bad one for a scope rule: it reads more than asked, quietly,
+ * and looks like it worked. `only` stays accepted so anyone who found it in the source
+ * is not broken by the correction. */
 function inScope(name, scope) {
   scope = scope || {};
-  var exclude = scope.exclude || [], only = scope.only || [];
+  var exclude = scope.exclude || [], include = scope.include || scope.only || [];
   if (exclude.some(function (p) { return nameMatches(name, p); })) return false;
-  if (only.length) return only.some(function (p) { return nameMatches(name, p); });
+  if (include.length) return include.some(function (p) { return nameMatches(name, p); });
   return true;
 }
 
@@ -303,7 +310,19 @@ function main(argv) {
   result.open.concat(result.closed).forEach(function (l) { if (l.msgId) spoke[l.msgId] = 1; });
 
   var beforeMute = result.open.length;
-  result.open = L.applyMutes(result.open, mutes);
+  var kept = L.applyMutes(result.open, mutes);
+  /* Which keys the mute removed, so the ledger can be told.
+   *
+   * Without this it sees them missing from today's list and announces them under
+   * CLEARED SINCE THE LAST RUN — the one section that is unambiguously good news,
+   * reporting work nobody did. Muting an item is the reader saying it was never real.
+   * That is the opposite of it being finished, and the two must not read the same. */
+  var keptKeys = {};
+  kept.forEach(function (l) { keptKeys[loops.loopKey(l)] = 1; });
+  var mutedKeys = result.open
+    .filter(function (l) { return !keptKeys[loops.loopKey(l)]; })
+    .map(function (l) { return loops.loopKey(l); });
+  result.open = kept;
   var muted = beforeMute - result.open.length;
 
   /* Learn from what has been rejected since last time.
@@ -322,7 +341,8 @@ function main(argv) {
     .filter(function (s) { return !already[s.phrase]; })
     .map(function (s) { return { phrase: s.phrase, count: s.count, since: today }; });
 
-  var ledger = L.mergeLedger(rows, result.open, today, { storeText: cfg.storeText !== false });
+  var ledger = L.mergeLedger(rows, result.open, today,
+                             { storeText: cfg.storeText !== false, mutedKeys: mutedKeys });
   result.open = ledger.shown;
   L.pruneLedger(rows, today, cfg.keepLedgerDays);
 

@@ -105,8 +105,14 @@ function mergeLedger(rows, loops, today, opts) {
    * everything that cleared between the two.
    */
   var gone = [];
+  /* An item the reader muted is not an item that closed. It is absent from today's
+     list because they said it was never real, which is the opposite of finished — and
+     CLEARED is the one section of the digest that is pure good news. */
+  var wasMuted = {};
+  ((opts && opts.mutedKeys) || []).forEach(function (k) { wasMuted[k] = 1; });
   rows.forEach(function (r) {
     if (touched[cell(r[COL.key])]) return;
+    if (wasMuted[cell(r[COL.key])]) return;
     if (cell(r[COL.gone_on]) || isWrong(r[COL.verdict])) return;
     r[COL.gone_on] = today;
     // Reported as plain fields rather than a raw row, so whatever renders this does
@@ -235,7 +241,14 @@ function applyMutes(loops, patterns) {
   if (!mute.length) return loops.slice();
   return loops.filter(function (l) {
     var t = String(l.what || '').toLowerCase();
-    return !mute.some(function (p) { return t.indexOf(p) > -1; });
+    /* Match the raw text AND the shape phrases() produces. A learned phrase is
+     * letters-only joined by single spaces, so one lifted from "pricing, at some
+     * point" comes out as "pricing at some point" and can never appear literally in
+     * the sentence it came from — it was announced as an active rule and silently did
+     * nothing. Raw is kept as well, because a hand-written mute may contain a digit or
+     * a hyphen that normalising would destroy. */
+    var flat = (t.match(/[a-z][a-z']*/g) || []).join(' ');
+    return !mute.some(function (p) { return t.indexOf(p) > -1 || flat.indexOf(p) > -1; });
   });
 }
 
