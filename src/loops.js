@@ -375,7 +375,12 @@ function detectLoops(messages, events, opts) {
         bookedBy = events.filter(function (e) {
           if (e.start < day(m.date)) return false;
           // An internal colleague appears on unrelated meetings — their presence proves nothing.
-          if (counterparty && side(counterparty) !== execSide && e.attendees.indexOf(counterparty) > -1) return true;
+          /* Lowercased on both sides. calendar.js writes every attendee lowercase, and a
+           * counterparty taken from a Slack profile need not be — so a MixedCase address
+           * missed here, the hold could not close the promise to book it, and the item
+           * nagged forever. Same failure as the domain comparison, one layer down. */
+          if (counterparty && side(counterparty) !== execSide &&
+              e.attendees.indexOf(String(counterparty).toLowerCase()) > -1) return true;
           return toks.some(function (w) { return e.title.toLowerCase().indexOf(w.toLowerCase()) > -1; });
         })[0];
         /* A promise to get something in the diary is kept by the thing being in the
@@ -388,7 +393,9 @@ function detectLoops(messages, events, opts) {
       out.push({
         type: (closer || bookedBy) ? 'closed' : type, openType: type, threadId: tid,
         subject: m.subject,
-        who: m.out ? (counterparty || m.to[0]) : m.from, byUs: m.out,
+        // (m.to || []) — an adapter may omit the key entirely on an outbound message,
+        // and this line running unguarded threw and took the whole evening run with it.
+        who: m.out ? (counterparty || (m.to || [])[0]) : m.from, byUs: m.out,
         what: shorten(s, 110), said: day(m.date), due: due,
         closedOn: closer ? day(closer.date) : bookedBy ? day(bookedBy.start) : null,
         closedBy: closer
@@ -434,7 +441,7 @@ function detectLoops(messages, events, opts) {
       if (ours && oAge >= 2) {
         out.push({
           type: 'awaiting_reply', threadId: tid, subject: ours.subject,
-          who: counterparty || ours.to[0], byUs: false,
+          who: counterparty || (ours.to || [])[0], byUs: false,
           what: shorten(askIn(ours), 110), said: day(ours.date), age: oAge,
           // A date in an outbound question is a proposed slot, not a deadline.
           due: null, excerpt: ours.body, msgId: ours.id

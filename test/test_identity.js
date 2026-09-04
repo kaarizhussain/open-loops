@@ -109,4 +109,44 @@ var CURLY = '’';
     'and the curly one must find the same thing: ' + curly);
 });
 
+/* --- shapes a real adapter produces that used to throw ---
+ *
+ * Two lines read `.to[0]` with no guard — one on every promise, one on every unanswered
+ * question of your own. An adapter that omits `to` on an outbound message, which is
+ * exactly what a single-member Slack workspace does, took the whole run down. On the
+ * unattended evening job that means no digest and no explanation. */
+assert.doesNotThrow(function () {
+  detectLoops([{ id: 'm1', threadId: 't1', subject: '#deals', from: 'me@corp.io',
+                 date: '2026-09-01T10:00', body: "I'll send the deck Thursday.", attach: false }],
+              [], { exec: 'me@corp.io', today: '2026-09-02' });
+}, 'a promise in a message with no `to` key');
+
+assert.doesNotThrow(function () {
+  detectLoops([{ id: 'm1', threadId: 't1', subject: '#deals', from: 'me@corp.io',
+                 date: '2026-08-25T10:00', attach: false,
+                 body: 'Let me know your thoughts on the deck when you get a chance.' }],
+              [], { exec: 'me@corp.io', today: '2026-09-02' });
+}, 'and an unanswered question of your own in one');
+
+/* --- the diary closes a promise whatever case the address arrived in ---
+ *
+ * calendar.js lowercases every attendee; an address taken off a Slack profile need not
+ * be. The comparison was exact, so a MixedCase counterparty missed, the hold could not
+ * close the promise to book it, and the item nagged forever. Same failure as comparing
+ * domains for identity — one layer further down. */
+function bookedWith(counterpartyAs) {
+  var r = detectLoops(
+    [msg({ id: 'm1', from: 'me@corp.io', to: [counterpartyAs], date: '2026-08-28T10:00',
+           body: "Let's schedule a sync for Thursday to walk through the rollout plan." }),
+     msg({ id: 'm2', from: counterpartyAs, to: ['me@corp.io'], date: '2026-08-28T11:00',
+           body: 'Sounds good.' })],
+    [evt({ id: 'ev1', title: 'Catch up', start: '2026-09-03T14:00',
+           attendees: ['me@corp.io', 'sana@halcyon.io'], agenda: true })],
+    { exec: 'me@corp.io', today: '2026-09-02' });
+  return r.closed.map(function (l) { return l.closedBy; });
+}
+assert.deepStrictEqual(bookedWith('sana@halcyon.io'), ['In the diary: Catch up']);
+assert.deepStrictEqual(bookedWith('Sana@Halcyon.io'), ['In the diary: Catch up'],
+  'the diary closes it however the address was capitalised');
+
 console.log('identity: OK');
