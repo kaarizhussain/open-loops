@@ -77,16 +77,29 @@ var SYSTEM = /\b(has joined the channel|has left the channel|set the channel (?:
 
 /* Parse one channel or DM read.
  *
- * opts: { channel, members, self, tzOffset }
+ * opts: { channel, members, self, selfUid, tzOffset }
  *   channel  — display name, becomes `subject`. Slack has no subject line, and the
  *              conversation name is the closest thing to what a thread is "about".
  *   members  — addresses of the other participants, becomes `to`.
  *   self     — the reader's address, so direction resolves the same way mail does.
+ *   selfUid  — the reader's Slack id, which is what the banner always carries.
  */
 function parseChannel(text, opts) {
   opts = opts || {};
   var lines = String(text || '').split(/\r?\n/);
   var out = [], cur = null;
+
+  /* The email on a banner is optional — Slack only returns one when the token holds
+   * users:read.email and the account has an address set, so guests, app messages and
+   * any workspace that withheld the scope arrive without it. For everyone else that
+   * only costs a readable name. For the reader it inverts the entire digest: their own
+   * uid never equals the address they configured, so every promise they made reads as
+   * a promise somebody made to them, and the list tells them to chase themselves.
+   *
+   * Guarded on the id actually looking like one, because `selfDm` is documented as a
+   * channel to post to and only happens to be a user id. A DM id would match nobody. */
+  var selfUid = /^[UW][A-Z0-9]+$/.test(opts.selfUid || '') ? opts.selfUid : null;
+  var selfAddr = String(opts.self || '').toLowerCase();
 
   var close = function () {
     if (!cur) return;
@@ -105,7 +118,8 @@ function parseChannel(text, opts) {
         // is a separate call the caller has to make.
         hasThread: !!cur.hasThread,
         subject: opts.channel || 'Slack',
-        from: cur.email || (cur.uid + '@slack.local'),
+        from: cur.email || (selfUid && cur.uid === selfUid && selfAddr) ||
+              (cur.uid + '@slack.local'),
         to: (opts.members || []).slice(),
         date: stamp(cur.ts, opts.tzOffset),
         body: body,

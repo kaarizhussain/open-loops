@@ -56,7 +56,10 @@ var anon = [
 var a = parseChannel(anon, OPTS);
 assert.strictEqual(a.length, 1, 'a missing email must not drop the message');
 assert.strictEqual(a[0].from, 'U0EXAMPLE003@slack.local',
-  'it falls back to something addressable, so direction still resolves');
+  'it falls back to something addressable');
+/* That fallback is only sound for other people. For the reader it inverted every
+   direction call — see the self/selfUid case at the bottom of this file, which is the
+   one this comment used to claim was covered. */
 
 /* --- what the connector adds, observed on a live workspace --- */
 
@@ -191,5 +194,42 @@ var kept = detectLoops(signed, [], { exec: 'you@example.com', today: '2026-08-12
 assert.strictEqual(kept.open.length, 1, 'a promise about a signed document survives');
 assert.strictEqual(kept.open[0].type, 'owed_to_us');
 assert.strictEqual(kept.open[0].due, '2026-08-08', 'with its deadline intact');
+
+/* --- the reader's own banner, without their email on it ---
+ *
+ * The email is optional: Slack returns one only when the token holds users:read.email
+ * and the account has an address set. Missing, it used to fall back to the uid for
+ * everyone, which for a third party costs nothing but a readable name.
+ *
+ * For the reader it inverted the digest. Their uid never equals the address they
+ * configured, so every promise they made was read as a promise made TO them, and the
+ * list told them to chase their own user id. `self`/`selfUid` were in parseChannel's
+ * documented contract the whole time and nothing passed or read them. */
+var deck = function (banner, opts) {
+  var text = [banner, 'Message TS: 1788271200.000400',
+    "I'll send the board deck Thursday.",
+    '=== Message from Lena Ortiz <lena@vectorfreight.com> (U0EXAMPLE009) at 2026-09-01 13:00:00 EDT ===',
+    'Message TS: 1788274800.000500', 'Great, thanks.'].join('\n');
+  var o = { channel: '#deals', members: ['lena@vectorfreight.com'], tzOffset: 0 };
+  Object.keys(opts || {}).forEach(function (k) { o[k] = opts[k]; });
+  var msgs = parseChannel(text, o);
+  var l = detectLoops(msgs, [], { exec: 'you@example.com', today: '2026-09-02' }).open[0];
+  return { from: msgs[0].from, type: l && l.type };
+};
+var ME = { self: 'you@example.com', selfUid: 'U0EXAMPLE001' };
+var NO_EMAIL = '=== Message from You (U0EXAMPLE001) at 2026-09-01 12:00:00 EDT ===';
+
+assert.deepStrictEqual(deck(NO_EMAIL, ME), { from: 'you@example.com', type: 'owed_by_us' },
+  'a promise the reader made is a promise the reader has to keep');
+assert.deepStrictEqual(
+  deck('=== Message from You <you@example.com> (U0EXAMPLE001) at 2026-09-01 12:00:00 EDT ===', ME),
+  { from: 'you@example.com', type: 'owed_by_us' }, 'and the same when the email is there');
+assert.strictEqual(deck('=== Message from Ray (U0EXAMPLE077) at 2026-09-01 12:00:00 EDT ===', ME).from,
+  'U0EXAMPLE077@slack.local', 'somebody else with no email is unchanged');
+
+/* selfDm is documented as a channel to post to and merely happens to be a user id, so
+ * an id that is not one resolves nobody rather than resolving the wrong person. */
+assert.strictEqual(deck(NO_EMAIL, { self: 'you@example.com', selfUid: 'D0EXAMPLE001' }).from,
+  'U0EXAMPLE001@slack.local', 'a channel id identifies no one, and must not be guessed at');
 
 console.log('slack: OK');

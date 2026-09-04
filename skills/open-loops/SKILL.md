@@ -61,6 +61,12 @@ slack_read_user_profile()          → their email and user id
 
 The user id is also the channel id of their own DM, which is where the digest goes.
 
+Write the **user id** (`U…`) into `selfDm`, not a DM channel id (`D…`). Both post
+correctly, so a `D…` looks like it works — but the id is also how the run recognises
+their own messages when Slack omits an email from the banner, and it does that whenever
+the token lacks `users:read.email`. Get it wrong and everything they promised is listed
+as something they are waiting on.
+
 **2. Show them what would be read, and ask what should not be.**
 
 ```

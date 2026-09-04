@@ -239,7 +239,8 @@ function main(argv) {
   (input.conversations || []).forEach(function (c) {
     if (!inScope(c.channel, cfg.channels)) { skipped++; return; }
     parseChannel(c.text, {
-      channel: c.channel, members: c.members || [], tzOffset: cfg.tzOffset
+      channel: c.channel, members: c.members || [], tzOffset: cfg.tzOffset,
+      self: cfg.you, selfUid: cfg.selfDm
     }).forEach(function (m) {
       byId[m.id] = m;
       if (m.hasThread) roots[m.id] = c.channel;   // has replies a channel read omits
@@ -259,7 +260,7 @@ function main(argv) {
     if (!inScope(t.channel, cfg.channels)) { skippedThreads++; return; }
     parseChannel(t.text, {
       channel: t.channel, members: t.members || [], threadId: t.root,
-      tzOffset: cfg.tzOffset
+      tzOffset: cfg.tzOffset, self: cfg.you, selfUid: cfg.selfDm
     }).forEach(function (m) { byId[m.id] = m; });
     delete roots[t.root];
   });
@@ -314,7 +315,8 @@ function main(argv) {
 
   // Yesterday's corrections land before today's list is built, or a rejected item
   // shows up one more time before disappearing.
-  var dmMessages = input.dm ? parseChannel(input.dm.text, { channel: 'DM', tzOffset: cfg.tzOffset }) : [];
+  var dmMessages = input.dm ? parseChannel(input.dm.text,
+    { channel: 'DM', tzOffset: cfg.tzOffset, self: cfg.you, selfUid: cfg.selfDm }) : [];
   var replies = marksFromDm(dmMessages, store, rows);
 
   /* Phrases you have decided are never worth surfacing. Applied before the ledger
