@@ -20,7 +20,7 @@ var fs = require('fs');
 var path = require('path');
 var L = require('./ledger.js');
 
-var EMPTY = { rows: [], digests: {}, seen: [], learned: [], audit: { checked: 0, missed: [], asked: {}, quiet: 0 } };
+var EMPTY = { rows: [], digests: {}, seen: [], learned: [], audit: { checked: 0, missed: [], asked: {}, quiet: 0, found: 0 } };
 
 function load(file) {
   try {
@@ -32,6 +32,7 @@ function load(file) {
       learned: Array.isArray(raw.learned) ? raw.learned : [],
       audit: raw.audit && typeof raw.audit === 'object'
         ? { checked: raw.audit.checked || 0, quiet: raw.audit.quiet || 0,
+            found: raw.audit.found || 0,
             missed: Array.isArray(raw.audit.missed) ? raw.audit.missed : [],
             asked: raw.audit.asked || {} }
         : { checked: 0, missed: [], asked: {} }
@@ -110,9 +111,10 @@ function fileStore(file) {
      * numbered items have, and the same solution. */
     audit: function () { return state.audit; },
 
-    rememberAudit: function (date, ids, quiet) {
+    rememberAudit: function (date, ids, quiet, found) {
       state.audit.asked[date] = ids;
       if (quiet != null) state.audit.quiet = quiet;
+      if (found != null) state.audit.found = found;
       Object.keys(state.audit.asked).sort().slice(0, -7).forEach(function (d) {
         delete state.audit.asked[d];
       });

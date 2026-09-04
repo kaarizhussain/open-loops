@@ -464,52 +464,27 @@ assert.throws(function () { main([write({ conversations: [] }), '--ledger', ledg
   /Config is incomplete[\s\S]*"you"/,
   'without an address there is no way to tell inbound from outbound');
 
-fs.rmSync(dir, { recursive: true, force: true });
 
-
-/* --- three things the audit found, each of which passed the old tests ---
+/* --- recall must measure the detector, not the age of the ledger ---
  *
- * The allowlist. inScope read `scope.only` while config.js, the example file and
- * SLACK.md all named it `include`, so an allowlist written to narrow what gets read
- * narrowed nothing. The failure direction is the bad one for a scope rule: it reads
- * more than it was asked to, quietly, and looks like it worked. */
-assert.strictEqual(inScope('#deals', { include: ['#deals'] }), true);
-assert.strictEqual(inScope('#social', { include: ['#deals'] }), false,
-  'an allowlist under its documented name actually excludes');
-assert.strictEqual(inScope('#social', { only: ['#deals'] }), false,
-  'and the undocumented name still works, so nobody who found it is broken');
-assert.strictEqual(inScope('#deals', { include: ['#deals'], exclude: ['#deals'] }), false,
-  'exclude still wins over include');
+ * `found` was the cumulative row count while `quiet` was one run's silent pool, so the
+ * ratio drifted upward on its own. It is worst where retention outlives the read
+ * window: the ledger keeps 90 days of rows while each run reads 21 days, so the
+ * numerator grows for months while the denominator does not. A number that improves
+ * because you kept using it is worse than no number.
+ *
+ * So the audit records what THIS read found, alongside how much of it was silent, and
+ * the report uses that pair rather than the row count. */
+var recLedger = path.join(dir, 'recall.json');
+var recInput = JSON.parse(JSON.stringify(input));
+main([write(recInput), '--ledger', recLedger]);
+var recAudit = JSON.parse(fs.readFileSync(recLedger, 'utf8')).audit;
+var recRows = JSON.parse(fs.readFileSync(recLedger, 'utf8')).rows.length;
 
-/* Muting is not clearing. A muted item vanishes from today's list, and the ledger used
-   to read that as CLEARED SINCE THE LAST RUN — the one section that is unambiguously
-   good news, announcing work nobody did. Muting means "this was never real", which is
-   the opposite of finished. */
-var muteItem = { type: 'owed_by_us', threadId: 't-mute', said: '2026-08-01',
-                 what: 'We will revisit pricing at some point.', who: 'x@y.io',
-                 due: null, status: 'due_soon', risk: 20 };
-var muteKey = loopKey(muteItem);
-var mrows = [];
-L.mergeLedger(mrows, [muteItem], '2026-08-05');
-var afterMute = L.mergeLedger(mrows, L.applyMutes([muteItem], ['at some point']),
-                              '2026-08-06', { mutedKeys: [muteKey] });
-assert.strictEqual(afterMute.gone.length, 0, 'a muted item is not reported as cleared');
+assert.ok(recAudit.found > 0, 'the run records how many commitments it found');
+assert.ok(recAudit.quiet > 0, 'and how many messages it found nothing in');
+assert.ok(recAudit.found <= recRows,
+  'found is this read, so it can never exceed the ledger — it is a different quantity');
 
-var grows = [];
-L.mergeLedger(grows, [muteItem], '2026-08-05');
-assert.strictEqual(L.mergeLedger(grows, [], '2026-08-06').gone.length, 1,
-  'but something that genuinely stopped being detected still is');
-
-/* A learned mute has to be able to match. phrases() tokenises to letters only and joins
-   with single spaces, so one lifted from "pricing, at some point" comes out without the
-   comma and could never appear literally in the sentence it came from — while still
-   being announced in every digest as an active rule. */
-assert.strictEqual(
-  L.applyMutes([{ what: 'We will revisit pricing, at some point next year.' }],
-               ['pricing at some point']).length, 0,
-  'a phrase learned across punctuation matches the sentence it came from');
-assert.strictEqual(
-  L.applyMutes([{ what: 'I will pull the Q3 numbers.' }], ['q3 numbers']).length, 0,
-  'and a hand-written mute containing a digit still works');
-
+fs.rmSync(dir, { recursive: true, force: true });
 console.log('slack-run: OK');

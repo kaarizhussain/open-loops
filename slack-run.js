@@ -152,7 +152,13 @@ function report(ledgerPath) {
      the extrapolation collapses and the report reads far higher than the digest does
      off the same ledger. Old ledgers have no such field; fall back rather than crash,
      and the next digest run writes one. */
-  var r = L.recall(p.total, audit.quiet || audit.checked, audit.checked, audit.missed.length);
+  /* Both from the last digest, never the cumulative row count. p.total grows every
+     day the tool is used, so pairing it with a single run's silent pool made recall
+     climb on its own — 68% at five rows, 99% at two hundred, same detector throughout.
+     Old ledgers carry neither field; fall back rather than crash, and the next digest
+     writes both. */
+  var r = L.recall(audit.found || p.total, audit.quiet || audit.checked,
+                   audit.checked, audit.missed.length);
   out.push('');
   out.push(audit.checked
     ? 'Recall: about ' + r.rate + '% — ' + audit.missed.length + ' misses found in ' +
@@ -358,7 +364,19 @@ function main(argv) {
   var checkCount = cfg.spotCheck;
   var silent = messages.filter(function (m) { return !spoke[m.id]; });
   var sample = L.sampleQuiet(silent, [], checkCount, today);
-  var score = L.recall(rows.length, silent.length,
+  /* Both halves have to come from the same read.
+   *
+   * `found` was the cumulative ledger row count while `quiet` was one day's silent
+   * pool, so the ratio drifted upward on its own: identical detector, identical spot
+   * check, identical single miss, and recall read 68% at five rows and 99% at two
+   * hundred. A number that gets prettier the longer you use it is worse than no number,
+   * because it looks like progress.
+   *
+   * So: how many commitments this read produced, against how many messages in the same
+   * read produced nothing. Closed items count as found — recall is about whether the
+   * detector saw the commitment, not about whether it is still outstanding. */
+  var foundToday = result.open.length + result.closed.length;
+  var score = L.recall(foundToday, silent.length,
                        audit.checked + replies.checked, audit.missed.length + replies.misses.length);
 
   /* Slack refuses a message over 4,000 characters, and a busy mailbox goes miles past
@@ -414,7 +432,7 @@ function main(argv) {
       store.recordMisses(replies.misses, replies.checked);
     }
     if (sample.length) {
-      store.rememberAudit(today, sample.map(function (m) { return m.id; }), silent.length);
+      store.rememberAudit(today, sample.map(function (m) { return m.id; }), silent.length, foundToday);
     }
   }
 
