@@ -901,9 +901,31 @@ function meetingBriefs(messages, events, open, opts) {
 /* A stable identity for a detected item, so that re-running against a longer message
  * set keeps what the assistant already did to it — and so anything genuinely new can
  * be told apart from everything that was already on the list. */
+/* FNV-1a, because the key must not carry the sentence.
+ *
+ * The key used to end with `l.what` verbatim, which quietly defeated the one privacy
+ * control this has: `storeText: false` blanks the `who` and `what` columns and was
+ * documented as dropping the words, while column 0 still read
+ * "owed_by_us|#deals|2026-09-01|I will wire the Ellsworth settlement to Avista on
+ * Monday." Somebody who turned that on to keep sentences off disk did not get what the
+ * setting promised.
+ *
+ * A hash keeps everything the key is for — stable across runs, unique per item, enough
+ * to tell two promises in one thread on one day apart — and none of what it should
+ * never have held. The readable parts stay readable; the sentence lives in its own
+ * column, where the retention flag can actually remove it. */
+function fnv(s) {
+  var h = 0x811c9dc5;
+  for (var i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return ('0000000' + h.toString(16)).slice(-8);
+}
+
 function loopKey(l) {
   if (l.eventId) return l.type + '|' + l.eventId;
-  return [l.type, l.threadId, l.said, l.what].join('|');
+  return [l.type, l.threadId, l.said, fnv(String(l.what || ''))].join('|');
 }
 
 var OWNER = {

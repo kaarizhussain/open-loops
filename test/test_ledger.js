@@ -182,15 +182,40 @@ assert.strictEqual(stillDetected[0][COL.last_seen], '2026-11-01',
 assert.strictEqual(L.pruneLedger(stillDetected, '2026-11-01', 90), 0,
   'so retention does not delete a live item out from under itself');
 
-/* --- keeping the key but not the words --- */
+/* --- keeping the key but not the words ---
+ *
+ * This used to check the `what` and `who` COLUMNS and stop there, so it passed for
+ * months while the key itself ended with the sentence verbatim — "owed_by_us|#deals|
+ * 2026-09-01|I will wire the Ellsworth settlement to Avista on Monday." Somebody who
+ * set storeText:false to keep sentences off disk got the opposite of what the docs
+ * promised, and the test agreed with the docs rather than with the file.
+ *
+ * So assert against the WHOLE row. A privacy flag has to be checked by looking for the
+ * thing that should be absent, not by confirming the fields you happened to think of. */
+var secret = 'wire the Ellsworth settlement to Avista';
+var withSecret = function () {
+  var l = loop();
+  l.what = 'I will ' + secret + ' on Monday.';
+  return l;
+};
+
 var noText = [];
-L.mergeLedger(noText, [loop()], '2026-08-06', { storeText: false });
+L.mergeLedger(noText, [withSecret()], '2026-08-06', { storeText: false });
 assert.ok(noText[0][COL.key], 'the key is kept, so suppression still works');
-assert.strictEqual(noText[0][COL.what], '', 'but the sentence is not stored');
-assert.strictEqual(noText[0][COL.who], '', 'nor the counterparty');
+assert.strictEqual(JSON.stringify(noText[0]).indexOf(secret), -1,
+  'and the sentence appears NOWHERE in the row: ' + JSON.stringify(noText[0]));
+
 var withText = [];
-L.mergeLedger(withText, [loop()], '2026-08-06');
-assert.ok(withText[0][COL.what], 'text is kept by default');
+L.mergeLedger(withText, [withSecret()], '2026-08-06');
+assert.ok(withText[0][COL.what].indexOf(secret) > -1,
+  'while the default still keeps it, in its own column where the flag can remove it');
+
+/* The key has to survive being hashed: same item, same key, every run — otherwise
+   everything reads as new every morning and the ledger is worthless. */
+assert.strictEqual(loopKey(withSecret()), loopKey(withSecret()), 'the key is stable');
+var other = withSecret(); other.what = 'I will wire something else entirely on Tuesday.';
+assert.notStrictEqual(loopKey(withSecret()), loopKey(other),
+  'and two different promises in one thread on one day stay distinct');
 
 /* --- learning the kind, not just the instance --- */
 

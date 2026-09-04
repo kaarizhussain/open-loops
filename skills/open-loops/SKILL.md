@@ -38,11 +38,16 @@ you post back to their own DM. Say this plainly if they ask, because someone rea
 their employer's Slack is right to ask.
 
 What lands on disk is `ledger.json`, in their working directory. By default it keeps the
-text of the message a commitment was found in, so the digest can quote the line back at
-them. Setting `"storeText": false` in the config keeps the tracking — keys, dates,
-verdicts, accuracy — and drops the words. Offer that to anyone whose workspace holds
-material they would rather not have sitting in a file, and tell them the trade: the
-digest stops being able to show them what was actually said.
+sentence each commitment was found in, so the digest can say what cleared. Setting
+`"storeText": false` keeps the tracking — keys, dates, verdicts, accuracy — and writes no
+message text at all.
+
+**It costs less than it sounds like.** Every open item in the digest is re-detected from
+live messages on each run, so the list still quotes every sentence in full. The single
+thing lost is the *cleared since the last run* section, which reads from the ledger and
+falls back to `(text not kept)` — it can still say something closed, just not what it
+said. Offer this to anyone whose workspace holds material they would rather not have
+sitting in a file; for most of them it is close to free.
 
 ## Setup — first run only
 
