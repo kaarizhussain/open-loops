@@ -467,6 +467,18 @@ function keyTokens(subject) {
 var EXEC_WORK = /\b(review|sign[- ]?off|approve|approval|decision|decide|feedback|pricing|redline|deck|section|reference call|weigh in)\b/i;
 var EA_WORK = /\b(agenda|invite|calendar|schedul\w*|book|venue|recap|notes|questionnaire|bio|talk title|itinerary|travel|circulate|forward|logistics|intro\w*|connect)\b/i;
 
+/* Whichever action word comes first, because that is the next action. Testing one list
+ * before the other instead lets the topic outrank the verb: "I'll book the pricing
+ * review" is the assistant booking something, and matching EXEC_WORK first calls it the
+ * executive's — the exact case the note above says it is not. */
+function nextAction(t) {
+  var a = t.search(EXEC_WORK), b = t.search(EA_WORK);
+  if (a < 0 && b < 0) return null;
+  if (a < 0) return 'you';
+  if (b < 0) return 'exec';
+  return a < b ? 'exec' : 'you';
+}
+
 function assignOwner(type, what, subject, solo) {
   if (type === 'owed_to_us' || type === 'awaiting_reply') return 'them';
   // These three are logistics by definition — the next move is always the assistant's.
@@ -475,10 +487,12 @@ function assignOwner(type, what, subject, solo) {
    * "yours" and "the executive's" when you are the executive produces a heading that
    * lies about its own contents. */
   if (solo) return 'you';
-  var t = what + ' ' + subject;
-  if (EXEC_WORK.test(t)) return 'exec';
-  if (EA_WORK.test(t)) return 'you';
-  return 'exec';
+  /* The sentence decides; the subject only breaks a tie it left open. These used to be
+   * concatenated and searched as one string, which let a channel name overrule the promise
+   * inside it — the same sentence routed to the assistant in #offsite and to the executive
+   * in #pricing, so every commitment in a channel named for review, pricing or decisions
+   * went to the executive whatever it actually said. */
+  return nextAction(what) || nextAction(subject) || 'exec';
 }
 
 /* Who this belongs to, when the reader supports more than one person.

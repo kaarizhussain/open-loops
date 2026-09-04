@@ -508,7 +508,6 @@ console.log('open loops: ' + r.open.length + ' | cleared: ' + r.closed.length + 
 });
 console.log('\ncleared:');
 r.closed.forEach(function (l) { console.log('  ' + l.closedOn + '  ' + l.who + ' — ' + l.what); });
-console.log('\nOK');
 
 /* --- a counterparty's pace excuses them, never us ---
  *
@@ -610,3 +609,40 @@ assert.strictEqual(tiered({ 'Halcyon.IO': wanted }).weight, 26,
 assert.strictEqual(tiered({ 'halcyon.io': { tier: 'key_account' } }).label, 'key_account',
   'a missing label falls back to the tier rather than printing "undefined"');
 assert.strictEqual(tiered(null), null, 'and no contacts map is still no tier');
+
+/* --- the channel name is not the next action ---
+ *
+ * owner used to be decided by searching `what + ' ' + subject` as one string, so a
+ * channel called #pricing or #deck-review outranked the promise inside it: the same
+ * sentence went to the assistant in #offsite and to the executive in #pricing. Every
+ * team has a channel named for review, pricing or decisions, and every commitment in
+ * one landed in the wrong pile.
+ *
+ * And within the sentence the earliest action word wins, because that is the next
+ * action. Matching the exec list first let a topic noun outrank the verb: "book the
+ * pricing review" is the assistant booking something, which is the case the comment
+ * over assignOwner names outright. */
+var owner = function (channel, line) {
+  var r = detectLoops([
+    { id: 'a', threadId: 't', subject: channel, from: 'me@corp.io', to: ['sana@halcyon.io'],
+      date: '2026-08-28T10:00', attach: false, body: line },
+    { id: 'b', threadId: 't', subject: channel, from: 'sana@halcyon.io', to: ['me@corp.io'],
+      date: '2026-08-28T11:00', attach: false, body: 'Thanks.' }
+  ], [], { exec: 'me@corp.io', today: '2026-09-02',
+           principals: [{ name: 'Dana', address: 'dana@corp.io' }] });
+  var l = r.open.filter(function (x) { return x.type === 'owed_by_us'; })[0];
+  return l ? l.owner : '(none)';
+};
+
+var promise = "I'll get the venue booked and circulate the invite.";
+['#offsite', '#logistics', '#pricing', '#deck-review'].forEach(function (c) {
+  assert.strictEqual(owner(c, promise), 'you',
+    'the same promise gets the same owner in ' + c);
+});
+
+assert.strictEqual(owner('#deals', "I'll book the pricing review with Sana."), 'you',
+  'booking is the assistant’s move even when the topic is the executive’s');
+assert.strictEqual(owner('#offsite', "I'll review the agenda before Monday."), 'exec',
+  'and reviewing is still the executive’s even when the topic is logistics');
+
+console.log('\nOK');
