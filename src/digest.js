@@ -221,6 +221,15 @@ function render(b) {
                                    : ' threads had replies that were not read.') +
       ' Anything promised inside them is missing from this list.');
   }
+  /* A reply that named an item number but did not lead with it. Not acted on — "call
+   * Dana at 3" is a note, and the self-DM is where notes live — but never silently, or
+   * somebody retypes the same correction all week wondering why the item will not go
+   * away. Being able to say this is what makes it safe to read replies strictly. */
+  (b.ignoredReplies || []).slice(0, 3).forEach(function (line) {
+    p('NOT READ AS A CORRECTION — "' + String(line).slice(0, 56) +
+      '". Reply with just the number, like "3", to reject one.');
+  });
+
   /* A signal with no evidence to reason about must say so. Chat gives a channel
    * roster where mail gives a recipient list, so "did a recap go out" is a question
    * this source cannot answer — and a silent nothing there reads identically to a

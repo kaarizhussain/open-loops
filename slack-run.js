@@ -82,7 +82,7 @@ function inScope(name, scope) {
  * forever, and re-applying it against a later, shorter list marks different items. */
 function marksFromDm(messages, store, rows) {
   var seen = store.seenReplies(), known = {}, marked = 0, forDate = null;
-  var misses = [], checked = 0;
+  var misses = [], checked = 0, ignored = [];
   seen.forEach(function (id) { known[id] = 1; });
 
   messages.forEach(function (m) {
@@ -99,6 +99,10 @@ function marksFromDm(messages, store, rows) {
 
     var marks = L.parseMarks(m.body, keys.length);
     marked += L.applyMarks(rows, keys, marks);
+    /* A reply that named an item but did not lead with the number is a note, not a
+     * correction. Saying so is what makes it safe to be strict — the reader finds out
+     * the same evening instead of retyping it all week. */
+    ignored = ignored.concat(marks.ignored || []);
 
     /* Answering the spot check at all is what makes it evidence. A reply that names
      * no misses still counts everything asked as checked-and-clean; without that the
@@ -112,7 +116,7 @@ function marksFromDm(messages, store, rows) {
     }
   });
 
-  return { marked: marked, seen: seen, misses: misses, checked: checked };
+  return { marked: marked, seen: seen, misses: misses, checked: checked, ignored: ignored };
 }
 
 /* How it has been doing, out of the ledger alone — no fetching, no input file.
@@ -393,7 +397,7 @@ function main(argv) {
     ledger: ledger, marked: replies.marked, principals: cfg.supporting,
     muted: muted, mutes: L.suggestMutes(rows).filter(function (s) { return !already[s.phrase]; }),
     learnedNow: fresh, learnedAll: learned,
-    spotCheck: sample, recall: score, dark: result.dark,
+    spotCheck: sample, recall: score, dark: result.dark, ignoredReplies: replies.ignored,
     read: { threads: (input.conversations || []).length - skipped, capped: false,
             unfetchedThreads: unfetched.length, skipped: skipped, windowDays: window }
   });

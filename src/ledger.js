@@ -366,7 +366,7 @@ function recall(found, quiet, checked, missed) {
  * costs one suppressed item that returns the moment the cell is cleared. Require a
  * leading keyword if that turns out to bite. */
 function parseMarks(text, max) {
-  var wrong = [], knew = [], missed = [], seen = {}, seenLetter = {};
+  var wrong = [], knew = [], missed = [], ignored = [], seen = {}, seenLetter = {};
   String(text || '').split(/\r?\n/).forEach(function (line) {
     /* A line led by miss names spot-check entries that did contain a commitment.
      * Those are lettered rather than numbered precisely so the two cannot be
@@ -382,16 +382,39 @@ function parseMarks(text, max) {
      * between measuring whether this is trustworthy and whether it is any use.
      * Bare numbers stay a rejection, so the common case costs nothing extra. */
     var known = /^\s*(k|knew|known|already)\b/i.test(line);
-    // A full stop only disqualifies when it joins two digit runs — "item 4." is a mark,
-    // "3.5" is not, and a sentence ending in a number is how people actually write.
-    (line.match(/(?<![\d\-\/:]|\d\.)\d+(?![\d\-\/:]|\.\d)/g) || []).forEach(function (s) {
-      var n = +s;
-      if (n < 1 || n > max || seen[n]) return;
+    var body = known ? line.replace(/^\s*(k|knew|known|already)\b/i, '') : line;
+
+    /* A digit glued to a letter is a time or a quantity, not an item number — "3pm",
+     * "2x", "5min". */
+    var nums = (body.match(/(?<![\d\-\/:]|\d\.)\d+(?![\d\-\/:a-z]|\.\d)/gi) || [])
+      .map(Number)
+      .filter(function (n) { return n >= 1 && n <= max; });
+    if (!nums.length) return;
+
+    /* The line has to LEAD with the mark.
+     *
+     * This used to take numbers out of any line at all, which made "3 and 7 arent real"
+     * work and made "call Dana at 3" reject item 3 — and those two are the same shape,
+     * so no rule separates them by meaning. The self-DM is where people keep notes,
+     * because it is the one channel that is only theirs, and this tool posts there daily
+     * and asks for replies. It was putting a trap in the channel it drives traffic to.
+     *
+     * A false rejection is the expensive failure: the item is hidden from every future
+     * digest, nobody is told, and four of them on one phrase auto-mute the whole
+     * pattern. A missed correction costs a retype, and the item still sitting there
+     * tomorrow is the reminder. So: lead with the number, as the digest asks. Anything
+     * else is recorded and reported rather than acted on. */
+    if (!/^\s*#?\d/.test(body)) { ignored.push(line.trim()); return; }
+
+    nums.forEach(function (n) {
+      if (seen[n]) return;
       seen[n] = 1;
       (known ? knew : wrong).push(n);
     });
   });
-  return { wrong: wrong, knew: knew, missed: missed };
+  /* `ignored` is every line that named an item number but did not lead with one.
+     Reported rather than acted on, so a reply that was not read never fails silently. */
+  return { wrong: wrong, knew: knew, missed: missed, ignored: ignored };
 }
 
 /* Resolve those numbers against the list as it was sent, not as it stands now —

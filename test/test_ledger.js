@@ -95,13 +95,42 @@ assert.deepStrictEqual(L.parseMarks('0 16 2026 99', 15).wrong, [], 'numbers outs
 
 /* Dates and times are the trap: "2026-08-25" offers up 8 and 25, and people quote
    dates when saying which item they mean. Only standalone numbers count. */
-assert.deepStrictEqual(L.parseMarks('due 2026-08-25, item 4', 15).wrong, [4],
-  'an ISO date in the reply does not become a mark');
-assert.deepStrictEqual(L.parseMarks('the 08/25 one and 6', 15).wrong, [6], 'nor a slashed date');
-assert.deepStrictEqual(L.parseMarks('the 9:15 call, plus 2', 15).wrong, [2], 'nor a time');
-assert.deepStrictEqual(L.parseMarks('item 4.', 15).wrong, [4], 'a trailing full stop is still a mark');
-assert.deepStrictEqual(L.parseMarks('3 is wrong. 7 too.', 15).wrong, [3, 7], 'sentences ending in numbers');
-assert.deepStrictEqual(L.parseMarks('the 3.5 hour one, and 8', 15).wrong, [8], 'but a decimal is not two marks');
+assert.deepStrictEqual(L.parseMarks('3 is wrong. 7 too.', 15).wrong, [3, 7],
+  'a line that leads with the mark can say whatever it likes after it');
+
+/* --- prose that names a number is a note, not a correction ---
+ *
+ * These five used to be marks, deliberately: "reply however you like, we will find the
+ * numbers". That generosity and "call Dana at 3" rejecting item 3 are the same feature,
+ * because the two are structurally identical — no rule separates them by meaning.
+ *
+ * The self-DM is the one channel that is only the reader's, which is exactly why people
+ * keep notes there, and this tool posts into it daily and asks for replies. Being
+ * permissive put a trap in the channel it drives traffic to.
+ *
+ * A false rejection hides a real commitment from every future digest, tells nobody, and
+ * four of them on one phrase auto-mute the pattern. A missed correction costs a retype,
+ * the item is still sitting there tomorrow as the reminder, and the digest now says the
+ * line was not read. So the line has to lead with the mark, as the digest asks. */
+[
+  'due 2026-08-25, item 4',
+  'the 08/25 one and 6',
+  'the 9:15 call, plus 2',
+  'item 4.',
+  'the 3.5 hour one, and 8',
+  'call Dana at 3'
+].forEach(function (note) {
+  var m = L.parseMarks(note, 15);
+  assert.deepStrictEqual(m.wrong, [], 'not a correction: ' + note);
+  assert.deepStrictEqual(m.ignored, [note],
+    'but reported, so a reply that was not acted on never fails silently: ' + note);
+});
+
+/* A number stuck to a letter is a time or a quantity, and does not even get reported —
+   there is nothing for the reader to have meant. */
+['3pm standup', 'back in 5min', 'ok thanks'].forEach(function (note) {
+  assert.deepStrictEqual(L.parseMarks(note, 15).ignored, [], 'plainly not about an item: ' + note);
+});
 
 /* --- resolving those numbers against the list as it was sent --- */
 var sent = ['k-alpha', 'k-beta', 'k-gamma'];
