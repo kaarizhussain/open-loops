@@ -266,8 +266,20 @@ assert.strictEqual(pct(main(['--report', '--ledger', quietLedger]), 'Recall'),
 assert.deepStrictEqual(L.parseMarks('miss', 10).missed, [], 'bare "miss" flags nothing');
 assert.deepStrictEqual(L.parseMarks('miss b d', 10).missed, ['b', 'd']);
 assert.deepStrictEqual(L.parseMarks('3 7\nmiss a', 10),
-  { wrong: [3, 7], knew: [], missed: ['a'], ignored: [] },
+  { wrong: [3, 7], knew: [], missed: ['a'], ignored: [], answered: true },
   'rejections and misses in one reply');
+
+/* --- answering the spot check, and not answering it ---
+ *
+ * `missed: []` means two different things and only one of them is evidence: a bare
+ * "miss" is the reader saying none of these were missed, and no miss line at all is
+ * the reader not having looked. `answered` is what separates them. */
+assert.strictEqual(L.parseMarks('miss', 10).answered, true, 'bare miss is an answer');
+assert.strictEqual(L.parseMarks('miss b', 10).answered, true);
+assert.strictEqual(L.parseMarks('3 7', 10).answered, false, 'rejecting items is not');
+assert.strictEqual(L.parseMarks('k 1 4', 10).answered, false);
+assert.strictEqual(L.parseMarks('remember to call Dana', 10).answered, false,
+  'and neither is a note to yourself in your own DM');
 
 /* ------------------- learning a mute without being told ------------------- */
 
@@ -516,6 +528,37 @@ assert.ok(/INCOMPLETE — #busy was only read back to 2026-09-24/.test(shortText
   shortText.split('\n').filter(function (l) { return /INCOMPLETE/.test(l); }).join('\n'));
 assert.ok(!/#quiet was only read back/.test(shortText),
   'but one that reached past the window start is not — it was simply quiet');
+
+/* --- what counts as having answered the spot check ---
+ *
+ * The sample is the only evidence about what the detector walked past, and it is
+ * gathered by asking. Any reply used to count as an answer, so rejecting an item — or
+ * typing a note to yourself, in the DM this tool posts to daily and invites replies in
+ * — recorded the whole sample as reviewed and clean. With no misses the estimate is
+ * found/(found+0), a flat 100%, so a fortnight of replying to anything at all reported
+ * perfect recall on a spot check nobody had answered, and the honest "unmeasured"
+ * state became unreachable after the first reply. */
+var { marksFromDm } = require('../slack-run.js');
+var ASKED = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8'];
+var stub = {
+  seenReplies: function () { return []; },
+  recallDigest: function () { return ['k1', 'k2', 'k3']; },
+  audit: function () { return { asked: { '2026-09-03': ASKED }, checked: 0, missed: [] }; }
+};
+var answering = function (body) {
+  var rows = [['k1', '2026-09-01', '2026-09-03', '', 'owed_by_us', 'a', 'x', ''],
+              ['k2', '2026-09-01', '2026-09-03', '', 'owed_by_us', 'b', 'y', ''],
+              ['k3', '2026-09-01', '2026-09-03', '', 'owed_by_us', 'c', 'z', '']];
+  var r = marksFromDm([{ id: 'd1', body: 'OPEN LOOPS — for 2026-09-03\nthe digest' },
+                       { id: 'r1', body: body }], stub, rows);
+  return { checked: r.checked, misses: r.misses.length, marked: r.marked };
+};
+assert.strictEqual(answering('miss').checked, 8, 'a bare miss reviews the whole sample');
+assert.strictEqual(answering('miss b').misses, 1, 'and a lettered one names a miss in it');
+assert.strictEqual(answering('3').checked, 0, 'rejecting an item says nothing about the sample');
+assert.strictEqual(answering('3').marked, 1, 'though the rejection itself still lands');
+assert.strictEqual(answering('remember to call Dana').checked, 0,
+  'and a note to yourself is not a spot check answer');
 
 fs.rmSync(dir, { recursive: true, force: true });
 console.log('slack-run: OK');

@@ -104,16 +104,23 @@ function marksFromDm(messages, store, rows) {
      * the same evening instead of retyping it all week. */
     ignored = ignored.concat(marks.ignored || []);
 
-    /* Answering the spot check at all is what makes it evidence. A reply that names
-     * no misses still counts everything asked as checked-and-clean; without that the
-     * denominator only ever grows when something was wrong, and the rate is garbage. */
-    /* Once per digest, not once per reply.
+    /* A reply that names no misses still counts everything asked as checked-and-clean,
+     * because without the clean ones the denominator only grows when something was
+     * wrong and the rate is garbage. But it has to BE an answer — a `miss` line, which
+     * bare means "none of these".
      *
-     * The sample belongs to the digest. Two messages underneath one digest are two
-     * replies to the same question, and counting the sample again for the second one
-     * inflates the denominator and flatters recall — most easily by answering the spot
-     * check and then typing anything else at all. */
-    if (asked.length && !counted[forDate]) {
+     * Any reply used to count. So rejecting an item, or typing a note to yourself in
+     * your own DM, recorded that the whole sample had been reviewed and nothing
+     * missed — and with no misses the estimate is found/(found+0), a flat 100%. Two
+     * weeks of replying to anything reported perfect recall on a spot check nobody had
+     * ever answered, and made the honest "unmeasured" state unreachable after the first
+     * reply. Recall is the one thing here no other number can see, so inventing it is
+     * worse than leaving it blank.
+     *
+     * Once per digest, not once per reply. The sample belongs to the digest, and two
+     * messages under one digest are two replies to the same question — counting it
+     * twice inflates the denominator and flatters the rate. */
+    if (asked.length && marks.answered && !counted[forDate]) {
       counted[forDate] = 1;
       checked += asked.length;
       marks.missed.forEach(function (letter) {

@@ -374,11 +374,18 @@ function recall(found, quiet, checked, missed) {
  * leading keyword if that turns out to bite. */
 function parseMarks(text, max) {
   var wrong = [], knew = [], missed = [], ignored = [], seen = {}, seenLetter = {};
+  /* Whether the spot check was answered at all, which is not the same as whether it
+   * named a miss. A bare `miss` means "none of these" and is the answer that makes the
+   * clean ones count; no miss line at all means they did not look, and counting the
+   * sample as reviewed on the strength of any reply at all invents the only evidence
+   * about recall that exists. */
+  var answered = false;
   String(text || '').split(/\r?\n/).forEach(function (line) {
     /* A line led by miss names spot-check entries that did contain a commitment.
      * Those are lettered rather than numbered precisely so the two cannot be
      * confused: "3" is always a rejection, "c" is always a miss. */
     if (/^\s*(m|miss|missed)\b/i.test(line)) {
+      answered = true;
       (line.replace(/^\s*\w+/, '').match(/\b[a-z]\b/gi) || []).forEach(function (c) {
         var L = c.toLowerCase();
         if (!seenLetter[L]) { seenLetter[L] = 1; missed.push(L); }
@@ -421,7 +428,7 @@ function parseMarks(text, max) {
   });
   /* `ignored` is every line that named an item number but did not lead with one.
      Reported rather than acted on, so a reply that was not read never fails silently. */
-  return { wrong: wrong, knew: knew, missed: missed, ignored: ignored };
+  return { wrong: wrong, knew: knew, missed: missed, ignored: ignored, answered: answered };
 }
 
 /* Resolve those numbers against the list as it was sent, not as it stands now —
