@@ -364,11 +364,22 @@ function parseDue(text, from) {
   /* The ordinal suffix is optional but must be allowed to be there. Requiring a word
    * boundary straight after the digits meant "Aug 15th" and "Sept 3rd" — much commoner
    * than the bare form — matched nothing at all and silently arrived undated. */
-  var m = t.match(/\b(?:by|before|on)?\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b/);
+  /* Each month spelled out rather than `abbrev + [a-z]*`.
+   *
+   * That wildcard ate the rest of whatever word began with those three letters, and the
+   * word boundary after it was then satisfied — so "maybe 3 of us can join" was May 3rd,
+   * "we will decide 5 things" was December 5th, and "marketing 5 campaign numbers" was
+   * March 5th. Six ordinary sentences out of eight produced a date.
+   *
+   * A wrong deadline is worse than no deadline. No date means the item ranks on age; a
+   * fabricated one either makes something look overdue that is not, or parks a real
+   * commitment months away where nobody will see it again. */
+  var m = t.match(/\b(?:by|before|on)?\s*(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b/);
   if (m) {
     var d = toUTC(from);
-    var cand = new Date(Date.UTC(d.getUTCFullYear(), MONTHS[m[1]], +m[2]));
-    if (cand < d) cand = new Date(Date.UTC(d.getUTCFullYear() + 1, MONTHS[m[1]], +m[2]));
+    // The capture may be the full name, so key on the first three letters either way.
+    var cand = new Date(Date.UTC(d.getUTCFullYear(), MONTHS[m[1].slice(0, 3)], +m[2]));
+    if (cand < d) cand = new Date(Date.UTC(d.getUTCFullYear() + 1, MONTHS[m[1].slice(0, 3)], +m[2]));
     return iso(cand);
   }
 

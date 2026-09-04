@@ -19,6 +19,27 @@ assert.strictEqual(parseDue('Aug 15th', '2026-08-01T10:00'), '2026-08-15');
 assert.strictEqual(parseDue('by Sept 3rd', '2026-09-01T10:00'), '2026-09-03');
 assert.strictEqual(parseDue('Aug 15', '2026-08-01T10:00'), '2026-08-15', 'and the bare form still works');
 
+/* --- a month abbreviation is a month, not the start of a word ---
+ *
+ * The rule was `abbrev + [a-z]*`, and the wildcard ate the rest of whatever word began
+ * with those three letters — the boundary after it was then satisfied. So "maybe 3 of
+ * us can join" was May 3rd and "we will decide 5 things" was December 5th. Measured
+ * across the Enron corpus: 41 of 10,307 month-dates were fabricated this way, which is
+ * small but is 41 items ranked on a deadline nobody wrote. A wrong date is worse than
+ * none — no date ranks on age, a fabricated one either invents urgency or parks a real
+ * commitment months out of sight. */
+['Maybe 3 of us can join.', 'We will decide 5 things at the offsite.',
+ 'I will pull marketing 5 campaign numbers.', 'Let us separate 3 of those workstreams.',
+ 'They declined 2 of the terms.', 'The january report is late'].forEach(function (line) {
+  assert.strictEqual(parseDue(line, '2026-09-02T10:00'), null, 'not a date: ' + line);
+});
+
+// And every real spelling still resolves, abbreviated or written out.
+assert.strictEqual(parseDue('due September 20', '2026-09-02T10:00'), '2026-09-20');
+assert.strictEqual(parseDue('I will send it Sept 3rd', '2026-09-02T10:00'), '2026-09-03');
+assert.strictEqual(parseDue('on Feb 28th', '2026-01-05T10:00'), '2026-02-28');
+assert.strictEqual(parseDue('I will have it to you Dec 1', '2026-09-02T10:00'), '2026-12-01');
+
 /* A day with no month means the next one to come round. */
 assert.strictEqual(parseDue('by the 15th', '2026-09-01T10:00'), '2026-09-15');
 assert.strictEqual(parseDue('by the 1st', '2026-09-15T10:00'), '2026-10-01', 'already gone, so next month');
