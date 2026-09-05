@@ -20,6 +20,37 @@ and you correct it by replying to the message. The output is text, and it looks 
 
 ---
 
+## What it reads, and where that goes
+
+Anyone pointing this at a workspace they do not personally own is right to ask, and it
+should be answerable without reading the source.
+
+**Nowhere.** The detector is local code with no network calls in it — there are none in
+`src/` or `slack-run.js`. The only things touching a network are the Slack and calendar
+connectors you already have, and the digest posting back to your own DM.
+
+**You choose what it reads.** `channels.include` is an allowlist: name two channels and
+it reads two channels. Direct messages are never included unless you add them by name,
+because they are the most sensitive thing in a workspace and the least likely to hold a
+commitment anyone is tracking.
+
+**What lands on disk** is `ledger.json`, in your working directory. By default it keeps
+the sentence each commitment came from, so the digest can say what cleared.
+`"storeText": false` keeps the tracking — keys, dates, verdicts, accuracy — and writes no
+message text at all. That costs less than it sounds like: every open item is re-detected
+from live messages on each run and still quotes its sentence in full. The one thing lost
+is *cleared since the last run*, which reads from the ledger and falls back to
+`(text not kept)`.
+
+**No model decides anything.** On the Slack path a model fetches and posts; what counts
+as a commitment is regexes and plain comparisons. Nothing is sent anywhere to be
+classified.
+
+To stop it, delete the scheduled task — the ledger stays, so picking it up later resumes
+rather than restarts. To remove it, delete the working directory. That is all of it.
+
+---
+
 ## What it finds
 
 Seven ways a commitment slips, all detected from message text — none of it tagged by hand.
