@@ -292,7 +292,7 @@ privacy limits that matter more than the shapes do.
 |---|---|---|---|
 | Demo fixture (`src/fixture.js`) | 25 messages, 5 events | yes, by assertion | that a change has not broken known behaviour |
 | A live Slack workspace | 17 messages, one member | 1 rejection, 1 spot check | that the whole path runs unattended |
-| Enron corpus (`tools/benchmark.js`) | 3,395 emails, 16 mailboxes | **no** | how often it fires — 35.8 items per 100 |
+| Enron corpus (`tools/benchmark.js`) | 3,725 emails, 16 mailboxes | **no** | how often it fires — 35.8 items per 100 |
 | Top-of-digest, hand-graded | 79 items, two labellers | yes | that the task is well-posed — kappa 0.76 |
 
 **Read the third row carefully.** 35.8 per 100 is a *firing rate*, not an accuracy. That
