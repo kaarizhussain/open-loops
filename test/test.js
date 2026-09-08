@@ -687,4 +687,30 @@ assert.strictEqual(bubbles([{ body: DECK }]), null, 'and nothing following means
 // The ordinary case is untouched.
 assert.strictEqual(bubbles([{ body: "I'll send the board deck by Thursday." }]), '2026-09-03');
 
+/* --- relaying somebody else's commitment is not making one ---
+ *
+ * FIRM carried a bare "will send" with no subject in front of it, for the dropped-subject
+ * form chat is full of: "Will send it Thursday". Unanchored, it also matched "Sarah will
+ * send the contract Friday" — and because the reader typed that sentence, it became the
+ * reader's own promise. Writing down what other people committed to is most of an
+ * assistant's day, so this filed a large part of the job under work they owe.
+ *
+ * The bare form is now allowed only where a first-person subject was plausibly dropped. */
+var mine = function (body) {
+  var r = detectLoops([{ id: 'z', threadId: 'tz', subject: '#deals', from: 'me@corp.io',
+    to: ['lena@vectorfreight.com'], date: '2026-09-01T12:00', attach: false, body: body }],
+    [], { exec: 'me@corp.io', today: '2026-09-08' });
+  return r.open.some(function (l) { return l.type === 'owed_by_us'; });
+};
+
+['Will send the deck Thursday.', 'Yes, will send it Thursday.',
+ 'Sure — will get you the numbers.', 'Ok, will book the room.',
+ "I'll send the deck Thursday.", 'We will send the contract Friday.'
+].forEach(function (b) { assert.ok(mine(b), 'a dropped subject is still mine: ' + b); });
+
+['Sarah will send the contract Friday.', 'Legal will review it Friday.',
+ 'They will send the redlines Monday.', 'The vendor will forward the invoice.',
+ 'Marcus will get back to you Thursday.', 'Their team will share the deck.'
+].forEach(function (b) { assert.ok(!mine(b), 'somebody else is the subject: ' + b); });
+
 console.log('\nOK');

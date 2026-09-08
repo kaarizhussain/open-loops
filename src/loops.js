@@ -161,7 +161,18 @@ function parseDue(text, from) {
  * cannot measure it either — 0 of 8,716 messages contain a curly apostrophe, because
  * 2001 mail was plain text. A benchmark being silent is not the same as a problem
  * being absent. */
-var FIRM = /\b(?:(?:i['’]?ll|i will|we['’]?ll|we will|i['’]?m going to)(?!\s+have\s+to\b)|let me(?!\s+know)|will (?:send|get|share|review|book|connect|loop|circle|have(?!\s+to\b)|put|pull|draft|forward))\b/i;
+/* The bare "will send" carries no subject, so it needs one supplied by position.
+ *
+ * It is here for the dropped-subject form chat is full of — "Will send it Thursday",
+ * "Yes, will get you the deck". Unanchored it also matched "Sarah will send the
+ * contract Friday", and since the reader typed that sentence it became the reader's own
+ * promise. Relaying what somebody else committed to is most of an assistant's writing,
+ * so this filed a large part of the job under work they owe.
+ *
+ * So the bare form is allowed only where a first-person subject was actually dropped:
+ * at the start of the sentence, after punctuation, or after a connective. Anything with
+ * a real subject in front of it — a name, a team, "they" — is somebody else's. */
+var FIRM = /\b(?:i['’]?ll|i will|we['’]?ll|we will|i['’]?m going to)(?!\s+have\s+to\b)|\blet me(?!\s+know)\b|(?:^|[,;:—–-]\s*|\b(?:and|then|also|so|but|yes|sure|ok|okay)\s+)will (?:send|get|share|review|book|connect|loop|circle|have(?!\s+to\b)|put|pull|draft|forward)\b/i;
 var LETS = /\b(let['’]?s (?:schedule|book|set up|find time|meet|sync|talk|discuss|catch up|go over|walk through))\b/i;
 var COMMIT = new RegExp(FIRM.source + '|' + LETS.source, 'i');
 var DELIVER = /\b(attached|here['’]?s|here is|just sent|sent (?:it|you|over|through)|sending (?:it|over)|done|signed|uploaded|shared|forwarded|all set)\b/i;
