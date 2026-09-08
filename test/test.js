@@ -645,4 +645,46 @@ assert.strictEqual(owner('#deals', "I'll book the pricing review with Sana."), '
 assert.strictEqual(owner('#offsite', "I'll review the agenda before Monday."), 'exec',
   'and reviewing is still the executive’s even when the topic is logistics');
 
+/* --- a sentence split across two chat bubbles ---
+ *
+ * "I'll send the board deck." then, seconds later, "By Thursday." The commitment was
+ * always detected; the deadline was not, because it lived in the next message. An
+ * undated item ranks on age instead of urgency, so a real promise with a real deadline
+ * sank below things that mattered less. Mail does not do this. Chat does it constantly.
+ *
+ * This borrows from the reader's own side, which the backward walk deliberately refuses
+ * to do, so the cases that must NOT inherit are the point of this block. */
+var bubbles = function (lines) {
+  var n = 0;
+  var msgs = lines.map(function (l) {
+    n++;
+    return { id: 'b' + n, threadId: 't', subject: '#deals',
+             from: l.from || 'me@corp.io', to: ['lena@vectorfreight.com'],
+             date: '2026-09-01T12:' + ('0' + (l.at === undefined ? n : l.at)).slice(-2),
+             attach: false, body: l.body };
+  });
+  var l = detectLoops(msgs, [], { exec: 'me@corp.io', today: '2026-09-08' })
+    .open.filter(function (x) { return x.type === 'owed_by_us'; })[0];
+  return l ? l.due : '(no promise)';
+};
+var DECK = "I'll send the board deck.";
+
+assert.strictEqual(bubbles([{ body: DECK }, { body: 'By Thursday.' }]), '2026-09-03',
+  'the tail of the sentence carries the deadline');
+assert.strictEqual(bubbles([{ body: DECK }, { body: 'Thursday' }]), '2026-09-03',
+  'even as a bare fragment');
+assert.strictEqual(bubbles([{ body: DECK }, { body: 'by Friday at the latest' }]), '2026-09-04');
+
+assert.strictEqual(bubbles([{ body: DECK }, { body: "Thursday I'm out of office all day" }]), null,
+  'a longer line that merely mentions a day is not a deadline for anything');
+assert.strictEqual(
+  bubbles([{ body: DECK }, { body: 'By Thursday.', from: 'lena@vectorfreight.com' }]), null,
+  'somebody else finishing your sentence is not your deadline');
+assert.strictEqual(bubbles([{ body: DECK, at: 0 }, { body: 'By Thursday.', at: 40 }]), null,
+  'forty minutes later is a new thought, not the same one');
+assert.strictEqual(bubbles([{ body: DECK }]), null, 'and nothing following means nothing to borrow');
+
+// The ordinary case is untouched.
+assert.strictEqual(bubbles([{ body: "I'll send the board deck by Thursday." }]), '2026-09-03');
+
 console.log('\nOK');

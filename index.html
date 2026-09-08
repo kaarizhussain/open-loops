@@ -710,6 +710,34 @@ function detectLoops(messages, events, opts) {
         if (msgs[k].out === m.out) continue;
         due = parseDue(msgs[k].body, msgs[k].date);
       }
+
+      /* Chat splits one sentence across two bubbles. "I'll send the board deck." then,
+       * eight seconds later, "By Thursday." The deadline was never absent — it was in
+       * the next message, and the promise arrived undated. That is not a small loss: an
+       * item with no date ranks on age instead of urgency, so a real commitment with a
+       * real deadline sinks below things that matter less.
+       *
+       * This borrows from the reader's OWN side, which the note above warns against, so
+       * it is deliberately far narrower than the backward walk: the very next message
+       * only, the same person only, minutes apart, and only when that message is short
+       * enough to be the tail of a sentence rather than a new thought. A longer line
+       * that merely contains a date — "Thursday I'm out of office" — is not a deadline
+       * for anything and is left alone.
+       *
+       * ponytail: a fixed character cap does the fragment test, so "by Friday at the
+       * latest" is inherited and anything wordier is not. Widen it against real chat,
+       * not against invented examples. */
+      if (!due) {
+        var nxt = msgs[i + 1];
+        var gap = nxt ? new Date(nxt.date + ':00Z') - new Date(m.date + ':00Z') : -1;
+        if (nxt && nxt.out === m.out &&
+            String(nxt.from).toLowerCase() === String(m.from).toLowerCase() &&
+            gap >= 0 && gap <= 5 * 60000 &&
+            String(nxt.body || '').trim().length <= 25) {
+          due = parseDue(nxt.body, nxt.date);
+        }
+      }
+
       var type = m.out ? 'owed_by_us' : 'owed_to_us', bookedBy = null;
       // The promise and the scheduling language often sit in different sentences.
       if (!closer && m.out && MEETINGY.test(s) && SCHEDULEY.test(m.body)) {
