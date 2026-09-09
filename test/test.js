@@ -713,4 +713,33 @@ var mine = function (body) {
  'Marcus will get back to you Thursday.', 'Their team will share the deck.'
 ].forEach(function (b) { assert.ok(!mine(b), 'somebody else is the subject: ' + b); });
 
+/* --- backing away from a commitment is not making one ---
+ *
+ * The cue patterns match "I'll" wherever it sits, so "Maybe I'll send it Friday" and
+ * "I don't think I'll be able to send it Friday" both read as promises. The second is
+ * somebody explicitly declining, and turning a refusal into an obligation is the false
+ * positive most likely to teach a reader that the list is not worth reading.
+ *
+ * Tentative verbs were never the problem — "I can send it Friday" and "I should be able
+ * to send it Friday" fire nothing already, because neither is a cue at all. Only hedges
+ * sitting in front of a real cue got through. */
+var promised = function (body) {
+  return detectLoops([{ id: 'h', threadId: 'th', subject: '#deals', from: 'me@corp.io',
+    to: ['lena@vectorfreight.com'], date: '2026-09-01T12:00', attach: false, body: body }],
+    [], { exec: 'me@corp.io', today: '2026-09-08' }).open.length > 0;
+};
+
+["Maybe I'll send it Friday.", "I don't think I'll be able to send it Friday.",
+ "Perhaps I'll get to it Friday.", "I'm not sure I'll have it by Friday.",
+ 'No promises, but I\'ll try to look Friday.', "I doubt I'll finish it Friday."
+].forEach(function (b) { assert.ok(!promised(b), 'not a commitment: ' + b); });
+
+/* The hedge governs only what follows it. A caveat about something else, after a real
+   promise, must not take the promise with it. */
+assert.ok(promised("I'll send it Friday."), 'the plain case still fires');
+assert.ok(promised("I'll send it Friday, not sure about the deck though."),
+  'a caveat about a different thing does not cancel the promise');
+assert.ok(promised("I'll send the contract Friday. Maybe the deck too."),
+  'and neither does a hedge in the next sentence');
+
 console.log('\nOK');

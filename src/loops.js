@@ -175,6 +175,29 @@ function parseDue(text, from) {
 var FIRM = /\b(?:i['’]?ll|i will|we['’]?ll|we will|i['’]?m going to)(?!\s+have\s+to\b)|\blet me(?!\s+know)\b|(?:^|[,;:—–-]\s*|\b(?:and|then|also|so|but|yes|sure|ok|okay)\s+)will (?:send|get|share|review|book|connect|loop|circle|have(?!\s+to\b)|put|pull|draft|forward)\b/i;
 var LETS = /\b(let['’]?s (?:schedule|book|set up|find time|meet|sync|talk|discuss|catch up|go over|walk through))\b/i;
 var COMMIT = new RegExp(FIRM.source + '|' + LETS.source, 'i');
+
+/* Words somebody uses to back out of the thing they are about to say.
+ *
+ * The cue patterns match "I'll" wherever it appears, so "Maybe I'll send it Friday" and
+ * "I don't think I'll be able to send it Friday" both read as commitments — and the
+ * second is somebody explicitly declining. Turning a refusal into an obligation is the
+ * false positive most likely to teach a reader that the list is not worth reading.
+ *
+ * Tentative *verbs* were never the problem: "I can send it Friday" and "I should be
+ * able to send it Friday" already fire nothing, because neither is a cue. It is only
+ * hedges sitting in front of a real cue that got through. */
+var HEDGE = /\b(?:maybe|perhaps|hopefully|unlikely|no promises|not sure|unsure|don['’]?t think|do not think|doubt|probably not|might not|may not)\b/i;
+
+/* Only what comes after it. "Maybe I'll send it Friday" is hedged; "I'll send it
+ * Friday, not sure about the deck though" is a firm promise with a caveat attached to
+ * something else, and blocking that would lose a real commitment to a word about a
+ * different one. Same earliest-position rule the owner split uses. */
+function hedged(s) {
+  var h = s.search(HEDGE);
+  if (h < 0) return false;
+  var c = s.search(COMMIT);
+  return c < 0 || h < c;
+}
 var DELIVER = /\b(attached|here['’]?s|here is|just sent|sent (?:it|you|over|through)|sending (?:it|over)|done|signed|uploaded|shared|forwarded|all set)\b/i;
 var ASK = /\b(can you|could you|would you|please|need your|need you to|waiting on|any update|following up|checking in|let me know|confirm)\b/i;
 /* An intro is an email, not a meeting — keep those as plain promises. */
@@ -378,6 +401,8 @@ function detectLoops(messages, events, opts) {
     msgs.forEach(function (m, i) {
       var firm = false;
       sentences(m.body).forEach(function (s) {
+        // Somebody backing away from a commitment has not made one.
+        if (hedged(s)) return;
         /* "Sure — I'll do the call. Tuesday works, let's find time." is one agreement
          * said twice, and listing it twice is the noise this cares most about. A
          * "let's" after your own commitment in the same message is elaboration; a
