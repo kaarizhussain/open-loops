@@ -167,18 +167,20 @@ function parseDue(text, from) {
  * cannot measure it either — 0 of 8,716 messages contain a curly apostrophe, because
  * 2001 mail was plain text. A benchmark being silent is not the same as a problem
  * being absent. */
-/* The bare "will send" carries no subject, so it needs one supplied by position.
+/* The bare "will send" is allowed wherever an agent could be its subject.
  *
  * It is here for the dropped-subject form chat is full of — "Will send it Thursday",
- * "Yes, will get you the deck". Unanchored it also matched "Sarah will send the
- * contract Friday", and since the reader typed that sentence it became the reader's own
- * promise. Relaying what somebody else committed to is most of an assistant's writing,
- * so this filed a large part of the job under work they owe.
+ * "Yes, will get you the deck" — and for commitments relayed through somebody: "Sarah
+ * will send the contract Friday", "they will review it", "Dana will send the signed
+ * copy". An earlier version allowed only the dropped-subject form, to keep a relayed
+ * promise out of the reader's own pile. It was checked in one direction only, and in the
+ * other it hid every inbound commitment with a named subject and every executive promise
+ * an assistant relays — silence, in the one place the correction loop cannot see. Who
+ * owns a relayed promise is the owner split's job, not the cue's.
  *
- * So the bare form is allowed only where a first-person subject was actually dropped:
- * at the start of the sentence, after punctuation, or after a connective. Anything with
- * a real subject in front of it — a name, a team, "they" — is somebody else's. */
-var FIRM = /\b(?:i['’]?ll|i will|we['’]?ll|we will|i['’]?m going to)(?!\s+have\s+to\b)|\blet me(?!\s+know)\b|(?:^|[,;:—–-]\s*|\b(?:and|then|also|so|but|yes|sure|ok|okay)\s+)will (?:send|get|share|review|book|connect|loop|circle|have(?!\s+to\b)|put|pull|draft|forward)\b/i;
+ * Only a subject that cannot promise anything is excluded: "it will get worse", "this
+ * will have changed by then". */
+var FIRM = /\b(?:i['’]?ll|i will|we['’]?ll|we will|i['’]?m going to)(?!\s+have\s+to\b)|\blet me(?!\s+know)\b|(?<!\b(?:it|this|that|there|which|what|nothing|something|everything)\s+)\bwill (?:send|get|share|review|book|connect|loop|circle|have(?!\s+to\b)|put|pull|draft|forward)\b/i;
 var LETS = /\b(let['’]?s (?:schedule|book|set up|find time|meet|sync|talk|discuss|catch up|go over|walk through))\b/i;
 var COMMIT = new RegExp(FIRM.source + '|' + LETS.source, 'i');
 

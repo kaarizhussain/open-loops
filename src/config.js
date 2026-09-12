@@ -86,6 +86,14 @@ function settings(fs, configPath, run) {
   var missing = [];
   if (!s.you) missing.push('"you" — the address messages are outbound from; without it ' +
     'there is no way to tell inbound from outbound');
+  /* tzOffset is minutes from UTC. A zone name — "America/New_York", the natural thing
+   * to type — became NaN inside the timestamp maths and crashed every run with "Invalid
+   * time value", which says nothing about the config. Reported here with the rest. */
+  if (s.tzOffset != null && !isFinite(Number(s.tzOffset))) {
+    missing.push('"tzOffset" — minutes from UTC as a number, not a zone name: -240 for ' +
+      'New York in summer, -300 in winter, 60 for London in summer. Got ' +
+      JSON.stringify(s.tzOffset));
+  }
   if (missing.length) throw new Error('Config is incomplete:\n  ' + missing.join('\n  '));
   s.you = String(s.you).toLowerCase();
   return s;

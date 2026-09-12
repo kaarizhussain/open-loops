@@ -243,7 +243,11 @@ function main(argv) {
   /* Every conversation becomes messages in the shape loops.js already takes. The
    * channel name stands in for a subject line, which Slack does not have. */
   var byId = {}, roots = {}, skipped = 0, skippedThreads = 0, unread = [];
-  (input.conversations || []).forEach(function (c) {
+  /* A model writes this file, and models vary the shape — one conversation as an object
+   * rather than a list of one. [].concat takes both, so a shape slip no longer kills the
+   * unattended run before it can say anything at all. */
+  var convs = [].concat(input.conversations || []), threadsIn = [].concat(input.threads || []);
+  convs.forEach(function (c) {
     if (!inScope(c.channel, cfg.channels)) { skipped++; return; }
     var got = parseChannel(c.text, {
       channel: c.channel, members: c.members || [], tzOffset: cfg.tzOffset,
@@ -267,7 +271,7 @@ function main(argv) {
    * and the root belongs to the thread rather than to the channel it sits in. Keying
    * the whole thread on the root's timestamp gives closure matching a real boundary,
    * the only one Slack offers that is as tight as an email thread's. */
-  (input.threads || []).forEach(function (t) {
+  threadsIn.forEach(function (t) {
     // A thread inherits its channel's scope — excluding #hr and then reading a thread
     // inside it would be an exclusion that does not exclude.
     if (!inScope(t.channel, cfg.channels)) { skippedThreads++; return; }
@@ -338,7 +342,12 @@ function main(argv) {
   /* Two of the seven signals live in the gap between what was said and what is on
    * the calendar. Without this they cannot fire at all — and 'agreed but not booked'
    * can never be settled, so it over-reports every agreement forever. */
-  var events = parseEvents(input.events);
+  /* A calendar that failed to fetch arrives as whatever the connector said instead — an
+   * error sentence, not JSON — and parsing it threw and took the whole run with it.
+   * SKILL.md says to run without the calendar and say so; now the runner actually does. */
+  var events, calendarError = null;
+  try { events = parseEvents(input.events); }
+  catch (e) { events = []; calendarError = e.message; }
 
   var opts = { exec: self, today: today, contacts: input.contacts || null,
                // Absent means the historical single unnamed executive; [] means you
@@ -465,8 +474,9 @@ function main(argv) {
     /* Conversations skipped, not threads. One counter served both, and only the
        conversation count was reduced by it — so skipping a thread under-reported how
        much was read, and enough of them printed a negative number of conversations. */
-    read: { threads: (input.conversations || []).length - skipped,
+    read: { threads: convs.length - skipped,
             capped: shortRead.length > 0, shortRead: shortRead, unread: unread,
+            calendarError: calendarError,
             windowStart: cut,
             unfetchedThreads: unfetched.length,
             skipped: skipped + skippedThreads, windowDays: window }

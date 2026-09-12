@@ -251,6 +251,14 @@ function render(b) {
   /* Handed over and empty. Only worth a line when some other channel did parse —
      when none did, the READ NOTHING headline has already said it in stronger terms
      and naming all of them again is the same news twice. */
+  /* The calendar response could not be read at all. Two of the seven signals live in the
+   * gap between messages and meetings, so both are off for this run — and "0 meetings"
+   * in the line above would otherwise read as a quiet diary. */
+  if (read.calendarError) {
+    p('CALENDAR NOT READ — the calendar response could not be parsed, so unprepped' +
+      ' meetings and unbooked calls were not checked this run.');
+  }
+
   if (!blind && (read.unread || []).length) {
     p('NOTHING READ IN ' + read.unread.slice(0, 6).join(', ') +
       ((read.unread.length > 6) ? ' and ' + (read.unread.length - 6) + ' more' : '') +

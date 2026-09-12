@@ -560,5 +560,49 @@ assert.strictEqual(answering('3').marked, 1, 'though the rejection itself still 
 assert.strictEqual(answering('remember to call Dana').checked, 0,
   'and a note to yourself is not a spot check answer');
 
+/* --- malformed input must not take the unattended run down ---
+ *
+ * A model writes input.json and a person writes the config, and both vary. Each of these
+ * used to throw, so the evening run posted nothing at all — which reads exactly like a
+ * quiet day. Found by a sweep of deliberately broken inputs; the rest of that sweep
+ * (empty channels, emoji-only, 20,000-character messages, duplicates) already held. */
+var cp = require('child_process');
+var runner = path.join(__dirname, '..', 'slack-run.js');
+var robustCfg = path.join(dir, 'robust.config.json');
+fs.writeFileSync(robustCfg, JSON.stringify({ you: ME, selfDm: 'U0EXAMPLE001',
+  ledger: path.join(dir, 'robust-ledger.json') }));
+var line = function (ts, body) {
+  return '=== Message from You <' + ME + '> (U0EXAMPLE001) at 2026-09-01 12:00:00 EDT ===\n' +
+    (ts === null ? '' : 'Message TS: ' + ts + '\n') + body;
+};
+var fine = line('1788271200.000100', "I'll send the deck Friday.");
+var runWith = function (label, input) {
+  var f = path.join(dir, 'robust-' + label.replace(/\W+/g, '-') + '.json');
+  fs.writeFileSync(f, JSON.stringify(Object.assign({ today: '2026-09-08' }, input)));
+  return cp.spawnSync(process.execPath, [runner, f, '--config', robustCfg, '--dry'], { encoding: 'utf8' });
+};
+var survives = function (label, input) {
+  var r = runWith(label, input);
+  assert.strictEqual(r.status, 0, label + ' crashed the run: ' + (r.stderr || '').split('\n')[0]);
+  return r.stdout;
+};
+
+assert.ok(/READ NOTHING/.test(survives('no timestamp line',
+  { conversations: [{ channel: '#a', text: line(null, "I'll send it Friday.") }] })),
+  'a format change that drops the timestamp line reaches READ NOTHING instead of crashing');
+survives('timestamp is a dot', { conversations: [{ channel: '#a', text: line('.', "I'll send it.") }] });
+assert.ok(/CALENDAR NOT READ/.test(survives('events is an error sentence',
+  { conversations: [{ channel: '#a', text: fine }], events: 'Calendar unavailable' })),
+  'a calendar that failed is run without, and said out loud');
+survives('event with a non-date start', { conversations: [{ channel: '#a', text: fine }],
+  events: { events: [{ id: 'x', summary: 'x', start: { dateTime: 'soon' }, attendees: [{ email: 'a@b.com' }] }] } });
+survives('one member as a string', { conversations: [{ channel: '#a', members: 'lena@vf.com', text: fine }] });
+survives('conversations as an object', { conversations: { channel: '#a', text: fine } });
+
+// A zone name in tzOffset is a config mistake, so it stops the run — naming the setting.
+var tz = runWith('tz zone name', { tzOffset: 'America/New_York', conversations: [{ channel: '#a', text: fine }] });
+assert.notStrictEqual(tz.status, 0, 'a zone name is refused');
+assert.ok(/tzOffset/.test(tz.stderr), 'with a message naming tzOffset, not "Invalid time value"');
+
 fs.rmSync(dir, { recursive: true, force: true });
 console.log('slack-run: OK');

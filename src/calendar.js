@@ -65,8 +65,10 @@ function parseEvents(response) {
      * quickly teaches them the list is careless. Google marks the reader's own attendee
      * entry `self: true`. */
     var mine = (e.attendees || []).filter(function (a) { return a.self; })[0];
+    // A start that is not a date cannot be placed, and one malformed event used to throw
+    // inside the detector and take every other signal down with it.
     return e.status !== 'cancelled' && !(mine && mine.responseStatus === 'declined') &&
-      startOf(e.start);
+      /^\d{4}-\d{2}-\d{2}/.test(startOf(e.start) || '');
   }).map(function (e) {
     return {
       id: e.id,

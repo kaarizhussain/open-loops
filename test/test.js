@@ -687,31 +687,49 @@ assert.strictEqual(bubbles([{ body: DECK }]), null, 'and nothing following means
 // The ordinary case is untouched.
 assert.strictEqual(bubbles([{ body: "I'll send the board deck by Thursday." }]), '2026-09-03');
 
-/* --- relaying somebody else's commitment is not making one ---
+/* --- a commitment relayed through somebody is still a commitment ---
  *
- * FIRM carried a bare "will send" with no subject in front of it, for the dropped-subject
- * form chat is full of: "Will send it Thursday". Unanchored, it also matched "Sarah will
- * send the contract Friday" — and because the reader typed that sentence, it became the
- * reader's own promise. Writing down what other people committed to is most of an
- * assistant's day, so this filed a large part of the job under work they owe.
- *
- * The bare form is now allowed only where a first-person subject was plausibly dropped. */
-var mine = function (body) {
-  var r = detectLoops([{ id: 'z', threadId: 'tz', subject: '#deals', from: 'me@corp.io',
-    to: ['lena@vectorfreight.com'], date: '2026-09-01T12:00', attach: false, body: body }],
-    [], { exec: 'me@corp.io', today: '2026-09-08' });
-  return r.open.some(function (l) { return l.type === 'owed_by_us'; });
+ * An earlier change made the bare "will send" require a dropped first-person subject,
+ * to stop "Sarah will send the contract Friday" landing in the reader's own pile. It was
+ * checked in that direction only. In the other it hid every inbound commitment with a
+ * named subject — "They will send the redlines Monday" — and, outbound, the executive's
+ * own promises as an assistant relays them: "Dana will send the signed copy Friday".
+ * That is the product's headline case, and hiding it is silence, which the correction
+ * loop cannot see. So any agent may promise; only a subject that cannot is excluded.
+ * These cases run both directions, because the last version of this test did not. */
+var relayed = function (body, from, principals) {
+  var inbound = !!from && from !== 'me@corp.io';
+  var r = detectLoops([{ id: 'z', threadId: 'tz', subject: '#deals', from: from || 'me@corp.io',
+    to: [inbound ? 'me@corp.io' : 'lena@vectorfreight.com'], date: '2026-09-01T12:00',
+    attach: false, body: body }], [],
+    { exec: 'me@corp.io', today: '2026-09-08', principals: principals });
+  return r.open[0] || null;
 };
 
 ['Will send the deck Thursday.', 'Yes, will send it Thursday.',
  'Sure — will get you the numbers.', 'Ok, will book the room.',
  "I'll send the deck Thursday.", 'We will send the contract Friday.'
-].forEach(function (b) { assert.ok(mine(b), 'a dropped subject is still mine: ' + b); });
+].forEach(function (b) {
+  var l = relayed(b);
+  assert.ok(l && l.type === 'owed_by_us', 'a dropped subject is still ours: ' + b);
+});
 
-['Sarah will send the contract Friday.', 'Legal will review it Friday.',
- 'They will send the redlines Monday.', 'The vendor will forward the invoice.',
- 'Marcus will get back to you Thursday.', 'Their team will share the deck.'
-].forEach(function (b) { assert.ok(!mine(b), 'somebody else is the subject: ' + b); });
+['They will send the redlines Monday.', 'Sarah will get back to you Thursday.',
+ 'Our legal team will review it Friday.'
+].forEach(function (b) {
+  var l = relayed(b, 'marcus@vectorfreight.com');
+  assert.ok(l && l.type === 'owed_to_us', 'relayed by the other side, it is owed to us: ' + b);
+});
+
+var dana = relayed('Dana will send the signed copy Friday.', null,
+  [{ name: 'Dana', label: 'Dana', address: 'dana@corp.io' }]);
+assert.ok(dana && dana.type === 'owed_by_us', "the executive's promise, relayed, is tracked");
+assert.strictEqual(dana.owner, 'exec', "and lands in the executive's pile, not the assistant's");
+
+['It will get worse before Friday.', 'This will have changed by Friday.', 'That will get messy.'
+].forEach(function (b) {
+  assert.strictEqual(relayed(b), null, 'a subject that cannot promise anything: ' + b);
+});
 
 /* --- backing away from a commitment is not making one ---
  *

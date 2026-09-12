@@ -118,8 +118,13 @@ function parseChannel(text, opts) {
      * at the top of test_slack.js), so if the real format differs this changes
      * nothing rather than guessing at a new one. */
     var body = cleanText(cur.body.join('\n')) || cleanText(cur.files || '');
+    /* No usable timestamp, no message. The filter at the bottom was meant to drop these,
+     * but stamp() ran first and threw on the missing value — so a connector format change
+     * that lost the "Message TS" line crashed the run instead of reaching READ NOTHING,
+     * which exists for exactly that case. */
+    var tsOk = !!cur.ts && isFinite(parseFloat(cur.ts));
     // Drop empties and Slack's own housekeeping notices.
-    if (body && !SYSTEM.test(body)) {
+    if (tsOk && body && !SYSTEM.test(body)) {
       out.push({
         id: cur.ts,
         /* A channel read gives no thread ids, only a note on the root saying how many
@@ -134,7 +139,8 @@ function parseChannel(text, opts) {
         subject: opts.channel || 'Slack',
         from: cur.email || (selfUid && cur.uid === selfUid && selfAddr) ||
               (cur.uid + '@slack.local'),
-        to: (opts.members || []).slice(),
+        // concat, not slice: one member passed as a bare string is still a list of one.
+        to: [].concat(opts.members || []),
         date: stamp(cur.ts, opts.tzOffset),
         body: body,
         attach: !!cur.attach
