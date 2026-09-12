@@ -96,20 +96,26 @@ function mergeLedger(rows, loops, today, opts) {
    * reply landed, the agenda went out, the promise was kept. Worth saying once,
    * because a digest that only ever grows is a nag rather than a tool.
    *
-   * ponytail: an item also falls off when its thread ages past lookbackDays, so a
-   * long-silent loop reads as resolved when it was only forgotten. If that starts
-   * lying, diff against the thread ids actually read rather than trusting absence.
-   *
    * Keyed on what this run actually produced rather than on last_seen matching
    * today, so that running the digest twice in one day does not quietly swallow
    * everything that cleared between the two.
    */
-  var gone = [];
+  var gone = [], aged = [];
   /* An item the reader muted is not an item that closed. It is absent from today's
      list because they said it was never real, which is the opposite of finished — and
      CLEARED is the one section of the digest that is pure good news. */
   var wasMuted = {};
   ((opts && opts.mutedKeys) || []).forEach(function (k) { wasMuted[k] = 1; });
+  /* Said before the read window opened, so this run never looked for it at all.
+   *
+   * Reading only the last three weeks means a promise made twenty-two days ago is not
+   * in today's messages whether or not anybody kept it — and absence was all this had
+   * to go on. Run a digest, run another three weeks later, and every undelivered
+   * promise in the ledger was announced under CLEARED at once. That is the failure the
+   * whole tool exists to prevent, printed in the one section that is meant to be good
+   * news. The key carries the date the commitment was made; meetings are keyed on an
+   * event id instead, and are bounded by the calendar fetch rather than this window. */
+  var windowStart = opts && opts.windowStart;
   rows.forEach(function (r) {
     if (touched[cell(r[COL.key])]) return;
     if (wasMuted[cell(r[COL.key])]) return;
@@ -117,10 +123,13 @@ function mergeLedger(rows, loops, today, opts) {
     r[COL.gone_on] = today;
     // Reported as plain fields rather than a raw row, so whatever renders this does
     // not need to know the ledger's column layout.
-    gone.push({ key: cell(r[COL.key]), what: cell(r[COL.what]), who: cell(r[COL.who]) });
+    var item = { key: cell(r[COL.key]), what: cell(r[COL.what]), who: cell(r[COL.who]) };
+    var said = cell(r[COL.key]).split('|')[2];
+    if (windowStart && /^\d{4}-\d{2}-\d{2}$/.test(said || '') && said < windowStart) aged.push(item);
+    else gone.push(item);
   });
 
-  return { shown: shown, fresh: fresh, suppressed: suppressed, gone: gone };
+  return { shown: shown, fresh: fresh, suppressed: suppressed, gone: gone, aged: aged };
 }
 
 /* The two numbers the fortnight is for.
@@ -286,6 +295,12 @@ function tempos(rows, minSamples, windowDays) {
      * the overdue escalation and stops them being chased at all. Where the two cannot
      * be told apart, do not learn from it. */
     if (windowDays && days >= windowDays) return;
+    /* The same test against when it was said, not when the ledger first saw it. A
+     * promise already old on the first run ages out soon afterwards, and first_seen to
+     * gone_on then reads as a quick turnaround from somebody who never delivered. */
+    var said = cell(r[COL.key]).split('|')[2];
+    if (windowDays && /^\d{4}-\d{2}-\d{2}$/.test(said || '') &&
+        daysApart(said, done) >= windowDays) return;
     (byWho[who] = byWho[who] || []).push(days);
   });
 

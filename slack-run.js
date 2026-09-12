@@ -397,7 +397,8 @@ function main(argv) {
     .map(function (s) { return { phrase: s.phrase, count: s.count, since: today }; });
 
   var ledger = L.mergeLedger(rows, result.open, today,
-                             { storeText: cfg.storeText !== false, mutedKeys: mutedKeys });
+                             { storeText: cfg.storeText !== false, mutedKeys: mutedKeys,
+                               windowStart: cut });
   result.open = ledger.shown;
   L.pruneLedger(rows, today, cfg.keepLedgerDays);
 

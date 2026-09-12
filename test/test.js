@@ -742,4 +742,32 @@ assert.ok(promised("I'll send it Friday, not sure about the deck though."),
 assert.ok(promised("I'll send the contract Friday. Maybe the deck too."),
   'and neither does a hedge in the next sentence');
 
+/* --- "end of the week", said on a Friday ---
+ *
+ * nextDow is strictly-after, which is right for a bare weekday and wrong for "this
+ * week": a week has one Friday, and resolving to the following one gave a same-day
+ * deadline seven days of false slack. 2026-09-11 is a Friday. */
+assert.strictEqual(parseDue('by end of week', '2026-09-11T10:00'), '2026-09-11',
+  'on a Friday, the end of the week is today');
+assert.strictEqual(parseDue('this week', '2026-09-10T10:00'), '2026-09-11',
+  'earlier in the week it is still the coming Friday');
+assert.strictEqual(parseDue('by Friday', '2026-09-11T10:00'), '2026-09-18',
+  'but a bare weekday said on that weekday still means the next one');
+
+/* --- words inside double quotes are somebody else's ---
+ *
+ * `Marcus wrote: "I'll send it Friday."` carries a first-person promise, and because
+ * the reader typed the sentence it was filed as the reader's own. Same misattribution
+ * as relaying "Sarah will send it", one layer of punctuation deeper. */
+var quoted = function (body) {
+  return detectLoops([{ id: 'qt', threadId: 'tq', subject: '#deals', from: 'me@corp.io',
+    to: ['lena@vectorfreight.com'], date: '2026-09-01T12:00', attach: false, body: body }],
+    [], { exec: 'me@corp.io', today: '2026-09-08' })
+    .open.some(function (l) { return l.type === 'owed_by_us'; });
+};
+assert.ok(!quoted('Marcus wrote: "I\'ll send it Friday."'), 'a quoted promise is not yours');
+assert.ok(!quoted('Marcus wrote: “I’ll send it Friday.”'), 'with curly quotes either');
+assert.ok(quoted('I\'ll send the "Q3 board deck" Friday.'),
+  'but quoting a title inside your own promise does not cancel the promise');
+
 console.log('\nOK');

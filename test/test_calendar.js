@@ -109,4 +109,25 @@ assert.ok(without.open.some(function (l) { return l.type === 'agreed_unscheduled
   'with no calendar at all it fires, and can never be suppressed — which is why the'
   + ' Slack-only path over-reports it');
 
+/* --- a meeting you declined is not one you need to prepare for ---
+ *
+ * The filter's own comment named declined meetings from the start, and only cancelled
+ * ones were ever removed — so "send an agenda" fired for meetings the reader had turned
+ * down. That is the false positive they can dismiss fastest, and so the one that most
+ * quickly teaches them the list is careless. */
+var rsvp = function (mine) {
+  return { events: [{ id: 'r-' + mine, summary: 'Client sync', status: 'confirmed',
+    start: { dateTime: '2026-09-10T14:00:00-04:00' }, organizer: { email: 'lena@vf.com' },
+    attendees: [{ email: 'me@corp.io', self: true, responseStatus: mine },
+                { email: 'lena@vf.com', responseStatus: 'accepted' }] }] };
+};
+assert.strictEqual(parseEvents(rsvp('declined')).length, 0, 'declined by the reader: dropped');
+['accepted', 'tentative', 'needsAction'].forEach(function (s) {
+  assert.strictEqual(parseEvents(rsvp(s)).length, 1,
+    s + ' is kept — not having answered is not the same as saying no');
+});
+assert.strictEqual(parseEvents({ events: [{ id: 'solo', summary: 'Focus', status: 'confirmed',
+  start: { dateTime: '2026-09-10T09:00:00-04:00' } }] }).length, 1,
+  'and an event with no entry for the reader at all is untouched');
+
 console.log('calendar: OK');

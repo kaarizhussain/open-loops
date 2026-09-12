@@ -340,4 +340,46 @@ assert.strictEqual(p.byType.owed_by_us.wrong, 1, 'the wrong-rate is broken out p
 assert.strictEqual(p.byType.unanswered_ask.total, 3);
 assert.strictEqual(p.byType.unanswered_ask.knew, 1);
 
+/* --- aged out of the read window is not the same as cleared ---
+ *
+ * A promise said before today's read began is absent whether or not anybody kept it,
+ * and absence was all mergeLedger had to go on. Run a digest, run another three weeks
+ * later, and every undelivered promise in the ledger was announced under CLEARED at
+ * once — the failure this tool exists to prevent, in the one section meant to be good
+ * news. The key carries the date the commitment was made, so that is the test. */
+var aRow = function (key) {
+  return [key, '2026-09-01', '2026-09-01', '', 'owed_by_us', 'lena@vf.com', 'x', ''];
+};
+var keyOf = function (g) { return g.key; };
+var aging = L.mergeLedger([aRow('owed_by_us|#deals|2026-08-01|aaa'),
+                           aRow('owed_by_us|#deals|2026-09-01|bbb'),
+                           aRow('unprepped_meeting|evt123')],
+                          [], '2026-09-07', { windowStart: '2026-08-17' });
+assert.deepStrictEqual(aging.aged.map(keyOf), ['owed_by_us|#deals|2026-08-01|aaa'],
+  'said before the window opened: aged out, not cleared');
+assert.deepStrictEqual(aging.gone.map(keyOf).sort(),
+  ['owed_by_us|#deals|2026-09-01|bbb', 'unprepped_meeting|evt123'],
+  'said inside it, and so genuinely no longer found — and meetings are not bounded by it');
+
+var noWindow = L.mergeLedger([aRow('owed_by_us|#deals|2026-08-01|aaa')], [], '2026-09-07', {});
+assert.strictEqual(noWindow.gone.length, 1, 'with no window given, behaviour is unchanged');
+assert.strictEqual(noWindow.aged.length, 0);
+
+/* The only other reader of gone_on. A promise already old on the first run ages out
+   soon after, and first_seen to gone_on then reads as a three-day turnaround from
+   somebody who never delivered. Learning that damps the overdue escalation, and stops
+   them being chased at all. */
+var neverDelivered = function (i) {
+  return ['owed_to_us|#deals|2026-07-0' + i + '|n' + i, '2026-09-01', '2026-09-04', '2026-09-04',
+          'owed_to_us', 'lena@vf.com', 'x', ''];
+};
+assert.strictEqual(L.tempos([neverDelivered(1), neverDelivered(2), neverDelivered(3)], 3, 21)['lena@vf.com'],
+  undefined, 'an aged-out promise never closed, so it says nothing about how long they take');
+var onTime = function (i) {
+  return ['owed_to_us|#deals|2026-09-01|r' + i, '2026-09-01', '2026-09-05', '2026-09-05',
+          'owed_to_us', 'sam@vf.com', 'x', ''];
+};
+assert.strictEqual(L.tempos([onTime(1), onTime(2), onTime(3)], 3, 21)['sam@vf.com'], 4,
+  'while a real turnaround inside the window is still learned');
+
 console.log('ledger: OK');

@@ -57,8 +57,16 @@ function parseEvents(response) {
   var data = typeof response === 'string' ? JSON.parse(response || '{}') : (response || {});
   return (data.events || []).filter(function (e) {
     /* A cancelled meeting cannot be unprepped, and a declined one is not yours to
-     * prepare for. Both still come back from the API. */
-    return e.status !== 'cancelled' && startOf(e.start);
+     * prepare for. Both still come back from the API.
+     *
+     * Only the first was actually filtered. This comment named both for as long as it
+     * has existed, and "send an agenda" kept firing for meetings the reader had turned
+     * down — the false positive they can dismiss fastest, and so the one that most
+     * quickly teaches them the list is careless. Google marks the reader's own attendee
+     * entry `self: true`. */
+    var mine = (e.attendees || []).filter(function (a) { return a.self; })[0];
+    return e.status !== 'cancelled' && !(mine && mine.responseStatus === 'declined') &&
+      startOf(e.start);
   }).map(function (e) {
     return {
       id: e.id,

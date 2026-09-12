@@ -410,7 +410,13 @@ function parseDue(text, from) {
     if (idx >= 0) return nextDow(nextWk ? nextDow(from, 5) : from, idx);
   }
   if (nextWk) return nextDow(nextDow(from, 5), 5);
-  if (/\bthis week\b|\bend of week\b|\beow\b/.test(t)) return nextDow(from, 5);
+  /* "End of the week" said on a Friday means today. nextDow is strictly-after, which is
+   * right for a bare weekday — "Friday" said on a Friday usually means the next one —
+   * but a week has one Friday, and resolving to the following one gave a same-day
+   * deadline seven days of false slack. */
+  if (/\bthis week\b|\bend of week\b|\beow\b/.test(t)) {
+    return toUTC(from).getUTCDay() === 5 ? iso(toUTC(from)) : nextDow(from, 5);
+  }
   return null;
 }
 
@@ -685,20 +691,27 @@ function detectLoops(messages, events, opts) {
     msgs.forEach(function (m, i) {
       var firm = false;
       sentences(m.body).forEach(function (s) {
+        /* Words inside double quotes are somebody else's. `Marcus wrote: "I'll send it
+         * Friday."` contains a first-person promise, and because the reader typed the
+         * sentence it was filed as theirs — the same misattribution as relaying "Sarah
+         * will send it", one layer of punctuation deeper. Only the cue tests read the
+         * stripped copy; the item still quotes the sentence exactly as written. Single
+         * quotes are left alone, since every "I'll" contains one. */
+        var own = s.replace(/"[^"]*"|“[^”]*”/g, ' ');
         // Somebody backing away from a commitment has not made one.
-        if (hedged(s)) return;
+        if (hedged(own)) return;
         /* "Sure — I'll do the call. Tuesday works, let's find time." is one agreement
          * said twice, and listing it twice is the noise this cares most about. A
          * "let's" after your own commitment in the same message is elaboration; a
          * genuinely separate second commitment says "I'll" again. */
-        if (firm && !FIRM.test(s)) return;
-        if (FIRM.test(s)) firm = true;
+        if (firm && !FIRM.test(own)) return;
+        if (FIRM.test(own)) firm = true;
         /* No DELIVER check here, deliberately. A bare "attached" never reaches this
          * line — COMMIT already rejected it. The only sentences a DELIVER test could
          * reject are ones that commit *and* use delivery words, and those are promises:
          * "we’ll have the signed copy back Friday", "just sent it, I’ll follow up Monday".
          * Tense decides, not vocabulary, and a commitment is future tense by construction. */
-        if (COMMIT.test(s)) promises.push({ at: i, m: m, s: s, closer: null });
+        if (COMMIT.test(own)) promises.push({ at: i, m: m, s: s, closer: null });
       });
     });
 

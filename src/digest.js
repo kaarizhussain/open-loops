@@ -312,6 +312,7 @@ function render(b) {
   if (b.ledger) {
     p(open.length + ' open · ' + b.ledger.fresh + ' new' +
       (b.ledger.gone.length ? ' · ' + b.ledger.gone.length + ' cleared' : '') +
+      (b.ledger.aged && b.ledger.aged.length ? ' · ' + b.ledger.aged.length + ' aged out' : '') +
       (b.ledger.suppressed ? ' · ' + b.ledger.suppressed + ' hidden as wrong' : ''));
   }
 
@@ -424,6 +425,24 @@ function render(b) {
       // Blank under storeText:false — say something rather than print an empty line.
       p('  ' + (g.what || '(text not kept)') + (g.who ? '  — ' + g.who : ''));
     });
+    p('');
+  }
+
+  /* Not seen to close — only seen to leave the window. These were said before today's
+   * read began, so their absence is no evidence of anything, and they must not share a
+   * heading with the good news above. Listed once, so the reader can check them by hand;
+   * the ledger will not raise them again. Bounded by the same knob as the piles, because
+   * the first run after a long gap can age out a great many at once. */
+  var aged = (b.ledger && b.ledger.aged) || [];
+  if (aged.length) {
+    p('AGED OUT, NOT CLEARED (' + aged.length + ') — said more than ' +
+      (read.windowDays ? read.windowDays + ' days' : 'a read window') +
+      ' ago, so this run could not see whether they closed. Check these by hand:');
+    var agedShown = b.listCap ? aged.slice(0, b.listCap) : aged;
+    agedShown.forEach(function (g) {
+      p('  ' + (g.what || '(text not kept)') + (g.who ? '  — ' + g.who : ''));
+    });
+    if (agedShown.length < aged.length) p('  … and ' + (aged.length - agedShown.length) + ' more.');
     p('');
   }
 
