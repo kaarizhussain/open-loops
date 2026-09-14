@@ -19,6 +19,8 @@
  */
 var fs = require('fs');
 var path = require('path');
+// The detector's own idea of who is on which side, so placeholders can preserve it.
+var side = require(path.join(__dirname, '..', 'src', 'loops.js')).side;
 
 var argv = process.argv.slice(2);
 var opt = function (k) {
@@ -52,9 +54,20 @@ while ((m = NAME.exec(all))) {
   map[name] = line.indexOf('(' + self + ')') > -1 ? 'Alex Rivera' : 'Person ' + nextOf('name');
 }
 
+/* Addresses keep their sides. Everything used to become @example.com — the reader's own
+ * placeholder domain — so a sanitized capture moved every other participant onto the
+ * reader's side and erased exactly the structure a multi-person fixture exists to test.
+ * Each side now gets one placeholder domain: the reader's side is example.com, a
+ * colleague stays on it, two people at one company share a domain, and a consumer
+ * address — its own side — gets a domain of its own. */
+var sideDomain = {};
+sideDomain[side(you)] = 'example.com';
 (all.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || []).forEach(function (e) {
   var k = e.toLowerCase();
-  if (!map[k]) map[k] = 'person' + nextOf('email') + '@example.com';
+  if (map[k]) return;
+  var s = side(k);
+  if (!sideDomain[s]) sideDomain[s] = 'org' + nextOf('org') + '.example';
+  map[k] = 'person' + nextOf('email') + '@' + sideDomain[s];
 });
 
 // A Slack id is an uppercase prefix plus at least one digit, so an all-caps word never is.

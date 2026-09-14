@@ -107,7 +107,8 @@ var cap = [
   '',
   '=== Message from Pat Reader <pat@corp.io> (U0READER99) at 2026-09-01 12:05:00 EDT === ',
   'Message TS: 1788271500.000200',
-  'Thanks Sam — cc sam@vf.com and SAM@VF.COM.'
+  'Thanks Sam — cc sam@vf.com and SAM@VF.COM.',
+  'Copying bob@corp.io and jo@gmail.com in.'
 ].join('\n');
 fs.writeFileSync(path.join(tmp, 'cap.txt'), cap);
 var san = cp.spawnSync(process.execPath, [path.join(__dirname, '..', 'tools', 'sanitize-capture.js'),
@@ -115,11 +116,22 @@ var san = cp.spawnSync(process.execPath, [path.join(__dirname, '..', 'tools', 's
   path.join(tmp, 'cap.txt')], { encoding: 'utf8' });
 assert.strictEqual(san.status, 0, 'the sanitizer ran: ' + san.stderr);
 var clean = fs.readFileSync(path.join(tmp, 'out', 'cap.txt'), 'utf8');
-assert.ok(!/U0READER99|U0SAMPLE123|pat@corp|sam@vf|Pat Reader/i.test(clean), 'no identifier survives');
+assert.ok(!/U0READER99|U0SAMPLE123|pat@corp|sam@vf|bob@corp|jo@gmail|Pat Reader/i.test(clean),
+  'no identifier survives');
 assert.ok(/\(U0EXAMPLE001\)/.test(clean) && /<you@example\.com>/.test(clean) && /Alex Rivera/.test(clean),
   'the reader takes the placeholders every other fixture uses');
-assert.strictEqual((clean.match(/person1@example\.com/g) || []).length, 3,
+assert.strictEqual((clean.match(/person1@org1\.example/g) || []).length, 3,
   'one address, one placeholder, whatever its case');
+
+/* Sides survive sanitizing. Everything used to become @example.com, the reader's own
+   domain, which put every other participant on the reader's side. */
+var sideOf = loops.side;
+assert.ok(/person2@example\.com/.test(clean), 'a colleague at the reader\'s company stays on the reader\'s side');
+assert.ok(/person3@org2\.example/.test(clean), 'a consumer address is a side of its own');
+assert.notStrictEqual(sideOf('person1@org1.example'), sideOf('you@example.com'),
+  'and an outsider is still an outsider');
+assert.notStrictEqual(sideOf('person3@org2.example'), sideOf('person1@org1.example'),
+  'two unrelated outsiders are not made colleagues');
 assert.ok(/the same sample again/.test(clean), 'a short name cannot eat the inside of a word');
 assert.ok(/^Person 1, the same/m.test(clean) && /Thanks Person 1 /.test(clean),
   'but is replaced wherever it stands as a name');

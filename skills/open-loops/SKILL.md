@@ -99,6 +99,18 @@ support one or more executives, take names, and addresses if they have them.
 Everything else has a working default. Do not write settings they did not ask for —
 a config full of defaults is one nobody can tell they have edited.
 
+Don't ask about it, but if they mention clients or people who matter most, add them as
+`contacts`, keyed by address or whole domain, so those items rank higher and say who
+they are:
+
+```json
+"contacts": { "vectorfreight.com": { "tier": "key_account", "label": "Vector Freight" } }
+```
+
+A tier such as `key_account` or `investor` sets the weight; the label is what the
+digest prints. It lives in the config — the run's input can override an entry for a
+one-off, but a tier only in the input is gone the next day.
+
 **5. Run it once** (below) so they see output immediately, then offer to schedule it.
 
 ## Running the digest

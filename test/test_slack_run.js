@@ -604,5 +604,27 @@ var tz = runWith('tz zone name', { tzOffset: 'America/New_York', conversations: 
 assert.notStrictEqual(tz.status, 0, 'a zone name is refused');
 assert.ok(/tzOffset/.test(tz.stderr), 'with a message naming tzOffset, not "Invalid time value"');
 
+/* --- relationship tiers come from the config ---
+ *
+ * They were read from the run's input alone, which nothing in the shipped setup ever
+ * writes — so a tier set in the config was accepted, silently ignored, and the whole
+ * feature was unreachable through normal use. Found on the first run with other people
+ * in the workspace, which is the first time a tier could have applied at all. */
+var tierCfg = path.join(dir, 'tier.config.json');
+fs.writeFileSync(tierCfg, JSON.stringify({ you: ME, selfDm: 'U0EXAMPLE001',
+  ledger: path.join(dir, 'tier-ledger.json'),
+  contacts: { 'vectorfreight.com': { tier: 'key_account', label: 'Vector Freight' } } }));
+var fromLena = '=== Message from Lena <lena@vectorfreight.com> (U0EXAMPLE009) at 2026-09-01 12:00:00 EDT === \n' +
+  'Message TS: 1788271200.000100\n' + "I'll get you the signed MSA back by Tuesday.";
+var tierIn = path.join(dir, 'tier-input.json');
+var tierRun = function (extra) {
+  fs.writeFileSync(tierIn, JSON.stringify(Object.assign({ today: '2026-09-08',
+    conversations: [{ channel: '#deals', text: fromLena }] }, extra || {})));
+  return cp.spawnSync(process.execPath, [runner, tierIn, '--config', tierCfg, '--dry'], { encoding: 'utf8' }).stdout;
+};
+assert.ok(/Vector Freight/.test(tierRun()), 'a tier written in the config reaches the digest');
+assert.ok(/Anchor client/.test(tierRun({ contacts: { 'vectorfreight.com': { tier: 'key_account', label: 'Anchor client' } } })),
+  'and a run can still override an entry for a one-off');
+
 fs.rmSync(dir, { recursive: true, force: true });
 console.log('slack-run: OK');

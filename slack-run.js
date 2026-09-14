@@ -233,7 +233,12 @@ function main(argv) {
     mute: input.mute, unmute: input.unmute,
     spotCheck: input.spotCheck, actionList: input.actionList,
     storeText: input.storeText, keepLedgerDays: input.keepLedgerDays,
-    tzOffset: input.tzOffset
+    tzOffset: input.tzOffset,
+    /* Relationship tiers. This was read from the run's input alone, which nothing in the
+     * shipped setup ever writes — so a tier set in the config was accepted, silently
+     * ignored, and the whole feature was unreachable through normal use. Config now,
+     * with the run still able to add or override entries for a one-off. */
+    contacts: input.contacts
   });
 
   var self = cfg.you;
@@ -349,7 +354,7 @@ function main(argv) {
   try { events = parseEvents(input.events); }
   catch (e) { events = []; calendarError = e.message; }
 
-  var opts = { exec: self, today: today, contacts: input.contacts || null,
+  var opts = { exec: self, today: today, contacts: cfg.contacts || null,
                // Absent means the historical single unnamed executive; [] means you
                // support nobody, which is the common case for someone running this
                // over their own account.
