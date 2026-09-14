@@ -383,6 +383,9 @@ function main(argv) {
      and chose not to raise it yet; offering it as "found nothing" turns its own restraint
      into a recall miss the moment anyone answers honestly. */
   (result.held || []).forEach(function (id) { spoke[id] = 1; });
+  /* Nor is the message that closed something. The digest quotes it under CLOSED ITSELF as
+     the evidence; asking a line later whether it found nothing in it contradicts itself. */
+  result.closed.forEach(function (l) { if (l.closerId) spoke[l.closerId] = 1; });
 
   var beforeMute = result.open.length;
   var kept = L.applyMutes(result.open, mutes);
@@ -445,6 +448,13 @@ function main(argv) {
   var score = L.recall(foundToday, silent.length,
                        audit.checked + replies.checked, audit.missed.length + replies.misses.length);
 
+  /* The reply instructions in full until the reader has answered once, then as a key.
+   * Any answer counts — a rejection, a k, a spot-check reply — because any of them shows
+   * the loop has been learned. The config can pin either. */
+  var taught = replies.marked > 0 || replies.checked > 0 || audit.checked > 0 ||
+    rows.some(function (r) { return r[L.COL.verdict]; });
+  var replyKey = cfg.replyKey || (taught ? 'short' : 'long');
+
   /* Slack refuses a message over 4,000 characters, and a busy mailbox goes miles past
    * it — three Enron mailboxes rendered at 14k, 29k and 29k. That is not a long digest,
    * it is a digest that never arrives, and the runner is right to post nothing rather
@@ -482,6 +492,7 @@ function main(argv) {
     muted: muted, mutes: L.suggestMutes(rows).filter(function (s) { return !already[s.phrase]; }),
     learnedNow: fresh, learnedAll: learned,
     spotCheck: sample, recall: score, dark: result.dark, ignoredReplies: replies.ignored,
+    replyKey: replyKey,
     /* Conversations skipped, not threads. One counter served both, and only the
        conversation count was reduced by it — so skipping a thread under-reported how
        much was read, and enough of them printed a negative number of conversations. */

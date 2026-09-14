@@ -34,8 +34,9 @@ var DEFAULTS = {
   unmute: [],                 // overrides anything it muted on its own
 
   // The digest
-  actionList: 5,              // moves in the short list at the top. 0 turns it off
+  actionList: 5,              // moves spotlit under FIRST on a long list; a short one gets 1
   spotCheck: 5,               // messages sampled to ask what it missed. 0 turns it off
+  replyKey: null,             // "short" or "long". Unset: long until the first reply
 
   // The ledger
   ledger: 'ledger.json',

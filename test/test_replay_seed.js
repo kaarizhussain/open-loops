@@ -86,4 +86,30 @@ var digest = main([path.join(tmp, 'in.json'), '--config', path.join(tmp, 'cfg.js
 assert.ok(/Read \d+ messages across 2 conversations/.test(digest), 'the runner reads it');
 assert.strictEqual(digest.indexOf('NEEDS DANA'), -1, 'nothing the reader promised is filed as Dana\'s');
 
+/* --- the digest itself, on the Wednesday the demo is recorded ---
+ *
+ * The redesign (2026-09-14) was approved against exactly this output: the seed run, read
+ * on the 16th with a three-day window. Pinned so the approved shape cannot drift. */
+fs.writeFileSync(path.join(tmp, 'wed.json'), JSON.stringify({ today: '2026-09-16', tzOffset: -240,
+  conversations: convs, threads: threads }));
+fs.writeFileSync(path.join(tmp, 'wcfg.json'), JSON.stringify({ you: 'you@example.com', selfDm: 'U0EXAMPLE001',
+  supporting: DANA, contacts: CONTACTS, lookbackDays: 3, replyKey: 'short',
+  ledger: path.join(tmp, 'wed-ledger.json') }));
+var wed = main([path.join(tmp, 'wed.json'), '--config', path.join(tmp, 'wcfg.json'), '--dry']);
+var wl = wed.split('\n'), fi = wl.indexOf('FIRST');
+assert.ok(fi > -1, 'one item in the spotlight:\n' + wed);
+assert.ok(/^ 3  2d late\s+Answer Sam — "Are we still on for the vendor kickoff\?"$/.test(wl[fi + 1]),
+  'FIRST is Sam\'s question: ' + wl[fi + 1]);
+assert.ok(/"I need an answer today"/.test(wl[fi + 2]), 'with the sentence its deadline came from: ' + wl[fi + 2]);
+assert.ok(/^2 overdue · 1 due today · 3 due by Fri · 7 open$/m.test(wed), 'the state of the day in one line');
+assert.strictEqual(wed.split('Are we still on for the vendor kickoff').length - 1, 1, 'every loop appears once');
+assert.ok(/^ 3  2d late\s+↑ FIRST$/m.test(wed), 'its pile points at the spotlight instead');
+assert.ok(/date from Lena's "by Tuesday"/.test(wed), 'a borrowed deadline says whose it was');
+assert.ok(/closed Mon by Lena: "Signed MSA attached — sorry for the delay\."/.test(wed),
+  'and a closed one says what closed it');
+assert.ok(!/@org1\.example/.test(wed), 'people by name, not address');
+assert.strictEqual((wed.split('SPOT CHECK')[1] || '').indexOf('Signed MSA attached'), -1,
+  'the closing message is not offered as one it found nothing in');
+assert.ok(/^Reply   3 7  not real/m.test(wed) && !/isn't real/.test(wed), 'the short key, as configured');
+
 console.log('test_replay_seed: ok');

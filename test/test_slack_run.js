@@ -59,7 +59,7 @@ var text = main([write(input), '--ledger', ledger]);
 assert.ok(text.indexOf('OPEN LOOPS — for 2026-09-01') === 0, 'the digest is dated');
 assert.ok(/Read 6 messages across 3 conversations/.test(text),
   'and says conversations, not threads: ' + text.split('\n')[4]);
-assert.ok(/are overdue|is overdue/.test(text), 'the headline names the overdue work');
+assert.ok(/^\d+ overdue · /m.test(text), 'the counts line leads with what is overdue');
 
 /* Promises in both directions, found in Slack exactly as they are in mail. */
 assert.ok(text.indexOf("We'll get the revised contract back to you Friday Aug 28.") > -1,
@@ -69,22 +69,27 @@ assert.ok(text.indexOf("I'll put together a scope doc and send it Wednesday.") >
 assert.ok(text.indexOf('#vector-freight') > -1, 'the channel name stands in for a subject');
 
 /* Numbered, because a reply quotes the number back. */
-var numbered = text.split('\n').filter(function (l) { return /^\s*\d+\. \[/.test(l); });
+// The piles, not FIRST — which cites the same numbers out of order on purpose.
+var piles = text.slice(text.indexOf('\n\n', text.indexOf('\nFIRST') + 1));
+var numbered = piles.split('\n').filter(function (l) { return /^ ?\d+  \S/.test(l); });
 assert.ok(numbered.length >= 3, 'every open item is numbered, got ' + numbered.length);
 numbered.forEach(function (line, i) {
   assert.strictEqual(parseInt(line, 10), i + 1, 'numbering is contiguous: ' + line);
 });
-assert.ok(/· \d+ new/.test(text), 'a cold ledger reports everything as new');
+assert.ok(!/NEW|\d+ new/.test(text), 'on a cold ledger everything is new, so nothing needs marking new');
 
 /* ------------- the next day: the same conversations are not news ------------- */
 // Dated the next day: a second run on the same date replaces the first (see further down).
 var on = function (d) { var o = JSON.parse(JSON.stringify(input)); o.today = d; return write(o); };
 var again = main([on('2026-09-02'), '--ledger', ledger]);
-assert.ok(/· 0 new/.test(again), 'nothing is new the second time');
+assert.ok(!/\d+ new/.test(again) && /1d on the list/.test(again),
+  'nothing is new the next day, and each item says how long it has sat');
 assert.ok(again.indexOf('NEW · ') === -1, 'and no item is still flagged new');
 
 /* ------------- a correction, typed into the DM under the digest ------------- */
-var firstItem = numbered[0].replace(/^\s*\d+\.\s*\[[^\]]*\]\s*/, '');
+// Item 1's own words, from whichever line quotes it — its pile row, or FIRST if spotlit.
+var row1 = text.split('\n').filter(function (l) { return /^ 1  /.test(l) && /"/.test(l); })[0];
+var firstItem = row1.match(/"(.+)"/)[1].replace(/…$/, '');
 input.dm.text = [
   me(at(2026, 9, 1, 18), '```\n' + text + '\n```'),   // the digest, as it was posted
   me(at(2026, 9, 1, 19), '1')                          // "number 1 is not real"
@@ -95,6 +100,11 @@ assert.ok(/Took your last reply — 1 item marked wrong/.test(third),
   'the correction is acknowledged: ' + third.split('\n').slice(4, 8).join(' | '));
 assert.strictEqual(third.indexOf(firstItem), -1, 'and that item is gone: ' + firstItem);
 assert.ok(/1 hidden as wrong/.test(third), 'the count says something is being hidden');
+
+/* The instructions in full until the reader has answered once — that paragraph teaches
+   the loop — and a two-line key after, because nobody rereads it every evening. */
+assert.ok(/isn't real/.test(text) && !/^Reply   3 7/m.test(text), 'the first digest explains replies in full');
+assert.ok(/^Reply   3 7  not real/m.test(third) && !/isn't real/.test(third), 'once answered, a key is enough');
 
 /* The same reply must not be re-read. It stays in the DM forever, and re-applying it
    against a now-shorter list would mark a different item every single run. */
@@ -225,7 +235,7 @@ var quietInput = {
 
 var checked = main([write(quietInput), '--ledger', quietLedger]);
 assert.ok(/SPOT CHECK/.test(checked), 'it asks about what it stayed silent on');
-var lettered = checked.split('\n').filter(function (l) { return /^\s+[a-c]\) /.test(l); });
+var lettered = checked.split('\n').filter(function (l) { return /^  [a-c]  \S/.test(l); });
 assert.strictEqual(lettered.length, 3, 'three sampled, lettered not numbered');
 assert.ok(/Reply "miss b d"/.test(checked), 'and says how to answer');
 
@@ -241,7 +251,7 @@ assert.strictEqual(askedIds.length, 3, 'what was asked is recorded against the d
    nothing. */
 var again2 = main([write(quietInput), '--ledger', path.join(dir, 'quiet2.json')]);
 assert.deepStrictEqual(
-  again2.split('\n').filter(function (l) { return /^\s+[a-c]\) /.test(l); }), lettered,
+  again2.split('\n').filter(function (l) { return /^  [a-c]  \S/.test(l); }), lettered,
   'the same day samples the same messages');
 
 /* Answering it. "miss b" flags one; the rest of what was asked counts as checked. */
@@ -467,7 +477,8 @@ cal.events = { events: [{
 var sighted = main([write(cal), '--ledger', path.join(dir, 'c2.json')]);
 assert.ok(/and 1 meetings/.test(sighted), 'the calendar is read: ' +
   sighted.split('\n').filter(function (l) { return /^Read /.test(l); })[0]);
-assert.ok(/No agenda attached/.test(sighted), 'a meeting tomorrow with an outside guest fires');
+// The only item, so it is the one in FIRST — as the move rather than the signal's name.
+assert.ok(/Send an agenda — |No agenda attached/.test(sighted), 'a meeting tomorrow with an outside guest fires');
 assert.ok(/NEEDS TO GO OUT TODAY/.test(sighted),
   'and the brief says the agenda has to leave today, since one arriving on the morning'
   + ' of is too late to prep against');

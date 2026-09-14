@@ -696,11 +696,15 @@ function sentences(body) {
  * still passes. Tighten it against real chat if that shows up. */
 var DEADLINE = /\b(?:need|needs|needed|by|before|due|deadline|asap|at the latest)\b/i;
 function askDue(q, m, ours) {
-  var d = ours ? null : parseDue(q, m.date);
+  var d = ours ? null : parseDue(q, m.date), from = null;
   sentences(m.body).forEach(function (x) {
-    if (!d && x !== q && DEADLINE.test(x) && !FIRM.test(x) && !LETS.test(x)) d = parseDue(x, m.date);
+    if (!d && x !== q && DEADLINE.test(x) && !FIRM.test(x) && !LETS.test(x)) {
+      d = parseDue(x, m.date);
+      // Where the date came from, so the digest can quote it: it is not in the question.
+      if (d) from = { text: x, from: m.from, same: true };
+    }
   });
-  return d;
+  return { due: d, dueFrom: from };
 }
 function shorten(s, n) {
   s = s.replace(/\s+/g, ' ').trim();
@@ -854,10 +858,12 @@ function detectLoops(messages, events, opts) {
        * 15th" ends up due tomorrow, because tomorrow appeared in an unrelated
        * sentence further up. Harmless in mail, where a thread is one subject.
        * Not harmless in chat, where the thread is an entire channel. */
-      var due = parseDue(s, m.date);
+      var due = parseDue(s, m.date), dueFrom = null;
       for (var k = i - 1; k >= 0 && !due; k--) {
         if (msgs[k].out === m.out) continue;
         due = parseDue(msgs[k].body, msgs[k].date);
+        // Borrowed from the other side, so the digest has to say whose date it is.
+        if (due) dueFrom = { text: msgs[k].body, from: msgs[k].from, same: false };
       }
 
       /* Chat splits one sentence across two bubbles. "I'll send the board deck." then,
@@ -884,6 +890,7 @@ function detectLoops(messages, events, opts) {
             gap >= 0 && gap <= 5 * 60000 &&
             String(nxt.body || '').trim().length <= 25) {
           due = parseDue(nxt.body, nxt.date);
+          if (due) dueFrom = { text: nxt.body, from: nxt.from, same: true };
         }
       }
 
@@ -918,8 +925,12 @@ function detectLoops(messages, events, opts) {
         // (m.to || []) — an adapter may omit the key entirely on an outbound message,
         // and this line running unguarded threw and took the whole evening run with it.
         who: m.out ? (stream ? attribute(i, s) : (counterparty || (m.to || [])[0])) : m.from, byUs: m.out,
-        what: shorten(s, 110), said: day(m.date), due: due,
+        what: shorten(s, 110), said: day(m.date), due: due, dueFrom: dueFrom,
         closedOn: closer ? day(closer.date) : bookedBy ? day(bookedBy.start) : null,
+        // Who closed it and with which message: the digest quotes the evidence, and the
+        // spot check must not offer that message back as one it found nothing in.
+        closedByWho: closer ? (closer.out ? 'you' : closer.from) : null,
+        closerId: closer ? closer.id : null,
         closedBy: closer
           ? shorten(sentences(closer.body).find(function (x) { return DELIVER.test(x); }) || closer.body, 80)
           : bookedBy ? 'In the diary: ' + shorten(bookedBy.title, 60) : null,
@@ -952,13 +963,14 @@ function detectLoops(messages, events, opts) {
         var age = daysBetween(day(m.date), today);
         if (replied) return;
         if (age < 2) { held.push(m.id); return; }
+        var ad = askDue(q, m, m.out);
         out.push(m.out
           ? { type: 'awaiting_reply', threadId: tid, subject: m.subject, who: attribute(i, q), byUs: false,
-              what: shorten(q, 110), said: day(m.date), age: age, due: askDue(q, m, true),
+              what: shorten(q, 110), said: day(m.date), age: age, due: ad.due, dueFrom: ad.dueFrom,
               excerpt: m.body, msgId: m.id }
           : { type: 'unanswered_ask', threadId: tid, subject: m.subject, who: m.from, byUs: true,
               pendingCount: 1, what: shorten(q, 110), said: day(m.date), age: age,
-              due: askDue(q, m, false), excerpt: m.body, msgId: m.id });
+              due: ad.due, dueFrom: ad.dueFrom, excerpt: m.body, msgId: m.id });
       });
     } else if (lastIn > lastOut) {
       // They are waiting on us. Age from the oldest thing still unanswered.
@@ -967,12 +979,12 @@ function detectLoops(messages, events, opts) {
         var first = pending[0], fAge = daysBetween(day(first.date), today);
         if (fAge < 2) pending.forEach(function (p) { held.push(p.id); });
         if (fAge >= 2) {
-          var fs = askIn(first);
+          var fs = askIn(first), fd = askDue(fs, first, false);
           out.push({
             type: 'unanswered_ask', threadId: tid, subject: first.subject,
             who: first.from, byUs: true, pendingCount: pending.length,
             what: shorten(fs, 110), said: day(first.date), age: fAge,
-            due: askDue(fs, first, false), excerpt: first.body, msgId: first.id
+            due: fd.due, dueFrom: fd.dueFrom, excerpt: first.body, msgId: first.id
           });
         }
       }
@@ -986,12 +998,13 @@ function detectLoops(messages, events, opts) {
       var ours = waiting[0], oAge = ours && daysBetween(day(ours.date), today);
       if (ours && oAge < 2) held.push(ours.id);
       if (ours && oAge >= 2) {
+        var od = askDue(askIn(ours), ours, true);
         out.push({
           type: 'awaiting_reply', threadId: tid, subject: ours.subject,
           who: counterparty || (ours.to || [])[0], byUs: false,
           what: shorten(askIn(ours), 110), said: day(ours.date), age: oAge,
           // A date in the question itself is a proposed slot; askDue only takes a stated one.
-          due: askDue(askIn(ours), ours, true), excerpt: ours.body, msgId: ours.id
+          due: od.due, dueFrom: od.dueFrom, excerpt: ours.body, msgId: ours.id
         });
       }
     }

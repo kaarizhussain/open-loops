@@ -220,8 +220,8 @@ So each digest also samples the silence:
 
 ```
 SPOT CHECK — it found nothing in these. Did it miss something?
-  a) Sending the signed contract now.      — #new-channel
-  b) Let me know your thoughts on the deck when you have a minute.      — #all-open-loops
+  a  Sending the signed contract now.                              #new-channel
+  b  Let me know your thoughts on the deck when you have a minute. #all-open-loops
 Reply "miss b d" for any that did contain a commitment, or "miss" on its own
 if none did. Saying none is what makes the rest of it evidence.
 ```

@@ -35,16 +35,17 @@ assert.ok(!/undefined|NaN|\[object/.test(text), 'nothing leaked through as undef
 /* --- numbering is what a reply quotes back, so it has to be exact --- */
 assert.strictEqual(keys.length, result.open.length, 'every open item gets a number');
 
-/* Measured below the short list, which cites the same numbers out of order on purpose
-   and would otherwise be counted as part of the sequence. */
-var body = text.split('…and ').slice(1).join('…and ') || text;
-var numbered = body.split('\n').filter(function (l) { return /^\s*\d+\. \[/.test(l); });
+/* Measured on the piles. FIRST cites the same numbers out of order on purpose and would
+   otherwise be counted as part of the sequence. */
+var ROW = /^ ?\d+  \S/;
+var piles = function (t) { var i = t.indexOf('\nFIRST'); return i < 0 ? t : t.slice(t.indexOf('\n\n', i + 1)); };
+var numbered = piles(text).split('\n').filter(function (l) { return ROW.test(l); });
 assert.strictEqual(numbered.length, keys.length, 'one numbered line per open item');
 numbered.forEach(function (line, i) {
   assert.strictEqual(parseInt(line, 10), i + 1, 'numbering runs 1..n in print order: ' + line);
 });
 
-/* --- the headline, in each of its four states --- */
+/* --- the headline, now only for an empty list, in each of its four states --- */
 var mk = function (over) {
   var l = { subject: 'Meridian MSA', status: 'open', overdueDays: 0, ageDays: 3, rel: null };
   Object.keys(over || {}).forEach(function (k) { l[k] = over[k]; });
@@ -63,14 +64,14 @@ assert.ok(/Nothing overdue\. 1 thing lands today/.test(
 assert.ok(/quietest is Meridian MSA, untouched for 11 days/.test(
   headline([mk({ ageDays: 11 })])), 'and with no deadlines at all, to what has gone quiet');
 
-/* --- the short list answers a different question from the long one --- */
+/* --- FIRST: the spotlight answers a different question from the piles --- */
 
 /* The piles answer "what is outstanding, and who acts next". At nine in the morning
    the question is "what do I do next", and no amount of sorting forty items answers
    that — this is selection, not ordering. */
-var block = text.split('DO THESE FIRST')[1].split('\n\n')[0].split('\n');
-var head = block.filter(function (l) { return /^\s*\d+\. \[/.test(l); });
-assert.strictEqual(head.length, 5, 'five moves by default, got: ' + head.join(' | '));
+var block = text.split('\nFIRST')[1].split('\n\n')[0].split('\n');
+var head = block.filter(function (l) { return ROW.test(l); });
+assert.strictEqual(head.length, 5, 'five moves on a long list, got: ' + head.join(' | '));
 
 /* Numbered from the full list rather than renumbered, so replying "4" to reject
    something means the same thing wherever in the digest you read it. */
@@ -80,26 +81,35 @@ assert.ok(refs.every(function (n) { return n >= 1 && n <= result.open.length; })
 assert.ok(refs.some(function (n, i) { return i && n < refs[i - 1]; }),
   'and they are not in numeric order, because they are ranked by urgency not position');
 
+/* Every loop appears once. FIRST is a spotlight, not a second list: a spotlit item is
+   only pointed at from its pile. */
+refs.forEach(function (n) {
+  var inPile = numbered.filter(function (x) { return parseInt(x, 10) === n; })[0];
+  assert.ok(/↑ FIRST$/.test(inPile), 'item ' + n + ' is pointed at, not repeated: ' + inPile);
+});
+
 /* One per counterparty. Chasing three people about five things is three messages, and
    five lines from one conversation is a single move dressed up as five. */
 var parties = actionList(result.open, 5).map(function (l) { return l.who; });
 assert.strictEqual(new Set(parties).size, parties.length, 'no counterparty appears twice');
 
-/* The verb comes from the signal type, where it can honestly come from. A list of
-   quotations still leaves you working out what to do with each one. */
+/* The verb comes from the signal type, where it can honestly come from. */
 assert.ok(/Send an agenda —/.test(text), 'a meeting with no agenda names the action');
 assert.ok(/Chase /.test(text), 'something someone else owes is a chase');
-assert.ok(block.every(function (l) { return l.length <= 82; }),
-  'nothing wraps, drafts included — a list that wraps is not one you can scan: ' +
-  block.filter(function (l) { return l.length > 82; }).join(' | '));
+var moveLines = block.filter(function (l) { return ROW.test(l) || /^\s+→ /.test(l); });
+/* 82 was the bound with an 8-space indent; the status column adds 7, so it moves to 90. */
+assert.ok(moveLines.every(function (l) { return l.length <= 90; }),
+  'no move or draft wraps — a list that wraps is not one you can scan: ' +
+  moveLines.filter(function (l) { return l.length > 90; }).join(' | '));
 
-/* Below the threshold the full list already is the short list, and printing both is
-   saying everything twice. */
+/* A short list is already short, so the spotlight holds one item — and turning the long
+   spotlight off leaves that one. */
+var firstRows = function (t) { return t.split('\nFIRST')[1].split('\n\n')[0].split('\n').filter(function (l) { return ROW.test(l); }); };
 var few = { today: F.TODAY, messages: [], events: [], briefs: [],
   result: { open: result.open.slice(0, 4), closed: [] } };
-assert.strictEqual(render(few).indexOf('DO THESE FIRST'), -1, 'no short list for a short list');
-assert.strictEqual(render({ today: F.TODAY, messages: [], events: [], briefs: [],
-  actionList: 0, result: result }).indexOf('DO THESE FIRST'), -1, 'and it can be turned off');
+assert.strictEqual(firstRows(render(few)).length, 1, 'a short list spotlights one item');
+assert.strictEqual(firstRows(render({ today: F.TODAY, messages: [], events: [], briefs: [],
+  actionList: 0, result: result })).length, 1, 'and so does a long one with the move list off');
 
 /* --- the note to send, where sending a note is the move ---
  *
@@ -141,9 +151,10 @@ var anon = d({ who: 'hr@northstar.io' });
 assert.strictEqual(anon.indexOf('Hi '), -1, 'no greeting when there is no name');
 assert.ok(/^[A-Z]/.test(anon), 'and it still reads as a sentence: ' + anon);
 
-/* In the digest, only on the short list — one line per move, where you are about to
-   act. On every item it would be clutter. */
+/* In the digest, only in FIRST — one line per move, where you are about to act. On
+   every item it would be clutter. */
 assert.ok(/→ Hi \w+ — /.test(text), 'the note appears under the move it belongs to');
+assert.strictEqual(piles(text).indexOf('→ '), -1, 'and never in the piles');
 
 /* --- things a second runtime will not have --- */
 var bare = render({
@@ -164,8 +175,6 @@ assert.ok(/across 40 conversations/.test(capped), 'a Slack read says conversatio
 assert.ok(/INCOMPLETE — stopped at the 40-conversation limit/.test(capped),
   'and names its own limit rather than Gmail\'s');
 
-
-
 /* --- fitting a long digest into a message that will actually send ---
  *
  * Slack refuses anything over 4,000 characters. A real mailbox goes far past it — three
@@ -180,8 +189,7 @@ var capped = render({ today: F.TODAY, messages: F.MESSAGES, events: F.EVENTS,
                       result: result, briefs: briefs, listCap: 2 });
 
 var linesIn = function (t) {
-  var body = t.split('…and ').slice(1).join('…and ') || t;
-  return body.split('\n').filter(function (l) { return /^\s*\d+\. \[/.test(l); }).length;
+  return piles(t).split('\n').filter(function (l) { return ROW.test(l); }).length;
 };
 assert.strictEqual(linesIn(uncapped), result.open.length,
   'with no cap asked for, every item still prints — the Slack ceiling is the runner\'s problem');
@@ -199,7 +207,7 @@ assert.strictEqual(linesIn(capped) + heldTotal, result.open.length,
 
 /* Numbers are assigned over the full list, so rejecting "7" means the same thing
    whether or not the item above it was trimmed. */
-assert.ok(/^\s*\d+\. \[/m.test(capped), 'capped items keep their original numbers');
+assert.ok(/^ ?\d+  \S/m.test(capped), 'capped items keep their original numbers');
 
 /* --- conversations went in and no message came out ---
  *
@@ -241,33 +249,31 @@ assert.ok(!/NOTHING READ IN/.test(blind),
 /* --- found by running it against a real Slack workspace ---
  *
  * On Slack the "subject" is the channel name, and a workspace has a handful of those.
- * The headline is the one line everybody reads, and it said "the oldest by 2 days is
- * #all-open-loops" — naming nothing that was actually late. An email subject describes
- * the thing, so it stays; on Slack the commitment is the only identifier there is. */
-var headliner = function (source, what) {
-  return render({
-    today: '2026-09-04', source: source, listCap: 12, messages: [{}], events: [],
+ * The line everybody reads once said "the oldest by 2 days is #all-open-loops" — naming
+ * nothing that was actually late. The spotlight names the commitment; where it was said
+ * goes on the line beneath. */
+var spotlight = function (what) {
+  var out = render({
+    today: '2026-09-04', source: 'slack', listCap: 12, messages: [{}], events: [],
     result: { open: [{ type: 'owed_by_us', owner: 'you', status: 'overdue', overdueDays: 2,
                        what: what, subject: '#all-open-loops', who: '', n: 1 }],
               closed: [], dark: 0 },
     briefs: [], ledger: { shown: [], gone: [] }, marked: 0,
     read: { threads: 2, unread: [], shortRead: [], skipped: 0, windowDays: 21 }
-  }).split('\n')[2];
+  }).split('\n');
+  var i = out.indexOf('FIRST');
+  return { row: out[i + 1], meta: out[i + 2] };
 };
 var LONG = "I'm going to draft the onboarding doc and share it EOD tomorrow.";
-assert.ok(/onboarding doc/.test(headliner('slack', LONG)),
-  'on Slack the headline names the commitment');
-assert.ok(!/#all-open-loops/.test(headliner('slack', LONG)),
-  'and not the channel, which is shared by everything in it');
-assert.ok(/#all-open-loops/.test(headliner('mail', LONG)),
-  'a mail subject describes the thing, so it is still used');
-/* A trimmed commitment already ends in an ellipsis and the sentence added a stop on
-   top of it — "share it…." */
-assert.ok(!/\.\.\.\.|…\./.test(headliner('slack', LONG)), 'one full stop, not two');
+assert.ok(/onboarding doc/.test(spotlight(LONG).row), 'FIRST names the commitment');
+assert.ok(!/#all-open-loops/.test(spotlight(LONG).row), 'and not the channel, which everything in it shares');
+assert.ok(/#all-open-loops/.test(spotlight(LONG).meta), 'which goes underneath, as where it was said');
+/* A trimmed commitment already ends in an ellipsis and a stop was once added on top of
+   it — "share it…." */
+assert.ok(!/\.\.\.\.|…\./.test(spotlight(LONG).row), 'one full stop, not two');
 
-/* `who` falls back to the word "them", which every other move reads correctly ("Chase
-   them", "Answer them") and this one does not — a bare "them — I'm going to draft the
-   onboarding doc" is a placeholder printed where a name goes. */
+/* `who` can be empty, and "them — I'm going to draft the onboarding doc" is a
+   placeholder printed where a name goes. */
 var moveLine = function (who) {
   var out = render({
     today: '2026-09-04', source: 'slack', listCap: 12, actionList: 5,
@@ -279,11 +285,69 @@ var moveLine = function (who) {
     briefs: [], ledger: { shown: [], gone: [] }, marked: 0,
     read: { threads: 1, unread: [], shortRead: [], skipped: 0, windowDays: 21 }
   }).split('\n');
-  // The first line of the moves block. The headline quotes the same commitment, so
-  // matching on the text alone picks that up instead.
-  return out[out.findIndex(function (s) { return /^DO THESE FIRST/.test(s); }) + 1];
+  return out[out.findIndex(function (s) { return /^FIRST/.test(s); }) + 1];
 };
 assert.ok(!/them —/.test(moveLine('')), 'no counterparty means no name, not "them"');
-assert.ok(/lena@corp\.io —/.test(moveLine('lena@corp.io')), 'a real name still leads the line');
+assert.ok(/You owe Lena — /.test(moveLine('lena@corp.io')), 'a real person is named: ' + moveLine('lena@corp.io'));
+
+/* --- the redesign's own rules, 2026-09-14 --- */
+var one = function (b) {
+  var base = { today: '2026-09-16', source: 'slack', messages: [], events: [], briefs: [],
+               result: { open: [], closed: [] } };
+  Object.keys(b).forEach(function (k) { base[k] = b[k]; });
+  return render(base);
+};
+var item = function (over) {
+  var l = { type: 'owed_by_us', owner: 'you', status: 'open', what: 'x', subject: '#a', n: 1 };
+  Object.keys(over).forEach(function (k) { l[k] = over[k]; });
+  return l;
+};
+
+// Dates as a reader says them: a weekday within the week, a date beyond it.
+var dated = one({ result: { open: [item({ due: '2026-09-17' }), item({ n: 2, due: '2026-10-02', what: 'y' })], closed: [] } });
+assert.ok(/^OPEN LOOPS — for 2026-09-16 · Wed$/m.test(dated), 'the header keeps the date replies are matched on');
+assert.ok(/^ 1  Thu\s+↑ FIRST$/m.test(dated) && /^ 2  2 Oct\s+You: "y"$/m.test(dated),
+  'Thu this week, 2 Oct beyond it:\n' + dated);
+
+// NEW only when it tells you something.
+var tagged = function (fresh) {
+  return one({ ledger: { fresh: fresh, suppressed: 0, gone: [] }, result: { open: [
+    item({ isNew: true }),
+    item({ n: 2, what: 'y', isNew: fresh === 2, trackedDays: fresh === 2 ? 0 : 3 })
+  ], closed: [] } });
+};
+assert.ok(!/NEW|\d new/.test(tagged(2)), 'when everything is new, nothing is marked new');
+assert.ok(/NEW/.test(tagged(1)) && /· 1 new/.test(tagged(1)) && /3d on the list/.test(tagged(1)),
+  'on a mixed day the new one is marked and the old one says how long it has sat');
+
+// The reply instructions: in full by default, a key when asked.
+assert.ok(/isn't real/.test(one({})) && !/^Reply   3 7/m.test(one({})), 'in full by default');
+assert.ok(/^Reply   3 7  not real/m.test(one({ replyKey: 'short' })) && !/isn't real/.test(one({ replyKey: 'short' })),
+  'as a two-line key once the reader knows it');
+
+// People by the name they go by — unless two share it.
+var ask = function (who, n) { return item({ type: 'unanswered_ask', what: 'Can you check?', who: who, n: n }); };
+var named = one({ messages: [{ from: 's1@a.io', fromName: 'Sam M' }],
+  result: { open: [ask('s1@a.io', 1), ask('lee@a.io', 2)], closed: [] } });
+assert.ok(/Answer Sam — /.test(named) && /Lee asked: "Can you check\?"/.test(named),
+  'the display name, then a name off the address:\n' + named);
+var twoSams = one({ messages: [{ from: 's1@a.io', fromName: 'Sam M' }, { from: 's2@b.io', fromName: 'Sam K' }],
+  result: { open: [ask('s1@a.io', 1), ask('s2@b.io', 2)], closed: [] } });
+assert.ok(!/Sam/.test(twoSams) && /s2@b\.io asked/.test(twoSams), 'two Sams keep their addresses');
+
+// The evidence: where a borrowed date came from, and what closed something.
+var why = one({ result: { open: [
+  item({ type: 'unanswered_ask', who: 'sam@a.io', what: 'Are we still on?', status: 'overdue', overdueDays: 2, due: '2026-09-14',
+         dueFrom: { text: 'I need an answer today.', from: 'sam@a.io', same: true } }),
+  item({ n: 2, what: "I'll circulate the redline.", status: 'overdue', overdueDays: 1, due: '2026-09-15',
+         dueFrom: { text: "I'll get you the signed MSA back by Tuesday.", from: 'lena@a.io', same: false } })
+], closed: [
+  { type: 'closed', openType: 'owed_to_us', who: 'lena@a.io', what: "I'll get you the signed MSA back by Tuesday.",
+    closedOn: '2026-09-14', closedBy: 'Signed MSA attached.', closedByWho: 'lena@a.io' }
+] } });
+assert.ok(/· "I need an answer today"/.test(why), 'a deadline from the next sentence is quoted');
+assert.ok(/date from Lena's "by Tuesday"/.test(why), 'one from somebody else says whose');
+assert.ok(/^    Lena: "I'll get you the signed MSA back by Tuesday\."$/m.test(why) &&
+  /^      closed Mon by Lena: "Signed MSA attached\."$/m.test(why), 'and a closed item says what closed it:\n' + why);
 
 console.log('digest: OK');

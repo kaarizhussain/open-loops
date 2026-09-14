@@ -27,6 +27,7 @@
   "unmute": [],
   "actionList": 5,
   "spotCheck": 5,
+  "replyKey": null,
   "ledger": "ledger.json",
   "keepLedgerDays": 90,
   "storeText": true,

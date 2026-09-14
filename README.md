@@ -77,45 +77,52 @@ between a mailbox and a calendar — the seam no single-product assistant reache
 
 ## What comes out
 
-From 25 messages and 5 meetings, grouped by who acts next:
+From 25 messages and 5 meetings — the top of it:
 
 ```
-OPEN LOOPS — for 2026-08-06
+OPEN LOOPS — for 2026-08-06 · Thu
 
-4 are overdue. The oldest by 6 days is Intro to Halcyon Robotics (Investor).
+FIRST — one move each, most pressing first
+ 7  6d late    You owe Greg — "I'll connect you with Sana this week."
+               Greg · Investor · Intro to Halcyon Robotics · 30 Jul
+               → Hi Greg — I still owe you this — sending it today, sorry for the lag.
+ 8  today      Send an agenda — Larkspur Retail — renewal decision
+               m.osei@larkspurretail.com · Key account · Larkspur Retail — renewal decision · Thu
+ 3  6d late    Chase Paul — "We will have their comments back to you by Friday Jul 31…"
+               Key account · Meridian MSA — redlines · 28 Jul
+               → Hi Paul — checking in on this — anything holding it up your end?
+ ...
 
-Read 25 messages across 18 threads and 5 meetings.
-15 open · 15 new
-
-NEEDS TO GO OUT TODAY
-  [LATE] Larkspur Retail — renewal decision — today, no agenda (m.osei@larkspurretail.com)
-  Vector Freight — Q3 QBR — tomorrow, no agenda (lena.borg@vectorfreight.com)
+4 overdue · 2 due today · 2 due by Fri · 15 open
 
 NEEDS THE EXECUTIVE (2) — Only they can produce or decide this — protect the time for it.
- 1. [today] Yes — I'll send it Thursday EOD.
-      CFO · marcus.bell@northstar.io · Q3 board deck — revenue section
- 2. [due 2026-08-08] I'll review and get back to you before the deadline.
-      People team · hr@northstar.io · Sales comp plan — sign-off needed
-      note: stated 2026-08-08 is a weekend — last working day is 2026-08-07
+ 1  today      ↑ FIRST
+ 2  Sat        You: "I'll review and get back to you before the deadline."
+               hr@northstar.io · People team · Sales comp plan — sign-off needed · Sun · date from People team's "by Aug 8"
+               note: stated 2026-08-08 is a weekend — last working day is 2026-08-07
 
 CHASE THEM (4) — Someone else owes this. Your move is the nudge.
- 3. [6d late] We will have their comments back to you by Friday Jul 31 at the latest.
-      Key account · paul.oyelaran@meridianhealth.com · Meridian MSA — redlines
+ 3  6d late    ↑ FIRST
+ 4  3d late    ↑ FIRST
+ 5  no date    You asked: "Hi Paul — checking in on the redlines."
  ...
 ```
 
-It opens with the single worst thing rather than with how many messages it read — a
-digest that leads with its own statistics is a system reporting on itself. The three
-piles are the assistant's actual working split: what only the executive can do, what
-someone else owes you, and what you can close out yourself.
+It opens with what to do first, not with how many messages it read — a digest that
+leads with its own statistics is a system reporting on itself. FIRST spotlights the most
+pressing move — one per person on a long list — with a note to send, and every loop
+appears once: a spotlit item is only pointed at from its pile. The three piles are the
+assistant's actual working split: what only the executive can do, what someone else owes
+you, and what you can close out yourself.
 
-Every line after the first also says what *changed*. The same fifteen items arriving
-every morning is a list nobody reads by Thursday — not because it is inaccurate, but
-because it is identical. Repetition kills a digest faster than error does, so each item
-carries `NEW` or how long it has been sitting there, and anything that dropped off is
-reported once as cleared.
+Every item quotes the sentence it came from and says who said it, where and when — and
+when a deadline was borrowed from another message, whose it was. What closed itself says
+what closed it. That is what a reader checks the list against, in seconds.
 
-Each item carries the sentence it came from and the rule that fired.
+The same fifteen items every morning is a list nobody reads by Thursday — not because it
+is inaccurate, but because it is identical. So what changed rides on the counts line, on
+a day with old and new items mixed each item says `NEW` or how long it has sat, and
+anything that dropped off is reported once as cleared.
 
 ### Seeing it without installing it
 

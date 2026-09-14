@@ -10,11 +10,17 @@
  *
  *   { today, messages[], events[], result: {open[], closed[]}, briefs[],
  *     ledger: {fresh, suppressed, gone[]}, read: {threads, capped, cap},
- *     marked, source, ledgerUrl }
+ *     marked, source, ledgerUrl, replyKey }
  *
  * `OWNER` and `LABEL` come from loops.js as free variables, the same way ledger.js
  * uses loopKey — in Apps Script every file shares one global scope, and in node the
  * tests assign them before requiring this.
+ *
+ * The shape, since 2026-09-14: a spotlight, a line of counts, then the piles — and every
+ * loop appears once. The digest had grown into a report on the detector; this is the
+ * version an assistant can take in within ten seconds, and it keeps the evidence: every
+ * item quotes its sentence, says who said it and where, and says where a borrowed
+ * deadline came from.
  */
 
 /* Who acts next, in the order an assistant would want to read it: what only the
@@ -34,11 +40,6 @@ function ownerTitle(key, principals) {
     : OWNER.exec.title;          // several: the name goes on each item instead
 }
 
-/* One sentence naming the worst of it, before any counts.
- *
- * A digest that opens with how many messages it read is a system reporting on itself.
- * Someone good at this job opens with the thing you would be most annoyed to discover
- * on Friday. The ranking already knows which item that is; this only has to say it. */
 /* Enough of a message to judge it, not so much that five of them bury the list. */
 function shortenBody(s, n) {
   var t = String(s || '').replace(/\s+/g, ' ').trim();
@@ -51,6 +52,24 @@ function pad(s, n) { while (s.length < n) s += ' '; return s; }
 // The headline is the one line everybody reads, and "1 days past" reads as a bug in it.
 function days(n) { return n + (n === 1 ? ' day' : ' days'); }
 
+/* Dates as a reader says them. "Thu" is read at a glance; "2026-09-17" is decoded. A
+ * weekday is only unambiguous within a week either side of today, so beyond that it is
+ * the date. */
+var DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+var MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function utc(iso) { return new Date(String(iso).slice(0, 10) + 'T00:00:00Z'); }
+function dayLabel(iso, today) {
+  if (!iso) return '';
+  var d = utc(iso);
+  if (isNaN(d)) return String(iso);
+  return Math.abs(Math.round((d - utc(today)) / 864e5)) <= 6
+    ? DOW[d.getUTCDay()] : d.getUTCDate() + ' ' + MONTH[d.getUTCMonth()];
+}
+
+/* One sentence naming the worst of it, before any counts.
+ *
+ * Now only for an empty list — a list with anything on it opens with FIRST, which names
+ * the item and the move rather than describing them. */
 function headline(open, source) {
   if (!open.length) return 'Nothing outstanding. Genuinely — the list is empty.';
 
@@ -102,7 +121,7 @@ function digestOrder(open) {
   return keys;
 }
 
-/* The short list at the top answers a different question from the long one below it.
+/* What FIRST spotlights. It answers a different question from the piles.
  *
  * The piles answer "what is outstanding, and who acts next" — a status question. At
  * nine in the morning the question is "what do I do in the next hour", and no amount of
@@ -123,30 +142,26 @@ function actionList(open, limit) {
   return out;
 }
 
-/* What the move is, rather than what the commitment said. "Chase Meridian" is an
- * instruction; "We will have their comments back to you by Friday" is a quotation, and
- * a list of quotations still leaves you working out what to do with each one.
+/* What the move is, rather than what the commitment said. "Chase Lena" is an
+ * instruction; the sentence beside it is the evidence.
  *
  * The verb comes from the signal type, which is the only place it can honestly come
- * from — three of them name an action outright, and for a plain promise the sentence
- * already says what was promised, so naming who it is owed to is the useful half. */
-function move(l) {
-  var who = l.rel ? l.rel.label : (l.who || 'them');
+ * from. Where nobody is attributed there is no name to lead with — "Chase them" reads
+ * correctly, but "them — I'm going to draft the onboarding doc" was a placeholder
+ * printed where a name goes, so a promise of your own to nobody in particular says so. */
+function move(l, nm) {
+  var who = nm(l.who) || (l.rel ? l.rel.label : null);
+  if (who && who.indexOf('@') > -1) who = callName(who, l);
+  var q = '"' + shortenBody(l.what, 60) + '"';
   if (l.type === 'unprepped_meeting') return 'Send an agenda — ' + l.subject;
-  if (l.type === 'no_followup') return 'Send a recap to ' + who;
-  if (l.type === 'agreed_unscheduled') return 'Get it booked — ' + shortenBody(l.what);
-  if (l.type === 'unanswered_ask') return 'Answer ' + who + ' — ' + shortenBody(l.what);
-  if (l.owner === 'them') return 'Chase ' + who + ' — ' + shortenBody(l.what);
+  if (l.type === 'no_followup') return 'Send a recap to ' + (who || 'them');
+  if (l.type === 'agreed_unscheduled') return 'Get it booked — ' + q;
+  if (l.type === 'unanswered_ask') return 'Answer ' + (who || 'them') + ' — ' + q;
+  if (l.owner === 'them') return 'Chase ' + (who || 'them') + ' — ' + q;
   if (l.owner === 'exec') {
-    return 'Needs ' + (l.principal ? l.principal.label : 'the executive') +
-      ' — ' + shortenBody(l.what);
+    return 'Needs ' + (l.principal ? l.principal.label : 'the executive') + ' — ' + q;
   }
-  /* Something you owe, with nothing more specific to say about it than what you said.
-   * The name only leads the line when there is one — `who` falls back to "them", which
-   * every branch above reads correctly ("Chase them", "Answer them") and this one does
-   * not: "them — I'm going to draft the onboarding doc" is a placeholder printed where
-   * a name goes, which is how a digest stops looking like it was written on purpose. */
-  return (l.who || l.rel ? who + ' — ' : '') + shortenBody(l.what);
+  return (who ? 'You owe ' + who + ' — ' : 'You promised — ') + q;
 }
 
 /* "paul.oyelaran@meridianhealth.com" → "Paul". Wrong sometimes, and a note that opens
@@ -160,6 +175,98 @@ function firstName(addr) {
   var first = local.split(/[._+-]/)[0];
   if (first.length < 2 || /\d/.test(first)) return null;
   return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
+}
+
+/* People by the name they go by. The display name a chat message carries beats one
+ * guessed off an address, and the address stays the fallback. Two people who share a
+ * first name both keep their addresses — a digest that tells you to chase "Sam" when
+ * there are two is wrong in the way that costs the most. */
+function nameBook(messages, items) {
+  var named = {}, addrs = {}, holders = {};
+  (messages || []).forEach(function (m) {
+    var a = m && m.from ? String(m.from).toLowerCase() : '';
+    if (a && m.fromName && !named[a]) named[a] = String(m.fromName).trim().split(/\s+/)[0];
+  });
+  items.forEach(function (l) {
+    [l.who, l.closedByWho, l.dueFrom && l.dueFrom.from].forEach(function (a) {
+      if (a && String(a).indexOf('@') > -1) addrs[String(a).toLowerCase()] = 1;
+    });
+  });
+  Object.keys(addrs).forEach(function (a) {
+    if (!named[a]) named[a] = firstName(a);
+    var n = named[a] && named[a].toLowerCase();
+    if (n) (holders[n] = holders[n] || {})[a] = 1;
+  });
+  return function (who) {
+    if (!who) return null;
+    var a = String(who).toLowerCase();
+    if (a.indexOf('@') < 0) return String(who);       // already a name: "Sarah", "you"
+    var n = named[a];
+    return n && Object.keys(holders[n.toLowerCase()] || {}).length === 1 ? n : String(who);
+  };
+}
+
+/* Someone with no usable first name, in a word. The company for a role address — "People
+ * team" for hr@ — and otherwise the part before the @: "Chase j.mercer" says who, where
+ * "Chase Partner" reads as a person called Partner. The full address is on the line
+ * underneath either way. */
+function callName(addr, l) {
+  var local = String(addr).split('@')[0];
+  return ROLE.test(local) && l.rel && String(addr).toLowerCase() === String(l.who || '').toLowerCase()
+    ? l.rel.label : local;
+}
+
+/* Who said it, and what. Every item is a sentence somebody wrote, quoted as written —
+ * that is what lets a reader check the list against the conversation in seconds. A
+ * meeting signal is the exception: nothing was said, so there is nothing to quote. */
+var QUIET = { unprepped_meeting: 1, no_followup: 1 };
+function saidByThem(l) { var t = l.openType || l.type; return t === 'owed_to_us' || t === 'unanswered_ask'; }
+function lead(l, nm) {
+  var type = l.openType || l.type;
+  if (QUIET[type]) return l.what;
+  var q = '"' + l.what + '"';
+  if (type === 'awaiting_reply') return 'You asked: ' + q;
+  if (type === 'unanswered_ask') return (nm(l.who) || 'They') + ' asked: ' + q;
+  if (type === 'owed_to_us') return (nm(l.who) || 'They') + ': ' + q;
+  return 'You: ' + q;
+}
+
+/* Why it believes the date. A deadline the sentence states needs no note; one it
+ * borrowed does — "date from Lena's 'by Tuesday'" — or the reader cannot tell a real
+ * deadline from the detector's guess.
+ *
+ * ponytail: the phrase is picked out by its own small pattern, not by parseDue, so a
+ * wording parseDue resolves and this does not falls back to the sentence, shortened. */
+var DUE_WORDS = /\b(?:(?:by|before|on|until|due)\s+)?(?:(?:the\s+)?end of (?:the\s+)?(?:day|week)|eod|eow|today|tomorrow|this week|next week|(?:mon|tues|wednes|thurs|fri|satur|sun)day|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?|the\s+\d{1,2}(?:st|nd|rd|th))\b/i;
+function duePhrase(s) { var m = String(s).match(DUE_WORDS); return m ? m[0] : shortenBody(s, 40); }
+function evidence(l, nm) {
+  var out = [];
+  if (l.dueFrom) {
+    var from = nm(l.dueFrom.from);
+    if (from && from.indexOf('@') > -1) from = callName(l.dueFrom.from, l);
+    out.push(l.dueFrom.same
+      ? '"' + shortenBody(l.dueFrom.text, 40).replace(/[.!]$/, '') + '"'
+      : 'date from ' + (from || 'them') + '\'s "' + duePhrase(l.dueFrom.text) + '"');
+  }
+  if ((l.openType || l.type) === 'agreed_unscheduled') out.push('agreed, not yet booked');
+  return out;
+}
+
+/* The line under each item: how long it has sat, whose it is, who it is with, where it
+ * was said and when, and the evidence. NEW only when it tells you something — on a first
+ * run everything is new, and a tag on every line is a tag on none. */
+function meta(l, nm, ctx) {
+  var parts = [];
+  var tracked = ctx.mixed && l.isNew ? 'NEW' : !l.isNew && l.trackedDays > 0 ? l.trackedDays + 'd on the list' : null;
+  if (tracked) parts.push(tracked);
+  // With several principals the heading cannot name one, so each item does.
+  if (ctx.many && l.principal) parts.push('for ' + l.principal.label);
+  // The person, unless they are already named as the one who said it.
+  if (!saidByThem(l) && nm(l.who)) parts.push(nm(l.who));
+  if (l.rel) parts.push(l.rel.label);
+  parts.push(l.subject + (ctx.slack && l.threadId && l.threadId !== l.subject ? ', in a thread' : ''));
+  if (l.said) parts.push(dayLabel(l.said, ctx.today));
+  return parts.concat(evidence(l, nm)).join(' · ');
 }
 
 /* The note to send, where sending a note is the move.
@@ -199,18 +306,29 @@ function draft(l) {
   return name ? 'Hi ' + name + ' — ' + body : body.charAt(0).toUpperCase() + body.slice(1);
 }
 
-function when(l) {
+function when(l, today) {
   return !l.due ? (l.ageDays > 6 ? 'quiet ' + l.ageDays + 'd' : 'no date')
     : l.status === 'overdue' ? l.overdueDays + 'd late'
-    : l.status === 'due_today' ? 'today' : 'due ' + l.due;
+    : l.status === 'due_today' ? 'today' : dayLabel(l.due, today);
+}
+
+/* Number, status, text — the status in a column of its own, so lateness is read down
+ * one edge of the list. The number leads because it is what a reply quotes back. */
+var IND = '               ';
+function row(n, status, text) {
+  return (n ? (n < 10 ? ' ' + n : '' + n) : '  ') + '  ' + pad(status, 9) + '  ' + text;
 }
 
 function render(b) {
   var L = [], p = function (s) { L.push(s == null ? '' : s); };
-  var r = b.result, open = r.open;
+  var r = b.result, open = r.open, today = b.today;
   var read = b.read || {};
+  var nm = nameBook(b.messages, open.concat(r.closed || []));
+  var ctx = { today: today, slack: b.source === 'slack', many: (b.principals || []).length > 1,
+              mixed: !!(b.ledger && b.ledger.fresh > 0 && b.ledger.fresh < open.length) };
 
-  p('OPEN LOOPS — for ' + b.today);
+  var t0 = utc(today);
+  p('OPEN LOOPS — for ' + today + (isNaN(t0) ? '' : ' · ' + DOW[t0.getUTCDay()]));
   p('');
   /* Conversations were handed over and not one message came back out of them.
    *
@@ -221,24 +339,84 @@ function render(b) {
    * or promises to keep — and that failure is total and silent, so every channel comes
    * back empty at once and the digest looks like a quiet week. */
   var blind = !b.messages.length && read.threads > 0;
-  p(blind
-    ? 'READ NOTHING — ' + read.threads + ' conversation' + (read.threads === 1 ? ' was' : 's were') +
+
+  /* FIRST — the spotlight, and the one section everybody reads.
+   *
+   * One item on a short list; on a long one, one move per counterparty, up to
+   * `actionList`. Every loop appears once: a spotlit item is not printed again in its
+   * pile, only pointed at, so the digest never reads as the same list twice. Numbered
+   * from the full list, so replying "4" means the same thing wherever you read it. */
+  var cap = b.actionList === undefined ? 5 : b.actionList;
+  var spot = blind || !open.length ? [] : actionList(open, open.length > 8 && cap ? cap : 1);
+  var drafted = false;
+  if (blind) {
+    p('READ NOTHING — ' + read.threads + ' conversation' + (read.threads === 1 ? ' was' : 's were') +
       ' handed over and no message could be parsed out of any of them. This is not a' +
       ' quiet day. Until it is fixed this digest can say nothing about what is' +
-      ' outstanding, so treat the empty list below as unknown rather than clear.'
-    : headline(open, b.source));
+      ' outstanding, so treat the empty list below as unknown rather than clear.');
+  } else if (!spot.length) {
+    p(headline(open, b.source));
+  } else {
+    p(spot.length > 1 ? 'FIRST — one move each, most pressing first' : 'FIRST');
+    spot.forEach(function (l) {
+      p(row(l.n, when(l, today), move(l, nm)));
+      p(IND + meta(l, nm, ctx));
+      // Only where a note is the move. Paste it, send it, and the next run sees the
+      // message and closes the loop without anyone ticking anything.
+      var note = draft(l);
+      if (note) { p(IND + '→ ' + note); drafted = true; }
+    });
+  }
   p('');
 
-  p('Read ' + b.messages.length + ' messages' +
-    (read.threads ? ' across ' + read.threads + (b.source === 'slack' ? ' conversations' : ' threads') : '') +
-    ' and ' + b.events.length + ' meetings' +
-    // How far back it looked is the boundary everything else is judged inside.
-    (read.windowDays ? ', going back ' + read.windowDays + ' days.' : '.') +
-    // Deliberately out of scope, which is different from missed — say which.
-    (read.skipped ? ' ' + read.skipped + ' left out of scope on purpose.' : ''));
+  /* The state of the day in one line: how much is late, how much lands soon, how much
+   * there is. What changed since the last run rides on the end, because the rest of this
+   * is the same list it was and a reader who knows that will not scan it again. */
+  var t = utc(today), toFri = isNaN(t) ? 0 : (5 - t.getUTCDay() + 7) % 7;
+  var fri = toFri ? new Date(+t + toFri * 864e5).toISOString().slice(0, 10) : null;
+  var counts = [];
+  var over = open.filter(function (l) { return l.status === 'overdue'; }).length;
+  var dueNow = open.filter(function (l) { return l.status === 'due_today'; }).length;
+  var soon = fri ? open.filter(function (l) {
+    return l.due && l.status !== 'overdue' && l.status !== 'due_today' && l.due > today && l.due <= fri;
+  }).length : 0;
+  if (over) counts.push(over + ' overdue');
+  if (dueNow) counts.push(dueNow + ' due today');
+  if (soon) counts.push(soon + ' due by Fri');
+  counts.push(open.length + ' open');
+  if (b.ledger) {
+    if (ctx.mixed) counts.push(b.ledger.fresh + ' new');
+    if (b.ledger.gone.length) counts.push(b.ledger.gone.length + ' cleared');
+    if (b.ledger.aged && b.ledger.aged.length) counts.push(b.ledger.aged.length + ' aged out');
+    if (b.ledger.suppressed) counts.push(b.ledger.suppressed + ' hidden as wrong');
+  }
+  p(counts.join(' · '));
 
-  /* Silent truncation would make a half-read mailbox look like a complete digest, and
-   * the half it drops is the oldest — which is exactly where the overdue items are. */
+  /* Say the reply landed. Correcting something and seeing no acknowledgement is how
+   * a reader learns the correction does not matter, and then they stop sending them. */
+  if (b.marked) {
+    p('Took your last reply — ' + b.marked + (b.marked === 1 ? ' item' : ' items') +
+      ' marked wrong and dropped for good.');
+  }
+
+  /* Warnings stay at the top. Each one changes how far the list below can be trusted,
+   * and a caveat read after the list is a caveat read too late. */
+  /* The calendar response could not be read at all. Two of the seven signals live in the
+   * gap between messages and meetings, so both are off for this run — and "0 meetings"
+   * would otherwise read as a quiet diary. */
+  if (read.calendarError) {
+    p('CALENDAR NOT READ — the calendar response could not be parsed, so unprepped' +
+      ' meetings and unbooked calls were not checked this run.');
+  }
+  /* Handed over and empty. Only worth a line when some other channel did parse —
+     when none did, the READ NOTHING line has already said it in stronger terms
+     and naming all of them again is the same news twice. */
+  if (!blind && (read.unread || []).length) {
+    p('NOTHING READ IN ' + read.unread.slice(0, 6).join(', ') +
+      ((read.unread.length > 6) ? ' and ' + (read.unread.length - 6) + ' more' : '') +
+      ' — either nobody has posted there, or the read came back empty. Those look the' +
+      ' same from here, and only one of them is fine.');
+  }
   /* A read that did not reach the start of the window.
    *
    * The fetch takes a fixed number of newest messages, so a busy channel hands back
@@ -248,24 +426,6 @@ function render(b) {
    * nobody finished. Saying which channels and how far back is the whole point: a
    * quiet channel and a truncated one look identical from here, and only the reader
    * can tell them apart. */
-  /* Handed over and empty. Only worth a line when some other channel did parse —
-     when none did, the READ NOTHING headline has already said it in stronger terms
-     and naming all of them again is the same news twice. */
-  /* The calendar response could not be read at all. Two of the seven signals live in the
-   * gap between messages and meetings, so both are off for this run — and "0 meetings"
-   * in the line above would otherwise read as a quiet diary. */
-  if (read.calendarError) {
-    p('CALENDAR NOT READ — the calendar response could not be parsed, so unprepped' +
-      ' meetings and unbooked calls were not checked this run.');
-  }
-
-  if (!blind && (read.unread || []).length) {
-    p('NOTHING READ IN ' + read.unread.slice(0, 6).join(', ') +
-      ((read.unread.length > 6) ? ' and ' + (read.unread.length - 6) + ' more' : '') +
-      ' — either nobody has posted there, or the read came back empty. Those look the' +
-      ' same from here, and only one of them is fine.');
-  }
-
   (read.shortRead || []).slice(0, 4).forEach(function (s) {
     p('INCOMPLETE — ' + s.channel + ' was only read back to ' + s.from +
       ', not ' + (read.windowStart || 'the start of the window') +
@@ -293,7 +453,6 @@ function render(b) {
     p('NOT READ AS A CORRECTION — "' + String(line).slice(0, 56) +
       '". Reply with just the number, like "3", to reject one.');
   });
-
   /* A signal with no evidence to reason about must say so. Chat gives a channel
    * roster where mail gives a recipient list, so "did a recap go out" is a question
    * this source cannot answer — and a silent nothing there reads identically to a
@@ -314,44 +473,7 @@ function render(b) {
       ' no agenda, and no occurrence of theirs ever has. Put one on any occurrence and' +
       ' the series starts being checked.');
   }
-
-  /* What changed since the last run, high up — the rest of this is the same list it
-   * was, and a reader who already knows that will not scan it again. */
-  if (b.ledger) {
-    p(open.length + ' open · ' + b.ledger.fresh + ' new' +
-      (b.ledger.gone.length ? ' · ' + b.ledger.gone.length + ' cleared' : '') +
-      (b.ledger.aged && b.ledger.aged.length ? ' · ' + b.ledger.aged.length + ' aged out' : '') +
-      (b.ledger.suppressed ? ' · ' + b.ledger.suppressed + ' hidden as wrong' : ''));
-  }
-
-  /* Say the reply landed. Correcting something and seeing no acknowledgement is how
-   * a reader learns the correction does not matter, and then they stop sending them. */
-  if (b.marked) {
-    p('Took your last reply — ' + b.marked + (b.marked === 1 ? ' item' : ' items') +
-      ' marked wrong and dropped for good.');
-  }
   p('');
-
-  /* Only worth having when the list is long enough that you cannot scan it. Below
-   * that the full list is already the short list, and printing both is just saying
-   * everything twice. */
-  var cap = b.actionList === undefined ? 5 : b.actionList;
-  if (cap && open.length > 8) {
-    var moves = actionList(open, cap);
-    p('DO THESE FIRST — one move each, most pressing first');
-    moves.forEach(function (l) {
-      // Numbered from the full list below, not renumbered — so replying "4" to reject
-      // something means the same thing wherever you read it.
-      p('  ' + (l.n < 10 ? ' ' : '') + l.n + '. ' + pad('[' + when(l) + ']', 12) + ' ' +
-        shortenBody(move(l), 62));
-      // Only where a note is the move. Paste it, send it, and the next run sees the
-      // message and closes the loop without anyone ticking anything.
-      var note = draft(l);
-      if (note) p('        → ' + note);
-    });
-    p('  …and ' + (open.length - moves.length) + ' more below.');
-    p('');
-  }
 
   var due = (b.briefs || []).filter(function (x) { return x.prepDue; });
   if (due.length) {
@@ -364,7 +486,6 @@ function render(b) {
     p('');
   }
 
-  var many = (b.principals || []).length > 1;
   /* How many of each pile to actually print.
    *
    * Slack refuses a message over 4,000 characters, and a real mailbox goes far past
@@ -372,15 +493,10 @@ function render(b) {
    * digest would not have been shortened, it would have failed to send, on somebody's
    * first day, with the runner correctly refusing to post half of one.
    *
-   * It never showed up here because a test workspace produces eight items and 2,500
-   * characters, and always has. Nothing about the list was wrong; it just had no
-   * ceiling and had never met a mailbox with a real amount in it.
-   *
    * The items are already risk-ordered and the ordering is already trusted — it is what
-   * DO THESE FIRST selects on. So this takes the top of each pile and says out loud
-   * what it held back. Saying so is not decoration: a list that quietly stops is
-   * indistinguishable from a quiet week, which is the failure this whole thing exists
-   * to prevent. */
+   * FIRST selects on. So this takes the top of each pile and says out loud what it held
+   * back. Saying so is not decoration: a list that quietly stops is indistinguishable
+   * from a quiet week, which is the failure this whole thing exists to prevent. */
   /* Off unless asked. The 4,000-character ceiling belongs to Slack, so the fitting is
    * the Slack runner's job — a renderer that silently truncates by default would hide
    * items from every other caller too, including the tests that check it shows all of
@@ -389,29 +505,19 @@ function render(b) {
   OWNER_ORDER.forEach(function (key) {
     var items = open.filter(function (l) { return l.owner === key; });
     if (!items.length) return;
-    p(ownerTitle(key, b.principals).toUpperCase() + ' (' + items.length + ') — ' + OWNER[key].note);
+    // "Yours to handle" says what it is; the other two need their one line of why.
+    p(ownerTitle(key, b.principals).toUpperCase() + ' (' + items.length + ')' +
+      (key === 'you' ? '' : ' — ' + OWNER[key].note));
     var held = perPile ? items.length - perPile : 0;
     (perPile ? items.slice(0, perPile) : items).forEach(function (l) {
-      var when = !l.due ? 'no date'
-        : l.status === 'overdue' ? l.overdueDays + 'd late'
-        : l.status === 'due_today' ? 'today' : 'due ' + l.due;
-      // The number is what you quote back to reject it, so it leads the line.
-      var num = l.n ? (l.n < 10 ? ' ' + l.n : '' + l.n) + '. ' : '  ';
-      p(num + '[' + when + '] ' + l.what);
-      // How long this has been sitting here is its own kind of overdue.
-      var tracked = l.isNew ? 'NEW' : l.trackedDays > 0 ? l.trackedDays + 'd on the list' : null;
-      // With several principals the heading cannot name one, so each item does.
-      var whose = many && l.principal ? 'for ' + l.principal.label + ' · ' : '';
-      /* A channel you are alone in has no counterparty, and printing "undefined"
-       * where a name goes is how a digest stops looking like it was written on
-       * purpose. Say the conversation instead. */
-      p('      ' + (tracked ? tracked + ' · ' : '') + whose +
-        (l.rel ? l.rel.label + ' · ' : '') + (l.who ? l.who + ' · ' : '') + l.subject);
-      if (l.weekendShift) p('      note: stated ' + l.due + ' is a weekend — last working day is ' + l.workDue);
+      if (spot.indexOf(l) > -1) { p(row(l.n, when(l, today), '↑ FIRST')); return; }
+      p(row(l.n, when(l, today), lead(l, nm)));
+      p(IND + meta(l, nm, ctx));
+      if (l.weekendShift) p(IND + 'note: stated ' + l.due + ' is a weekend — last working day is ' + l.workDue);
       /* Late by the letter, normal for them. Chasing here is the thing that makes an
        * assistant look careless to the people it matters most with. */
       if (l.earlyForThem) {
-        p('      note: they usually take ' + l.usualDays + 'd — ' + l.ageDays +
+        p(IND + 'note: they usually take ' + l.usualDays + 'd — ' + l.ageDays +
           'd in, so this is not late for them yet');
       }
     });
@@ -454,32 +560,64 @@ function render(b) {
     p('');
   }
 
+  /* What closed, and what closed it. The closing message is the evidence — a list that
+   * says only "closed" asks to be taken on trust, which is what the rest of it avoids. */
   if (r.closed.length) {
     p('CLOSED ITSELF (' + r.closed.length + ')');
     // Bounded by the same knob as the piles: on a busy mailbox this ran to ten entries
     // and 700 characters of good news, which is the cheapest thing to shorten.
-    r.closed.slice(0, perPile || 10).forEach(function (l) { p('  ' + l.closedOn + '  ' + l.what); });
+    r.closed.slice(0, perPile || 10).forEach(function (l) {
+      p('    ' + lead(l, nm));
+      if (l.closedBy) {
+        p('      closed ' + dayLabel(l.closedOn, today) + (l.closedByWho
+          ? ' by ' + nm(l.closedByWho) + ': "' + l.closedBy + '"'
+          : ': ' + l.closedBy));
+      }
+    });
     p('');
   }
 
-  p('Drafts only — nothing here has been sent. Verify before acting on any of it.');
-  p('');
-  p("Anything here that isn't real? Reply with just its number — \"3 7\" — and those");
-  p('stop coming back. That reply is the only record of what this gets wrong.');
-  p('Already knew about one? Put it on a line starting with k — "k 1 4". It stays on');
-  p('the list; it just stops counting as something this told you.');
+  // The boundary everything above is judged inside, once the list has been read.
+  p('Read ' + b.messages.length + ' messages' +
+    (read.threads ? ' across ' + read.threads + (b.source === 'slack' ? ' conversations' : ' threads') : '') +
+    ' and ' + b.events.length + ' meetings' +
+    (read.windowDays ? ', going back ' + read.windowDays + ' days.' : '.') +
+    // Deliberately out of scope, which is different from missed — say which.
+    (read.skipped ? ' ' + read.skipped + ' left out of scope on purpose.' : ''));
+
+  if (drafted) p('Drafts only — nothing here has been sent. Verify before acting on any of it.');
+
+  /* How to answer it. In full until the reader has answered once — that paragraph is
+   * what teaches the loop, and the loop is the only way this learns anything — then as a
+   * two-line key, because the same explanation every evening is read once and then
+   * skimmed past forever. */
+  var brief = b.replyKey === 'short';
+  if (!brief) {
+    p('');
+    p("Anything here that isn't real? Reply with just its number — \"3 7\" — and those");
+    p('stop coming back. That reply is the only record of what this gets wrong.');
+    p('Already knew about one? Put it on a line starting with k — "k 1 4". It stays on');
+    p('the list; it just stops counting as something this told you.');
+  }
 
   /* The only question in here that can say anything about what was missed. Everything
    * else asks about things that appeared, and a miss produces nothing to reject. */
-  if (b.spotCheck && b.spotCheck.length) {
+  var checking = b.spotCheck && b.spotCheck.length;
+  if (checking) {
     p('');
     p('SPOT CHECK — it found nothing in these. Did it miss something?');
     b.spotCheck.forEach(function (m, i) {
-      p('  ' + String.fromCharCode(97 + i) + ') ' + shortenBody(m.body) +
-        '      — ' + (m.subject || ''));
+      p('  ' + String.fromCharCode(97 + i) + '  ' + pad(shortenBody(m.body, 60), 62) + (m.subject || ''));
     });
-    p('Reply "miss b d" for any that did contain a commitment, or "miss" on its own');
-    p('if none did. Saying none is what makes the rest of it evidence.');
+    if (!brief) {
+      p('Reply "miss b d" for any that did contain a commitment, or "miss" on its own');
+      p('if none did. Saying none is what makes the rest of it evidence.');
+    }
+  }
+  if (brief) {
+    p('');
+    p('Reply   3 7  not real        k 1 4  already knew');
+    if (checking) p('        miss b d  it missed those        miss  it missed nothing');
   }
 
   if (b.recall) {

@@ -93,7 +93,7 @@ fs.writeFileSync(path.join(tmp, 'cfg.json'), JSON.stringify({ you: 'you@example.
   selfDm: 'U0EXAMPLE001', supporting: [], ledger: path.join(tmp, 'ledger.json') }));
 var digest = main([path.join(tmp, 'in.json'), '--config', path.join(tmp, 'cfg.json'), '--dry']);
 assert.ok(/Read 17 messages across 2 conversations/.test(digest), 'the runner reads what the parser reads');
-assert.ok(/^10 open/m.test(digest));
+assert.ok(/\b10 open\b/.test(digest));
 assert.ok(/CHASE THEM \(2\)/.test(digest) && /YOURS TO HANDLE \(8\)/.test(digest) &&
   /CLOSED ITSELF \(2\)/.test(digest), 'and sorts it into the same piles the posted digest had');
 
