@@ -521,37 +521,61 @@ function nextAction(t) {
   return a < b ? 'exec' : 'you';
 }
 
-function assignOwner(type, what, subject, solo) {
+/* Who the sentence makes commit: the reader, a person by name, or someone else.
+ *
+ * First person — "I'll", "we'll", "let me", or chat's dropped subject ("Will send it
+ * Thursday", "Sure — will get you the numbers") — is the reader. A single capitalised word
+ * straight before "will" is a name: "Sarah will send the contract", "Dana will review it".
+ * Anything else there — "they", "the vendor", "our legal team" — is somebody who is neither. */
+var NOT_A_NAME = /^(they|he|she|it|this|that|we|our|the|their|your|when|what|who|how|where|why|which)$/i;
+function committer(what) {
+  var t = String(what || '');
+  if (/\b(?:i['’]?ll|i will|i['’]?m going to|we['’]?ll|we will|let me|let['’]?s)\b/i.test(t)) return 'self';
+  var m = t.match(/(\S+)\s+will\s/i);
+  if (!m) return 'self';
+  var w = m[1].replace(/[^A-Za-z]/g, '');
+  if (!w || /^(yes|sure|ok|okay|and|then|also|so|but)$/i.test(w)) return 'self';
+  return /^[A-Z][a-z]+$/.test(w) && !NOT_A_NAME.test(w) ? w : 'other';
+}
+
+function assignOwner(type, what, subject, principals) {
   if (type === 'owed_to_us' || type === 'awaiting_reply') return 'them';
   // These three are logistics by definition — the next move is always the assistant's.
   if (type === 'agreed_unscheduled' || type === 'no_followup' || type === 'unprepped_meeting') return 'you';
-  /* Supporting nobody collapses two of the three piles into one. Splitting work into
-   * "yours" and "the executive's" when you are the executive produces a heading that
-   * lies about its own contents. */
-  if (solo) return 'you';
-  /* The sentence decides; the subject only breaks a tie it left open. These used to be
-   * concatenated and searched as one string, which let a channel name overrule the promise
-   * inside it — the same sentence routed to the assistant in #offsite and to the executive
-   * in #pricing, so every commitment in a channel named for review, pricing or decisions
-   * went to the executive whatever it actually said. */
+  /* The reader is the assistant, or works alone — which is whenever principals is a list,
+   * and the Slack runner always passes one. Then ownership is grammatical: whoever the
+   * sentence makes commit owns the loop. "I'll draft the onboarding doc" is the reader's,
+   * whatever verb it uses; "Dana will send the signed copy" is the executive's; "Sarah will
+   * send the contract" is Sarah's, to be chased for. A question put to the reader is
+   * theirs to answer.
+   *
+   * This used to fall through to the verb split below and default to the executive — a
+   * rule written when the reader WAS the executive. On the first run where the reader
+   * supported somebody, their own promises filled the executive's pile. */
+  if (Array.isArray(principals)) {
+    if (type === 'unanswered_ask') return 'you';
+    if (committer(what) === 'self') return 'you';
+    return principalNamed(what, principals) ? 'exec' : 'them';
+  }
+  /* No principals: the historical shape, one unnamed executive reading their own inbox,
+   * so "I" is that executive and the split is by the next action. The sentence decides and
+   * the subject only breaks a tie — concatenating them once let a channel name overrule
+   * the promise inside it, sending everything in #pricing to the executive. */
   return nextAction(what) || nextAction(subject) || 'exec';
 }
 
-/* Who this belongs to, when the reader supports more than one person.
+/* Which principal a commitment was made in the name of — "Dana will send the signed copy".
  *
- * One deployment usually reads one mailbox, so the list is usually empty or a single
- * name. It genuinely holds several only when someone runs this over their own
- * account and is copied on several people's work — which is also the version that
- * needs nobody's permission to set up. */
-function principalFor(parties, principals) {
-  if (!principals || !principals.length) return null;
-  if (principals.length === 1) return principals[0];
-  var on = principals.filter(function (p) {
-    return p.address && (parties || []).indexOf(String(p.address).toLowerCase()) > -1;
-  });
-  // Nobody identifiable on the conversation — better to name the likeliest than to
-  // drop the item into an unlabelled pile.
-  return on[0] || principals[0];
+ * This used to route by who was on the conversation, falling back to the first principal
+ * listed. That guessed: an item in a channel both principals sat in went to whichever was
+ * listed first. Now the executive's pile only holds promises made in a principal's name,
+ * so the name is the routing, and there is nothing left to guess. */
+function principalNamed(what, principals) {
+  var c = committer(what);
+  if (c === 'self' || c === 'other') return null;
+  return (principals || []).filter(function (p) {
+    return String(p.label || p.name || '').trim().split(/\s+/)[0].toLowerCase() === c.toLowerCase();
+  })[0] || null;
 }
 
 /* Relationship tiers. Every assistant weights a promise to the board differently
@@ -635,6 +659,26 @@ function topicMatch(promise, delivery) {
   return p.some(function (a) { return d.some(function (b) { return sameTopic(a, b); }); });
 }
 
+/* Whether a later message actually answers a question. Stricter than closure on purpose.
+ * A delivery names what it delivers, so one shared word is evidence there; a channel is
+ * full of generic work vocabulary, and "review the Q4 headcount plan" and "walk through
+ * the rollout plan" share "plan" without either answering the other. So an answer must
+ * share a word that says what the question was about. A missed answer leaves a question
+ * open that a reply of `k` clears; a false one makes a real question vanish unseen. */
+var GENERIC = ['plan', 'review', 'call', 'meeting', 'sync', 'update', 'document', 'docs', 'doc',
+  'time', 'times', 'date', 'dates', 'thing', 'question', 'answer', 'info', 'detail', 'work',
+  'look', 'check', 'confirm', 'side', 'sides', 'stuff', 'note', 'notes', 'number', 'start',
+  'point', 'chance', 'minute'];
+function telling(text) {
+  return topics(text).filter(function (w) {
+    return !GENERIC.some(function (g) { return g === w || sameTopic(g, w); });
+  });
+}
+function answers(question, reply) {
+  var q = telling(question), r = telling(reply);
+  return q.some(function (a) { return r.some(function (b) { return sameTopic(a, b); }); });
+}
+
 function sentences(body) {
   return body.split(/(?<=[.!?])\s+|\n+/).map(function (s) { return s.trim(); }).filter(Boolean);
 }
@@ -649,7 +693,6 @@ function detectLoops(messages, events, opts) {
    * executive — so nothing that does not pass this changes behaviour. An explicit
    * empty list means they support nobody and are running it on their own work. */
   var principals = opts.principals;
-  var solo = Array.isArray(principals) && principals.length === 0;
   var out = [];
   var threads = {};
   /* Equal timestamps must compare equal, or the sort is free to reorder them.
@@ -663,15 +706,6 @@ function detectLoops(messages, events, opts) {
 
   Object.keys(threads).forEach(function (tid) {
     var msgs = threads[tid], last = msgs[msgs.length - 1];
-    /* Everyone on this conversation, so an item can be routed to whichever principal
-     * was actually party to it. Only consulted when there is more than one. */
-    var seen = {};
-    msgs.forEach(function (m) {
-      seen[m.from.toLowerCase()] = 1;
-      (m.to || []).forEach(function (t) { seen[String(t).toLowerCase()] = 1; });
-    });
-    var parties = Object.keys(seen);
-    var mark = out.length;
     var counterparty = null;
     msgs.forEach(function (m) {
       if (!m.out && side(m.from) !== execSide && !counterparty) counterparty = m.from;
@@ -682,6 +716,50 @@ function detectLoops(messages, events, opts) {
         else if (!counterparty) counterparty = m.from;
       });
     }
+
+    /* A channel read is a stream, not a thread: many conversations interleaved, with no
+     * reply structure between them. The whole-thread counterparty above is the first
+     * outsider who ever spoke, which in a channel made every commitment in it theirs —
+     * promises made before they had even joined included — and put their name on the chase
+     * note and their tier on the ranking. In a stream, attribution comes per commitment,
+     * from the strongest evidence available:
+     *
+     *   1. a real thread participant — that is the thread path, not this one
+     *   2. a person addressed by name: "Lena — can you confirm…"
+     *   3. someone from the other side who spoke earlier that day, about the same thing
+     *   4. the one other member, when the conversation declares only one — a DM
+     *   5. otherwise nobody — so no name and no tier, never a borrowed one. */
+    var stream = msgs.length > 0 && msgs.every(function (m) { return m.stream; });
+    /* Rule 4 is not an assumption about a channel; a conversation with one other member is
+     * a conversation with them. Taken from the declared members only, and only while nobody
+     * else from outside has spoken — who happened to speak is what rule 3 distrusts. */
+    var sole = null;
+    if (stream) {
+      var others = [];
+      [].concat(msgs[0].to || []).forEach(function (t) {
+        t = String(t).toLowerCase();
+        if (side(t) !== execSide && others.indexOf(t) < 0) others.push(t);
+      });
+      if (others.length === 1 && msgs.every(function (m) {
+        return m.out || side(m.from) === execSide || m.from.toLowerCase() === others[0];
+      })) sole = others[0];
+    }
+    var byName = {};
+    msgs.forEach(function (m) {
+      if (!stream || m.out || side(m.from) === execSide || !m.fromName) return;
+      var first = String(m.fromName).trim().split(/\s+/)[0].toLowerCase();
+      if (first.length > 1 && !byName[first]) byName[first] = m.from;
+    });
+    var attribute = function (i, s) {
+      var v = String(s).match(/^\s*(?:(?:hi|hey|thanks|thank you)[\s,]+)?([A-Za-z]+)\s*[,—–:!-]/i);
+      if (v && byName[v[1].toLowerCase()]) return byName[v[1].toLowerCase()];
+      var d = day(msgs[i].date);
+      for (var k = i - 1; k >= 0 && day(msgs[k].date) === d; k--) {
+        var p = msgs[k];
+        if (!p.out && side(p.from) !== execSide && answers(s, p.body)) return p.from;
+      }
+      return sole;
+    };
 
     /* --- promises, in both directions ---
      *
@@ -793,6 +871,9 @@ function detectLoops(messages, events, opts) {
       // The promise and the scheduling language often sit in different sentences.
       if (!closer && m.out && MEETINGY.test(s) && SCHEDULEY.test(m.body)) {
         var toks = keyTokens(m.subject);
+        // In a stream the hold must be with whoever this promise is attributed to, not
+        // with the first outsider who ever spoke in the channel.
+        var toWhom = stream ? attribute(i, s) : counterparty;
         bookedBy = events.filter(function (e) {
           if (e.start < day(m.date)) return false;
           // An internal colleague appears on unrelated meetings — their presence proves nothing.
@@ -800,8 +881,8 @@ function detectLoops(messages, events, opts) {
            * counterparty taken from a Slack profile need not be — so a MixedCase address
            * missed here, the hold could not close the promise to book it, and the item
            * nagged forever. Same failure as the domain comparison, one layer down. */
-          if (counterparty && side(counterparty) !== execSide &&
-              e.attendees.indexOf(String(counterparty).toLowerCase()) > -1) return true;
+          if (toWhom && side(toWhom) !== execSide &&
+              e.attendees.indexOf(String(toWhom).toLowerCase()) > -1) return true;
           return toks.some(function (w) { return e.title.toLowerCase().indexOf(w.toLowerCase()) > -1; });
         })[0];
         /* A promise to get something in the diary is kept by the thing being in the
@@ -816,7 +897,7 @@ function detectLoops(messages, events, opts) {
         subject: m.subject,
         // (m.to || []) — an adapter may omit the key entirely on an outbound message,
         // and this line running unguarded threw and took the whole evening run with it.
-        who: m.out ? (counterparty || (m.to || [])[0]) : m.from, byUs: m.out,
+        who: m.out ? (stream ? attribute(i, s) : (counterparty || (m.to || [])[0])) : m.from, byUs: m.out,
         what: shorten(s, 110), said: day(m.date), due: due,
         closedOn: closer ? day(closer.date) : bookedBy ? day(bookedBy.start) : null,
         closedBy: closer
@@ -836,7 +917,28 @@ function detectLoops(messages, events, opts) {
       return sentences(m.body).filter(function (s) { return ASK.test(s) || /\?$/.test(s); })[0];
     };
 
-    if (lastIn > lastOut) {
+    if (stream) {
+      /* In a stream each question stands alone. The whose-turn rule below treats a thread
+       * as one conversation, which an email thread or a real Slack thread is — there the
+       * other side's next message is the answer. A channel is many conversations at once,
+       * and under that rule whoever posted last settled every question in it: Sam posting
+       * about numbers "answered" a question put to Lena, and a channel tracked one question
+       * at most. Now a question stays open until the other side says something about what
+       * it asked. */
+      msgs.forEach(function (m, i) {
+        var q = askIn(m);
+        if (!q) return;
+        var replied = msgs.slice(i + 1).some(function (n) { return n.out !== m.out && answers(q, n.body); });
+        var age = daysBetween(day(m.date), today);
+        if (replied || age < 2) return;
+        out.push(m.out
+          ? { type: 'awaiting_reply', threadId: tid, subject: m.subject, who: attribute(i, q), byUs: false,
+              what: shorten(q, 110), said: day(m.date), age: age, due: null, excerpt: m.body, msgId: m.id }
+          : { type: 'unanswered_ask', threadId: tid, subject: m.subject, who: m.from, byUs: true,
+              pendingCount: 1, what: shorten(q, 110), said: day(m.date), age: age,
+              due: parseDue(q, m.date), excerpt: m.body, msgId: m.id });
+      });
+    } else if (lastIn > lastOut) {
       // They are waiting on us. Age from the oldest thing still unanswered.
       var pending = msgs.slice(lastOut + 1).filter(function (m) { return !m.out && askIn(m); });
       if (pending.length) {
@@ -869,9 +971,6 @@ function detectLoops(messages, events, opts) {
         });
       }
     }
-
-    // Everything this thread produced carries the thread's participants with it.
-    for (var q = mark; q < out.length; q++) out[q].parties = parties;
   });
 
   /* --- meetings: no follow-up after, no agenda before ---
@@ -999,8 +1098,14 @@ function detectLoops(messages, events, opts) {
     else r += Math.min(l.ageDays, 14) * 2;
     if (l.type === 'unprepped_meeting' && l.due === today) r += 20;
 
-    l.owner = assignOwner(l.type, l.what, l.subject, solo);
-    l.principal = l.owner === 'exec' ? principalFor(l.parties, principals) : null;
+    l.owner = assignOwner(l.type, l.what, l.subject, principals);
+    /* A promise made in somebody else's name is chased with them, so the note can say
+       "Chase Sarah" — and no tier is borrowed from whoever happened to be talking. */
+    if (l.owner === 'them' && l.type === 'owed_by_us') {
+      var named = committer(l.what);
+      if (named !== 'self' && named !== 'other') l.who = named;
+    }
+    l.principal = l.owner === 'exec' ? principalNamed(l.what, principals) : null;
     l.rel = relationship(l.who, opts.contacts);
     if (l.rel) r += l.rel.weight;
     l.risk = r;

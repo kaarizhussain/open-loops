@@ -1,0 +1,110 @@
+Channel: #all-open-loops (C0EXAMPLE001)
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-14 11:44:07 EDT ===
+Message TS: 1789400647.072299
+Halcyon pilot — scoping thread.
+
+=== Message from Lena H <person1@org1.example> (U0EXAMPLE002) at 2026-09-14 11:42:50 EDT ===
+Message TS: 1789400570.777589
+Signed MSA attached — sorry for the delay.
+
+=== Message from Sam M <person2@org1.example> (U0EXAMPLE003) at 2026-09-14 11:42:36 EDT ===
+Message TS: 1789400556.072549
+Numbers came in a bit under where we modelled them.
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-14 11:42:27 EDT ===
+Message TS: 1789400547.674669
+Let's set up a call Thursday to walk through the rollout plan.
+
+=== Message from Lena H <person1@org1.example> (U0EXAMPLE002) at 2026-09-14 11:42:19 EDT ===
+Message TS: 1789400539.815869
+We should probably revisit the pricing at some point.
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-14 11:42:08 EDT ===
+Message TS: 1789400528.693899
+Lena — can you confirm the pilot start date on your side?
+
+=== Message from Sam M <person2@org1.example> (U0EXAMPLE003) at 2026-09-14 11:41:58 EDT ===
+Message TS: 1789400518.617229
+Can you review the Q4 headcount plan before Thursday? Need your sign-off.
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-14 11:41:47 EDT ===
+Message TS: 1789400507.834819
+Thanks — I'll circulate the redline to legal once it lands.
+
+=== Message from Lena H <person1@org1.example> (U0EXAMPLE002) at 2026-09-14 11:39:41 EDT ===
+Message TS: 1789400381.692429
+I'll get you the signed MSA back by Tuesday.
+
+=== Message from Lena H <person1@org1.example> (U0EXAMPLE002) at 2026-09-14 11:37:27 EDT ===
+Message TS: 1789400247.087819
+<@U0EXAMPLE002|Lena H> has joined the channel
+
+=== Message from Sam M <person2@org1.example> (U0EXAMPLE003) at 2026-09-14 11:36:06 EDT ===
+Message TS: 1789400166.536089
+<@U0EXAMPLE003|Sam M> has joined the channel
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 22:28:24 EDT ===
+Message TS: 1788316104.634479
+I'll have the revenue numbers over to finance by the 15th.
+*Sent using* <@U0EXAMPLE004|Claude>
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 22:28:19 EDT ===
+Message TS: 1788316099.542969
+Let me know your thoughts on the deck when you have a minute.
+*Sent using* <@U0EXAMPLE004|Claude>
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 22:28:14 EDT ===
+Message TS: 1788316094.656559
+I'm going to draft the onboarding doc and share it EOD tomorrow.
+*Sent using* <@U0EXAMPLE004|Claude>
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 22:28:09 EDT ===
+Message TS: 1788316089.399349
+We'll need to revisit pricing at some point.
+*Sent using* <@U0EXAMPLE004|Claude>
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 22:28:04 EDT ===
+Message TS: 1788316084.450039
+I'll circle back with the Q4 forecast by next Tuesday.
+*Sent using* <@U0EXAMPLE004|Claude>
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 16:03:11 EDT ===
+Message TS: 1788292991.482509
+Halcyon pilot — scoping thread.
+*Sent using* <@U0EXAMPLE004|Claude>
+Thread: 1 replies (latest: 2026-09-01 16:03:17 EDT)
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 16:03:05 EDT ===
+Message TS: 1788292985.506749
+Let me know if the Q3 numbers look off to you.
+*Sent using* <@U0EXAMPLE004|Claude>
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 16:02:59 EDT ===
+Message TS: 1788292979.858419
+Done.
+*Sent using* <@U0EXAMPLE004|Claude>
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 16:02:54 EDT ===
+Message TS: 1788292974.377739
+Revised pricing sent over to Meridian just now.
+*Sent using* <@U0EXAMPLE004|Claude>
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 16:02:49 EDT ===
+Message TS: 1788292969.106049
+Done.
+*Sent using* <@U0EXAMPLE004|Claude>
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 16:02:44 EDT ===
+Message TS: 1788292964.046269
+Also — I'll book the offsite venue by end of week.
+*Sent using* <@U0EXAMPLE004|Claude>
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 16:02:38 EDT ===
+Message TS: 1788292958.058409
+I'll send the revised pricing sheet to Meridian by Thursday.
+*Sent using* <@U0EXAMPLE004|Claude>
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 11:06:12 EDT ===
+Message TS: 1788275172.381139
+<@U0EXAMPLE001|Alex Rivera> has joined the channel

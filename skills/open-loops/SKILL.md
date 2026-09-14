@@ -169,6 +169,10 @@ adapter parses the raw output.
 }
 ```
 
+`members` stays `[]` for channels. For a DM, put the other person's address in it
+(`["them@co.com"]`): a conversation with exactly one other member is the only place an
+item is attributed to someone without evidence in the message itself.
+
 **Run:**
 
 ```bash

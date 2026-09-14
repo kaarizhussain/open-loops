@@ -1,0 +1,50 @@
+Channel: #new-channel (C0EXAMPLE002)
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-14 11:43:40 EDT ===
+Message TS: 1789400620.058209
+Sending the updated deck across now.
+Thread: 1 replies (latest: 2026-09-14 11:44:27 EDT)
+
+=== Message from Lena H <person1@org1.example> (U0EXAMPLE002) at 2026-09-14 11:43:25 EDT ===
+Message TS: 1789400605.530059
+Let's see how the numbers land before we commit to anything.
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-14 11:43:15 EDT ===
+Message TS: 1789400595.994339
+I'll book the pricing review with Lena before end of week.
+
+=== Message from Sam M <person2@org1.example> (U0EXAMPLE003) at 2026-09-14 11:42:59 EDT ===
+Message TS: 1789400579.799099
+Are we still on for the vendor kickoff? I need an answer today.
+
+=== Message from Lena H <person1@org1.example> (U0EXAMPLE002) at 2026-09-14 11:37:26 EDT ===
+Message TS: 1789400246.986239
+<@U0EXAMPLE002|Lena H> has joined the channel
+
+=== Message from Sam M <person2@org1.example> (U0EXAMPLE003) at 2026-09-14 11:36:06 EDT ===
+Message TS: 1789400166.451949
+<@U0EXAMPLE003|Sam M> has joined the channel
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 22:28:45 EDT ===
+Message TS: 1788316125.611879
+Sending the signed contract now.
+*Sent using* <@U0EXAMPLE004|Claude>
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 22:28:40 EDT ===
+Message TS: 1788316120.081539
+I'll set up the kickoff with the vendor this week.
+*Sent using* <@U0EXAMPLE004|Claude>
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 22:28:35 EDT ===
+Message TS: 1788316115.062009
+Let's schedule a sync for Thursday to walk through the rollout plan.
+*Sent using* <@U0EXAMPLE004|Claude>
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 22:28:30 EDT ===
+Message TS: 1788316110.169659
+I'll book a meeting with Vector next week to go over the numbers.
+*Sent using* <@U0EXAMPLE004|Claude>
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 11:06:38 EDT ===
+Message TS: 1788275198.596909
+<@U0EXAMPLE001|Alex Rivera> has joined the channel

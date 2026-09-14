@@ -205,31 +205,26 @@ assert.strictEqual(
   r.open.filter(function (l) { return l.owner === 'you' || l.owner === 'exec'; }).length,
   'they move into yours rather than disappearing');
 
-/* One principal keeps the split and gains a name. */
-var oneR = withP([{ label: 'Dana' }]);
-assert.ok(oneR.open.some(function (l) { return l.owner === 'exec'; }), 'one principal keeps the pile');
-oneR.open.filter(function (l) { return l.owner === 'exec'; }).forEach(function (l) {
-  assert.strictEqual(l.principal.label, 'Dana', 'and every item in it names them');
-});
+/* With a principals list the reader is the assistant, so the executive's pile holds what
+   was promised in the executive's name — and one principal keeps it, with a name. */
+var sent = function (body, principals) {
+  return detectLoops([{ id: 'p', threadId: 'tp', subject: 'Board deck', from: F.EXEC,
+    to: ['marcus.bell@northstar.io'], date: '2026-09-01T10:00', attach: false, body: body }], [],
+    { exec: F.EXEC, today: '2026-09-08', principals: principals }).open[0];
+};
+var oneR = sent('Dana will send the board deck Friday.', [{ label: 'Dana' }]);
+assert.strictEqual(oneR.owner, 'exec', 'one principal keeps the pile');
+assert.strictEqual(oneR.principal.label, 'Dana', 'and the item names them');
 
-/* Several are routed by who was actually on the conversation, not by guesswork. */
-var manyR = withP([
-  { label: 'Dana', address: 'marcus.bell@northstar.io' },
-  { label: 'Marcus', address: 'hr@northstar.io' }
-]);
-var deckItem = manyR.open.filter(function (l) { return l.subject.indexOf('board deck') > -1; })[0];
-var compItem = manyR.open.filter(function (l) { return l.subject.indexOf('comp plan') > -1; })[0];
-assert.strictEqual(deckItem.principal.label, 'Dana', 'routed to whoever was on that thread');
-assert.strictEqual(compItem.principal.label, 'Marcus', 'and the other thread to the other one');
-
-/* An item on nobody's conversation still gets attributed rather than vanishing. */
-var orphan = detectLoops(F.MESSAGES, F.EVENTS, {
-  exec: F.EXEC, today: F.TODAY,
-  principals: [{ label: 'Dana', address: 'nobody@nowhere.test' }, { label: 'Marcus', address: 'also@nowhere.test' }]
-});
-orphan.open.filter(function (l) { return l.owner === 'exec'; }).forEach(function (l) {
-  assert.ok(l.principal, 'every executive item names someone, even when nobody matches');
-});
+/* Several are routed by whose name the promise was made in — not by who was on the
+   conversation, which put an item in a shared channel under whoever was listed first. */
+var two = [{ label: 'Dana', address: 'marcus.bell@northstar.io' }, { label: 'Marcus', address: 'hr@northstar.io' }];
+assert.strictEqual(sent('Marcus will send the board deck Friday.', two).principal.label, 'Marcus',
+  'routed by the name, even on a conversation the other principal was party to');
+assert.strictEqual(sent('Dana will send the board deck Friday.', two).principal.label, 'Dana',
+  'and the other name to the other one');
+assert.strictEqual(sent("I'll send the board deck Friday.", two).owner, 'you',
+  'the reader\'s own promise is never an executive\'s, whichever thread it is on');
 
 /* Only the executive pile carries a principal — a chase is on the counterparty. */
 r.open.filter(function (l) { return l.owner !== 'exec'; }).forEach(function (l) {
@@ -628,11 +623,12 @@ var owner = function (channel, line) {
       date: '2026-08-28T10:00', attach: false, body: line },
     { id: 'b', threadId: 't', subject: channel, from: 'sana@halcyon.io', to: ['me@corp.io'],
       date: '2026-08-28T11:00', attach: false, body: 'Thanks.' }
-  ], [], { exec: 'me@corp.io', today: '2026-09-02',
-           principals: [{ name: 'Dana', address: 'dana@corp.io' }] });
+  ], [], { exec: 'me@corp.io', today: '2026-09-02', principals: principals });
   var l = r.open.filter(function (x) { return x.type === 'owed_by_us'; })[0];
   return l ? l.owner : '(none)';
 };
+// The verb split below is the executive's-inbox model, where "I" is the executive.
+var principals;
 
 var promise = "I'll get the venue booked and circulate the invite.";
 ['#offsite', '#logistics', '#pricing', '#deck-review'].forEach(function (c) {

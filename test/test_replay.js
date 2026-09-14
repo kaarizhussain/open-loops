@@ -73,7 +73,9 @@ assert.ok(parseChannel(noEmail, { channel: '#a', members: [], tzOffset: -240 })
 var r = loops.detectLoops(msgs, [], { exec: 'you@example.com', today: '2026-09-04', principals: [] });
 var byType = {};
 r.open.forEach(function (l) { byType[l.type] = (byType[l.type] || 0) + 1; });
-assert.deepStrictEqual(byType, { owed_by_us: 6, agreed_unscheduled: 2, awaiting_reply: 1 });
+/* Two asks, not one. "Let me know your thoughts on the deck" was missed on the day because
+   the whose-turn rule tracked one question per channel; each now stands alone. */
+assert.deepStrictEqual(byType, { owed_by_us: 6, agreed_unscheduled: 2, awaiting_reply: 2 });
 assert.deepStrictEqual(r.closed.map(function (l) { return l.what; }).sort(), [
   'Also — I\'ll book the offsite venue by end of week.',
   'I\'ll send the revised pricing sheet to Meridian by Thursday.'
@@ -91,8 +93,8 @@ fs.writeFileSync(path.join(tmp, 'cfg.json'), JSON.stringify({ you: 'you@example.
   selfDm: 'U0EXAMPLE001', supporting: [], ledger: path.join(tmp, 'ledger.json') }));
 var digest = main([path.join(tmp, 'in.json'), '--config', path.join(tmp, 'cfg.json'), '--dry']);
 assert.ok(/Read 17 messages across 2 conversations/.test(digest), 'the runner reads what the parser reads');
-assert.ok(/^9 open/m.test(digest));
-assert.ok(/CHASE THEM \(1\)/.test(digest) && /YOURS TO HANDLE \(8\)/.test(digest) &&
+assert.ok(/^10 open/m.test(digest));
+assert.ok(/CHASE THEM \(2\)/.test(digest) && /YOURS TO HANDLE \(8\)/.test(digest) &&
   /CLOSED ITSELF \(2\)/.test(digest), 'and sorts it into the same piles the posted digest had');
 
 /* --- the sanitizer that made these ---

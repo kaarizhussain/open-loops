@@ -27,9 +27,12 @@ var opt = function (k) {
   var i = argv.indexOf('--' + k);
   return i > -1 ? argv.splice(i, 2)[1] : null;
 };
-var you = (opt('you') || '').toLowerCase(), self = opt('self'), out = opt('out'), files = argv;
+var you = (opt('you') || '').toLowerCase(), self = opt('self'), out = opt('out');
+// Display names that are already invented — test personas — and carry meaning in the text.
+var keep = (opt('keep') || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+var files = argv;
 if (!you || !self || !out || !files.length) {
-  console.error('usage: node tools/sanitize-capture.js --you <email> --self <slack user id> --out <dir> <file>...');
+  console.error('usage: node tools/sanitize-capture.js --you <email> --self <slack user id> --out <dir> [--keep "Name A,Name B"] <file>...');
   process.exit(2);
 }
 
@@ -48,7 +51,7 @@ map[self] = 'U0EXAMPLE001';
 var NAME = /(?:=== Message from |^From: )(.+?)(?= <| \()/gm, m;
 while ((m = NAME.exec(all))) {
   var name = m[1].trim();
-  if (map[name]) continue;
+  if (map[name] || keep.indexOf(name) > -1) continue;
   var end = all.indexOf('\n', m.index);
   var line = all.slice(m.index, end < 0 ? undefined : end);
   map[name] = line.indexOf('(' + self + ')') > -1 ? 'Alex Rivera' : 'Person ' + nextOf('name');

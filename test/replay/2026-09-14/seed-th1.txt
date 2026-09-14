@@ -1,0 +1,13 @@
+=== THREAD PARENT MESSAGE ===
+From: Alex Rivera <you@example.com> (U0EXAMPLE001)
+Time: 2026-09-14 11:43:40 EDT
+Message TS: 1789400620.058209
+Sending the updated deck across now.
+
+=== THREAD REPLIES (1 total) ===
+
+--- Reply 1 of 1 ---
+From: Sam M <person2@org1.example> (U0EXAMPLE003)
+Time: 2026-09-14 11:44:27 EDT
+Message TS: 1789400667.629269
+I'll put together the scope doc and share it Wednesday.

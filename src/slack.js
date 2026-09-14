@@ -133,10 +133,17 @@ function parseChannel(text, opts) {
          * the caller passes the root's timestamp, and that is a real boundary — the
          * narrowest Slack offers, and the one thing here that matches email's. */
         threadId: opts.threadId || opts.channel || 'slack',
+        /* A channel read has no reply structure between messages, only a note that a
+         * thread exists; a thread read is nothing but. The detector has to know which it
+         * is looking at: "the next message from the other side" is an answer in a thread
+         * and merely the next thing somebody said in a channel. */
+        stream: !opts.threadId,
         // Marks a root whose replies a channel read does not include — fetching them
         // is a separate call the caller has to make.
         hasThread: !!cur.hasThread,
         subject: opts.channel || 'Slack',
+        // The display name, only so that "Lena — can you…" can be tied to Lena's address.
+        fromName: cur.name || null,
         from: cur.email || (selfUid && cur.uid === selfUid && selfAddr) ||
               (cur.uid + '@slack.local'),
         // concat, not slice: one member passed as a bare string is still a list of one.
