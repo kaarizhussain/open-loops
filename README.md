@@ -77,7 +77,7 @@ between a mailbox and a calendar — the seam no single-product assistant reache
 
 ## What comes out
 
-From 25 threads and 5 meetings, grouped by who acts next:
+From 25 messages and 5 meetings, grouped by who acts next:
 
 ```
 OPEN LOOPS — for 2026-08-06
@@ -167,13 +167,16 @@ your own work, which is the common case for anyone trying this on themselves.
 
 ```js
 principals: []                          // nobody. Two piles: chase them, and yours.
-principals: [{ label: 'Dana' }]         // one. The pile becomes "Needs Dana".
+principals: [{ label: 'Dana' }]         // one. Her pile is "Needs Dana".
 principals: [{ label: 'Dana',   address: 'dana@northstar.io' },
              { label: 'Marcus', address: 'marcus@northstar.io' }]
 ```
 
-With several, items route by who was actually on the conversation and the name goes on
-each line. Leaving it out entirely keeps the original behaviour: one unnamed executive.
+Your own "I'll…" is always yours. A principal's pile holds what was promised in their
+name — "Dana will send the signed copy" — and with several, the name in the promise
+decides whose, and goes on each line. Anyone else's promise is theirs to chase. Leaving
+it out entirely keeps the original behaviour: one unnamed executive reading their own
+inbox, where "I" is the executive.
 
 ## How you argue with it
 
@@ -228,10 +231,13 @@ a model.
 ## The parts that were actually hard
 
 Every real bug in this thing was found by running it against real messages, never by
-reading the code. Four separate times, on four different days. A closure rule that let
+reading the code. Five separate times, on five different days. A closure rule that let
 the word `signed` mark a future promise as already delivered. Deadlines borrowed from
 unrelated messages further up a channel. An app footer poisoning the topic match. A
-question buried by the sender's own later message, so it vanished instead of ageing.
+question buried by the sender's own later message, so it vanished instead of ageing. And
+the biggest: every rule assumed a channel was one conversation with one person. The
+first run with three people in it showed whoever posted last "answering" every open
+question, and every promise pinned on whoever had spoken first.
 
 None were visible in review, and every one looked obvious afterwards.
 
@@ -267,7 +273,8 @@ The tests live in `test/` and are the documentation for how each part is meant t
 `test.js` for the detector against the demo fixture, `test_slack.js` and `test_store.js`
 for the adapters, `test_ledger.js` for what the digest remembers between runs,
 `test_digest.js` for the rendering, `test_slack_run.js` for the whole Slack path end to
-end.
+end, `test_channel.js` for a channel with several people in it, and `test_replay.js` and
+`test_replay_seed.js` for real connector output, sanitized and replayed.
 
 ## Pointing it at something else
 
@@ -292,6 +299,7 @@ privacy limits that matter more than the shapes do.
 |---|---|---|---|
 | Demo fixture (`src/fixture.js`) | 25 messages, 5 events | yes, by assertion | that a change has not broken known behaviour |
 | A live Slack workspace | 17 messages, one member | 1 rejection, 1 spot check | that the whole path runs unattended |
+| The same workspace, three people (`test/replay/2026-09-14/`) | 31 messages, two test accounts | yes, 13 scripted items | that attribution holds with more than one person — 10 of 13 right before the fix, 13 after |
 | Enron corpus (`tools/benchmark.js`) | 3,725 emails, 16 mailboxes | **no** | how often it fires — 35.8 items per 100 |
 | Top-of-digest, hand-graded | 79 items, two labellers | yes | that the task is well-posed — kappa 0.76 |
 

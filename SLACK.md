@@ -74,7 +74,8 @@ config file:
 {
   "today": "2026-09-01",
   "conversations": [
-    { "channel": "#deals", "members": ["lena@vectorfreight.com"], "text": "<connector output>" }
+    { "channel": "#deals", "members": [], "text": "<connector output>" },
+    { "channel": "D0…", "members": ["lena@vectorfreight.com"], "text": "<a DM, if you read DMs>" }
   ],
   "threads": [
     { "channel": "#deals", "root": "1788292991.482509", "text": "<slack_read_thread output>" }
@@ -83,6 +84,10 @@ config file:
   "events": "<list_events response, object or raw JSON>"
 }
 ```
+
+`members` stays empty for channels. A conversation with exactly one other member is read
+as a conversation with that person, so every item in it is theirs — right for a DM,
+wrong for a channel, where who an item is with has to come from the messages.
 
 `events` is optional and worth having. Fetch it with
 `list_events(startTime=<14 days ago>, endTime=<7 days ahead>, orderBy="startTime")` and
@@ -166,9 +171,10 @@ executive*, which is a heading that lies about what is under it.
 ]
 ```
 
-With several, items are routed by who was actually on the conversation rather than by
-guesswork, and the name goes on each line because one heading cannot carry two. That
-case only really arises when you read your own account and are copied on several
+Your own "I'll…" is always yours. What lands in a principal's pile is what was promised
+in their name — *"Dana will send the signed copy"* — and with several, the name in the
+promise decides whose pile, and goes on each line because one heading cannot carry two.
+Anyone else's promise is theirs to chase. That case only really arises when you read your own account and are copied on several
 people's work — which is also the version that needs nobody's permission to set up.
 
 ## Correcting it
@@ -341,7 +347,9 @@ Both were copied from live responses. This is the standing cost of parsing a
 presentation format, and the reason the adapter has tests built from real output
 rather than invented output.
 
-**Nothing is validated.** No number in this repo comes from real chatter. The
-conversations in `test_slack_run.js` are invented, the same way the mail fixture is.
-The point of the correction loop is to produce the first honest number; it has not
-been run against anything real yet.
+**Nothing is validated on real work yet.** The parser runs against real connector
+output — two sanitized captures in `test/replay/`, the second with three people talking
+in it. But those people are test accounts posting a script, so that shows it reads Slack
+correctly, not how often it is right about somebody's actual week. The conversations in
+`test_slack_run.js` are invented, the same way the mail fixture is. The point of the
+correction loop is to produce the first honest number, and it needs a real user for that.

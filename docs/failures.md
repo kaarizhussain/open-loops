@@ -1,7 +1,7 @@
 # What was actually hard
 
 Every bug below was found by running the detector against real messages, never by
-reading the code. Four separate times. They are kept because the failures say more
+reading the code. Five separate times. They are kept because the failures say more
 about what this problem is than the working parts do.
 
 [← README](../README.md)
@@ -63,3 +63,21 @@ logic:
 Then, on a second batch: two items carried deadlines that appeared nowhere in their own
 sentences, inherited from unrelated messages further up the channel. Safe in mail, where
 a thread is one subject. Not in chat, where it is a whole room.
+
+**A channel is not one relationship.** Every workspace it had read had one member, so
+nothing inbound ever arrived and three rules that only made sense for an email thread
+never had to prove anything. Two test accounts posting thirteen scripted messages broke
+all three at once:
+
+- whose turn it was decided every question in the conversation, so in a channel whoever
+  posted last had "answered" all of them — a question put to Lena closed when Sam
+  mentioned the numbers, and a channel could only ever track one
+- the assistant's own "I'll book the pricing review" went to the executive's pile, by a
+  rule written when the reader *was* the executive
+- every item in a channel was attributed to whoever had spoken there first, their tier
+  included — including promises made before that person had joined
+
+The fix was a model, not more rules: who asked, who promised and who a loop is with are
+decided per message. An item with no evidence of who it is with now says nobody, and
+carries no tier, rather than borrowing a name. 10 of the 13 scripted items were right
+before; all 13 after.

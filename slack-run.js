@@ -13,7 +13,8 @@
  *     "self": "you@example.com",
  *     "today": "2026-09-01",                       // optional, defaults to the clock
  *     "conversations": [
- *       { "channel": "#deals", "members": ["a@b.com"], "text": "<connector output>" }
+ *       { "channel": "#deals", "members": [], "text": "<connector output>" }
+ *       // members only for a DM: one other member means every item is theirs
  *     ],
  *     "dm": { "channel": "D0123", "text": "<connector output for your self-DM>" }
  *   }

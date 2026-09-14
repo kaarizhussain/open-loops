@@ -129,9 +129,6 @@ Follow `next_cursor` until the oldest message is past `lookbackDays`, or the cha
 out. The digest prints an INCOMPLETE line naming any channel it only saw part of, so if
 you see one, that channel needed another page.
 
-```
-```
-
 Any message containing a line like `Thread: 2 replies (latest: …)` is a thread root
 whose replies are **not** in the channel read. Fetch each one — a promise made inside a
 thread is invisible otherwise:
