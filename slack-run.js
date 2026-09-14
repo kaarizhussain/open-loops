@@ -245,6 +245,7 @@ function main(argv) {
   var self = cfg.you;
   var today = flag('today', input.today || new Date().toISOString().slice(0, 10));
   var store = fileStore(flag('ledger', cfg.ledger));
+  store.beginRun(today);    // a second run today starts from before the first
 
   /* Every conversation becomes messages in the shape loops.js already takes. The
    * channel name stands in for a subject line, which Slack does not have. */
@@ -378,6 +379,10 @@ function main(argv) {
    * never come back as "found nothing here, did I miss something?". */
   var spoke = {};
   result.open.concat(result.closed).forEach(function (l) { if (l.msgId) spoke[l.msgId] = 1; });
+  /* Nor is a question it is holding back until it is two days old. It found the question
+     and chose not to raise it yet; offering it as "found nothing" turns its own restraint
+     into a recall miss the moment anyone answers honestly. */
+  (result.held || []).forEach(function (id) { spoke[id] = 1; });
 
   var beforeMute = result.open.length;
   var kept = L.applyMutes(result.open, mutes);

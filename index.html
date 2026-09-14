@@ -713,7 +713,7 @@ function detectLoops(messages, events, opts) {
    * executive — so nothing that does not pass this changes behaviour. An explicit
    * empty list means they support nobody and are running it on their own work. */
   var principals = opts.principals;
-  var out = [];
+  var out = [], held = [];   // held: ids of questions too young to raise yet
   var threads = {};
   /* Equal timestamps must compare equal, or the sort is free to reorder them.
    * Mail rarely collides to the minute; chat does it constantly, and the caller has
@@ -950,7 +950,8 @@ function detectLoops(messages, events, opts) {
         if (!q) return;
         var replied = msgs.slice(i + 1).some(function (n) { return n.out !== m.out && answers(q, n.body); });
         var age = daysBetween(day(m.date), today);
-        if (replied || age < 2) return;
+        if (replied) return;
+        if (age < 2) { held.push(m.id); return; }
         out.push(m.out
           ? { type: 'awaiting_reply', threadId: tid, subject: m.subject, who: attribute(i, q), byUs: false,
               what: shorten(q, 110), said: day(m.date), age: age, due: askDue(q, m, true),
@@ -964,6 +965,7 @@ function detectLoops(messages, events, opts) {
       var pending = msgs.slice(lastOut + 1).filter(function (m) { return !m.out && askIn(m); });
       if (pending.length) {
         var first = pending[0], fAge = daysBetween(day(first.date), today);
+        if (fAge < 2) pending.forEach(function (p) { held.push(p.id); });
         if (fAge >= 2) {
           var fs = askIn(first);
           out.push({
@@ -982,6 +984,7 @@ function detectLoops(messages, events, opts) {
        * gets answered. */
       var waiting = msgs.slice(lastIn + 1).filter(function (m) { return m.out && askIn(m); });
       var ours = waiting[0], oAge = ours && daysBetween(day(ours.date), today);
+      if (ours && oAge < 2) held.push(ours.id);
       if (ours && oAge >= 2) {
         out.push({
           type: 'awaiting_reply', threadId: tid, subject: ours.subject,
@@ -1136,7 +1139,8 @@ function detectLoops(messages, events, opts) {
     .sort(function (a, b) { return b.risk - a.risk; });
   var closed = out.filter(function (l) { return l.type === 'closed'; })
     .sort(function (a, b) { return a.closedOn < b.closedOn ? 1 : -1; });
-  return { open: open, closed: closed, today: today, dark: { no_followup: darkFollowup, quietSeries: quietSeries } };
+  return { open: open, closed: closed, today: today, held: held,
+           dark: { no_followup: darkFollowup, quietSeries: quietSeries } };
 }
 
 /* Regroup everything by upcoming meeting. The list answers "what is outstanding";
@@ -1213,7 +1217,7 @@ function loopKey(l) {
 
 var OWNER = {
   them: { title: 'Chase them', note: 'Someone else owes this. Your move is the nudge.' },
-  you:  { title: 'Yours to handle', note: 'Logistics you can close out without the executive.' },
+  you:  { title: 'Yours to handle', note: 'Logistics you can close out yourself.' },
   exec: { title: 'Needs the executive', note: 'Only they can produce or decide this — protect the time for it.' }
 };
 

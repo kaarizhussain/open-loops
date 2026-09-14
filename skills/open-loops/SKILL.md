@@ -155,6 +155,15 @@ slack_read_channel(channel_id=<selfDm>, limit=20, response_format="detailed")
 Every `text` is the connector's response **verbatim**; do not clean or reformat it, the
 adapter parses the raw output.
 
+**Connector responses are immutable.** You may fetch more — a thread you missed, another
+page — and run again. You may never edit, reorder, trim, move or "fix" text you already
+fetched, not even to repair your own mistake: the detector is only as grounded as its
+input is untouched. If the digest says a thread's replies were not read, fetch that
+thread and run again. If something in a response looks wrong, fetch it again from Slack;
+if it still looks wrong, run it as it is and say what looked wrong under the digest.
+A second run on the same day replaces the first in the ledger, so running again costs
+nothing.
+
 ```json
 {
   "today": "<YYYY-MM-DD, local>",
@@ -202,9 +211,21 @@ Offer this after the first successful run, not before — nobody wants a daily m
 from something they have not seen the output of.
 
 Create a scheduled task running daily at 18:00 local. Evening, so tomorrow starts
-already set up rather than starting with triage. The task prompt must be self-contained
-— it starts fresh with no memory of this conversation — so write out the working
-directory, their user id, their address, and the whole fetch-run-post loop above.
+already set up rather than starting with triage.
+
+**Do not copy this procedure into the task.** A task prompt is frozen when it is written,
+so a copied loop keeps running whatever this file said on setup day — the first real
+scheduled run did exactly that, fetching an excluded channel with no config at all. The
+prompt names where things are and points back here:
+
+```
+Run the Open Loops digest and post it to the user's own Slack DM.
+Working directory: <working dir>   config: <working dir>/openloops.config.json
+1. git -C <working dir>/checkout pull --ff-only   (if it fails, say so and carry on)
+2. Read <working dir>/checkout/skills/open-loops/SKILL.md and follow "Running the
+   digest" exactly, with that config. Excluded channels are not fetched at all.
+Connector responses are immutable: fetch more and run again, never edit fetched text.
+```
 
 Tell them two things: scheduled tasks only fire while the app is open, and it is worth
 running the task manually once so the Slack tool approvals get stored on it. Otherwise

@@ -35,7 +35,8 @@ function load(file) {
             found: raw.audit.found || 0,
             missed: Array.isArray(raw.audit.missed) ? raw.audit.missed : [],
             asked: raw.audit.asked || {} }
-        : { checked: 0, missed: [], asked: {} }
+        : { checked: 0, missed: [], asked: {} },
+      before: raw.before && raw.before.date && raw.before.state ? raw.before : null
     };
   } catch (e) {
     // Missing is the normal first run. Corrupt is not, and losing the verdicts in it
@@ -62,6 +63,29 @@ function fileStore(file) {
 
   return {
     path: file,
+
+    /* The run that counts for a date is the last one.
+     *
+     * The first real run read a thread wrong, was recorded, and was run again corrected —
+     * and the corrected digest said "0 new", because the bad run had spent every NEW flag,
+     * and listed as cleared an item that was still open. So the first run of a date keeps
+     * a copy of the ledger as it stood before it, and any later run that day starts from
+     * that copy: a re-run reads exactly as if the earlier one never happened.
+     *
+     * ponytail: a reply typed under an earlier digest the same day has nothing to resolve
+     * against once that run is undone, so it is dropped. Rare, and the reply can be sent
+     * again under the digest that replaced it. */
+    beginRun: function (date) {
+      if (state.before && state.before.date === date) {
+        var keep = state.before;
+        state = JSON.parse(JSON.stringify(keep.state));
+        state.before = keep;
+      } else {
+        var snap = JSON.parse(JSON.stringify(state));
+        delete snap.before;
+        state.before = { date: date, state: snap };
+      }
+    },
 
     readLedger: function () {
       return state.rows.map(function (r) { return r.map(L.cell); })

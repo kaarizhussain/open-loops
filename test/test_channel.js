@@ -164,4 +164,15 @@ assert.strictEqual(outDue('Can you send the signed copy? I need it by Friday.', 
 assert.strictEqual(outDue('Lena, does Thursday work for a call?'), null,
   'but a date in our own question is a proposed slot, not a deadline');
 
+/* ---------------- 5. held back is not the same as found nothing ---------------- */
+var hold = function (msgs) { return detectLoops(msgs, [], { exec: ME, today: '2026-09-18', principals: [] }).held; };
+assert.deepStrictEqual(hold([say(SAM, '17T10:00', 'Are we still on for the vendor kickoff?')]), [String(n)],
+  'inbound: a question too young to raise is reported as held');
+assert.deepStrictEqual(hold(threaded([say(ME, '17T10:00', 'Can you confirm the pilot date?')])), [String(n)],
+  'outbound, in a thread: the same');
+assert.deepStrictEqual(hold(threaded([say(SAM, '17T10:00', 'Are we still on for the vendor kickoff?')])), [String(n)],
+  'inbound, in a thread: the same');
+assert.deepStrictEqual(hold([say(SAM, '14T10:00', 'Are we still on for the vendor kickoff?')]), [],
+  'and one old enough to raise is raised, not held');
+
 console.log('test_channel: ok');

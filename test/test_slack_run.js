@@ -76,8 +76,10 @@ numbered.forEach(function (line, i) {
 });
 assert.ok(/· \d+ new/.test(text), 'a cold ledger reports everything as new');
 
-/* --------------- second run: the same conversations are not news --------------- */
-var again = main([write(input), '--ledger', ledger]);
+/* ------------- the next day: the same conversations are not news ------------- */
+// Dated the next day: a second run on the same date replaces the first (see further down).
+var on = function (d) { var o = JSON.parse(JSON.stringify(input)); o.today = d; return write(o); };
+var again = main([on('2026-09-02'), '--ledger', ledger]);
 assert.ok(/· 0 new/.test(again), 'nothing is new the second time');
 assert.ok(again.indexOf('NEW · ') === -1, 'and no item is still flagged new');
 
@@ -88,7 +90,7 @@ input.dm.text = [
   me(at(2026, 9, 1, 19), '1')                          // "number 1 is not real"
 ].join('\n');
 
-var third = main([write(input), '--ledger', ledger]);
+var third = main([on('2026-09-03'), '--ledger', ledger]);
 assert.ok(/Took your last reply — 1 item marked wrong/.test(third),
   'the correction is acknowledged: ' + third.split('\n').slice(4, 8).join(' | '));
 assert.strictEqual(third.indexOf(firstItem), -1, 'and that item is gone: ' + firstItem);
@@ -96,7 +98,7 @@ assert.ok(/1 hidden as wrong/.test(third), 'the count says something is being hi
 
 /* The same reply must not be re-read. It stays in the DM forever, and re-applying it
    against a now-shorter list would mark a different item every single run. */
-var fourth = main([write(input), '--ledger', ledger]);
+var fourth = main([on('2026-09-04'), '--ledger', ledger]);
 assert.ok(!/Took your last reply/.test(fourth), 'a reply is acted on exactly once');
 assert.ok(/1 hidden as wrong/.test(fourth), 'but what it rejected stays rejected');
 
@@ -247,6 +249,7 @@ quietInput.dm = { channel: 'D0', text: [
   me(at(2026, 9, 1, 18), '```\n' + checked + '\n```'),
   me(at(2026, 9, 1, 19), 'miss b')
 ].join('\n') };
+quietInput.today = '2026-09-02';   // answered the next day — a same-date run would replace the one it answers
 var scored = main([write(quietInput), '--ledger', quietLedger]);
 var st2 = JSON.parse(fs.readFileSync(quietLedger, 'utf8'));
 assert.strictEqual(st2.audit.checked, 3, 'answering counts everything asked, not just the misses');
@@ -316,6 +319,7 @@ var st = JSON.parse(fs.readFileSync(learnLedger, 'utf8'));
 st.rows.forEach(function (r) { if (/at some point/.test(r[6])) r[7] = 'x'; });
 fs.writeFileSync(learnLedger, JSON.stringify(st));
 
+learnInput.today = '2026-09-02';   // each run its own day — a same-date run replaces the last
 var second = main([write(learnInput), '--ledger', learnLedger]);
 assert.ok(/LEARNED/.test(second), 'the pattern is learned: ' +
   second.split('\n').filter(function (l) { return /LEARNED|"at some/.test(l); }).join(' | '));
@@ -326,9 +330,10 @@ var saved = JSON.parse(fs.readFileSync(learnLedger, 'utf8')).learned;
 assert.strictEqual(saved.length, 1, 'recorded in the ledger, not in config');
 assert.strictEqual(saved[0].phrase, 'at some point');
 assert.strictEqual(saved[0].count, 4, 'with the evidence it acted on');
-assert.strictEqual(saved[0].since, '2026-09-01');
+assert.strictEqual(saved[0].since, '2026-09-02');
 
 /* From now on it applies without being told, and says that it is. */
+learnInput.today = '2026-09-03';
 var third = main([write(learnInput), '--ledger', learnLedger]);
 assert.ok(!/LEARNED/.test(third), 'announced once, not every run');
 assert.ok(/Currently muting on its own: "at some point"/.test(third),
@@ -350,6 +355,7 @@ assert.ok(warnAt > -1 && shared.indexOf('"at some point"', warnAt) > warnAt,
 /* Overruling it stops the phrase being muted. The rows themselves stay rejected —
    those are two different decisions and undoing one must not undo the other. */
 learnInput.unmute = ['at some point'];
+learnInput.today = '2026-09-04';
 var undone = main([write(learnInput), '--ledger', learnLedger]);
 assert.ok(!/Currently muting on its own/.test(undone), 'unmute wins over what it taught itself');
 assert.ok(!/muted by phrase/.test(undone), 'nothing is being dropped by phrase any more');
@@ -476,6 +482,35 @@ assert.ok(/CLOSED ITSELF[\s\S]*walk through the renewal/.test(sighted),
   'closed by the hold, not merely reclassified and left on the list');
 assert.strictEqual(stillOpen(sighted).indexOf('walk through the renewal'), -1,
   'so it is off the open list entirely');
+
+/* ------------- a second run the same day replaces the first ------------- */
+
+/* The first real run (2026-09-14) read a thread wrong, was recorded, then run again
+   corrected. The second digest said "0 new" — the bad run had spent every NEW flag — and
+   listed as cleared an item still open. The run that counts for a date is the last. */
+var partial = JSON.parse(JSON.stringify(input));
+partial.conversations = partial.conversations.slice(1);
+var onceLedger = path.join(dir, 'once.json'), twiceLedger = path.join(dir, 'twice.json');
+var once = main([write(input), '--ledger', onceLedger]);
+main([write(partial), '--ledger', twiceLedger]);
+assert.strictEqual(main([write(input), '--ledger', twiceLedger]), once,
+  'a corrected re-run reads exactly as if the bad run had never happened');
+var nextDay = function (l) {
+  var o = JSON.parse(JSON.stringify(input)); o.today = '2026-09-02';
+  return main([write(o), '--ledger', l]);
+};
+assert.strictEqual(nextDay(twiceLedger), nextDay(onceLedger), 'and the next day builds on the run that counted');
+
+/* ------------ a question held back for age is not a spot-check miss ------------ */
+var young = { self: ME, today: '2026-09-01', tzOffset: 0, principals: [],
+  conversations: [{ channel: '#ops', members: [], text: [
+    them('Sam Park', 'sam@vectorfreight.com', 'U04', at(2026, 9, 1, 9), 'Can you review the Q4 headcount plan before Thursday?'),
+    them('Sam Park', 'sam@vectorfreight.com', 'U04', at(2026, 9, 1, 10), 'Numbers came in a bit under forecast.')
+  ].join('\n') }] };
+var check = main([write(young), '--ledger', path.join(dir, 'young.json')]).split('SPOT CHECK')[1] || '';
+assert.ok(/Numbers came in/.test(check), 'the spot check still samples what it found nothing in');
+assert.strictEqual(check.indexOf('headcount'), -1,
+  'but not a question it is only holding back until it is two days old');
 
 /* ------------------------------ bad input ------------------------------ */
 assert.throws(function () { main([write({ conversations: [] }), '--ledger', ledger]); },
