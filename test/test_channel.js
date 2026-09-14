@@ -135,4 +135,33 @@ assert.strictEqual(dm([LENA, SAM]), null, 'but a conversation with two others na
 assert.strictEqual(dm([LENA], [say(SAM, '14T09:00', 'Morning.', { to: [LENA] })]), null,
   'and a member list someone else has spoken past is not trusted');
 
+/* ---------------- 4. a question's deadline is often the next sentence ---------------- */
+
+// "Are we still on for the vendor kickoff? I need an answer today." — seed item 9, undated
+// on the real run, and so ranked on age below things that mattered less.
+var askOf = function (msgs, type) { return of(run(msgs), type)[0]; };
+var inDue = function (body, thread) {
+  var m = [say(SAM, '14T10:00', body)];
+  return askOf(thread ? threaded(m) : m, 'unanswered_ask').due;
+};
+assert.strictEqual(inDue('Are we still on for the vendor kickoff? I need an answer today.'), '2026-09-14',
+  'inbound: the deadline in the next sentence dates the question');
+assert.strictEqual(inDue('Are we still on for the vendor kickoff? I need an answer today.', true), '2026-09-14',
+  'and the same in a real thread');
+assert.strictEqual(inDue('Can you review the deck? I am out Friday.'), null,
+  'a date that is not a deadline dates nothing');
+assert.strictEqual(inDue("Can you review the deck? We'll send the rest by Friday."), null,
+  'nor does a promise sitting beside the question — that deadline is the promise\'s');
+
+var outDue = function (body, thread) {
+  var m = [say(ME, '14T10:00', body)];
+  return askOf(thread ? threaded(m) : m, 'awaiting_reply').due;
+};
+assert.strictEqual(outDue('Lena, can you send the signed copy? I need it by Friday.'), '2026-09-18',
+  'outbound: our stated deadline dates our ask');
+assert.strictEqual(outDue('Can you send the signed copy? I need it by Friday.', true), '2026-09-18',
+  'and the same in a real thread');
+assert.strictEqual(outDue('Lena, does Thursday work for a call?'), null,
+  'but a date in our own question is a proposed slot, not a deadline');
+
 console.log('test_channel: ok');

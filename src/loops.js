@@ -398,6 +398,26 @@ function answers(question, reply) {
 function sentences(body) {
   return body.split(/(?<=[.!?])\s+|\n+/).map(function (s) { return s.trim(); }).filter(Boolean);
 }
+/* A question's deadline, which is often not in the question. "Are we still on for the
+ * vendor kickoff? I need an answer today." arrived undated on the first real run with other
+ * people in it, so it ranked on age below things that mattered less.
+ *
+ * The question's own date counts only when it is theirs: a date in a question we asked is
+ * a proposed slot ("does Thursday work?"), not a deadline. Beyond that, another sentence of
+ * the same message lends its date only when it is stated as a deadline and is not a
+ * promise — "I'm out Friday" dates nothing, and "we'll send the rest by Friday" is the
+ * promise's deadline, not the question's.
+ *
+ * ponytail: a keyword list decides "stated as a deadline", so "the office closes by Friday"
+ * still passes. Tighten it against real chat if that shows up. */
+var DEADLINE = /\b(?:need|needs|needed|by|before|due|deadline|asap|at the latest)\b/i;
+function askDue(q, m, ours) {
+  var d = ours ? null : parseDue(q, m.date);
+  sentences(m.body).forEach(function (x) {
+    if (!d && x !== q && DEADLINE.test(x) && !FIRM.test(x) && !LETS.test(x)) d = parseDue(x, m.date);
+  });
+  return d;
+}
 function shorten(s, n) {
   s = s.replace(/\s+/g, ' ').trim();
   return s.length > n ? s.slice(0, n - 1).replace(/[,;:\s]+\S*$/, '') + '…' : s;
@@ -649,10 +669,11 @@ function detectLoops(messages, events, opts) {
         if (replied || age < 2) return;
         out.push(m.out
           ? { type: 'awaiting_reply', threadId: tid, subject: m.subject, who: attribute(i, q), byUs: false,
-              what: shorten(q, 110), said: day(m.date), age: age, due: null, excerpt: m.body, msgId: m.id }
+              what: shorten(q, 110), said: day(m.date), age: age, due: askDue(q, m, true),
+              excerpt: m.body, msgId: m.id }
           : { type: 'unanswered_ask', threadId: tid, subject: m.subject, who: m.from, byUs: true,
               pendingCount: 1, what: shorten(q, 110), said: day(m.date), age: age,
-              due: parseDue(q, m.date), excerpt: m.body, msgId: m.id });
+              due: askDue(q, m, false), excerpt: m.body, msgId: m.id });
       });
     } else if (lastIn > lastOut) {
       // They are waiting on us. Age from the oldest thing still unanswered.
@@ -665,7 +686,7 @@ function detectLoops(messages, events, opts) {
             type: 'unanswered_ask', threadId: tid, subject: first.subject,
             who: first.from, byUs: true, pendingCount: pending.length,
             what: shorten(fs, 110), said: day(first.date), age: fAge,
-            due: parseDue(fs, first.date), excerpt: first.body, msgId: first.id
+            due: askDue(fs, first, false), excerpt: first.body, msgId: first.id
           });
         }
       }
@@ -682,8 +703,8 @@ function detectLoops(messages, events, opts) {
           type: 'awaiting_reply', threadId: tid, subject: ours.subject,
           who: counterparty || (ours.to || [])[0], byUs: false,
           what: shorten(askIn(ours), 110), said: day(ours.date), age: oAge,
-          // A date in an outbound question is a proposed slot, not a deadline.
-          due: null, excerpt: ours.body, msgId: ours.id
+          // A date in the question itself is a proposed slot; askDue only takes a stated one.
+          due: askDue(askIn(ours), ours, true), excerpt: ours.body, msgId: ours.id
         });
       }
     }

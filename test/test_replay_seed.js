@@ -73,6 +73,8 @@ expect('11', 'see how the numbers land', null);
 expect('12', 'Sending the updated deck', null);
 expect('14', 'scope doc and share it Wednesday', ['owed_to_us', 'them', SAM]);
 assert.strictEqual(r.open.filter(seed).length, 7, 'and nothing else from the seed');
+assert.strictEqual(find('vendor kickoff').due, '2026-09-14',
+  '9: "I need an answer today", in the sentence after the question, is its deadline');
 
 /* Through the runner, supporting Dana: none of the reader's own work goes to her pile. */
 var tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'openloops-seed-'));
