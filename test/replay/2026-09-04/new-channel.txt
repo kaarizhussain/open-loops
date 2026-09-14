@@ -1,0 +1,25 @@
+Channel: #new-channel (C0EXAMPLE002)
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 22:28:45 EDT === 
+Message TS: 1788316125.611879
+Sending the signed contract now.
+*Sent using* <@U0EXAMPLE002|Claude>
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 22:28:40 EDT === 
+Message TS: 1788316120.081539
+I'll set up the kickoff with the vendor this week.
+*Sent using* <@U0EXAMPLE002|Claude>
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 22:28:35 EDT === 
+Message TS: 1788316115.062009
+Let's schedule a sync for Thursday to walk through the rollout plan.
+*Sent using* <@U0EXAMPLE002|Claude>
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 22:28:30 EDT === 
+Message TS: 1788316110.169659
+I'll book a meeting with Vector next week to go over the numbers.
+*Sent using* <@U0EXAMPLE002|Claude>
+
+=== Message from Alex Rivera <you@example.com> (U0EXAMPLE001) at 2026-09-01 11:06:38 EDT === 
+Message TS: 1788275198.596909
+<@U0EXAMPLE001|Alex Rivera> has joined the channel

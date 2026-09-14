@@ -1,0 +1,15 @@
+=== THREAD PARENT MESSAGE ===
+From: Alex Rivera <you@example.com> (U0EXAMPLE001)
+Time: 2026-09-01 16:03:11 EDT
+Message TS: 1788292991.482509
+Halcyon pilot — scoping thread.
+*Sent using* <@U0EXAMPLE002|Claude>
+
+=== THREAD REPLIES (1 total) ===
+
+--- Reply 1 of 1 ---
+From: Alex Rivera <you@example.com> (U0EXAMPLE001)
+Time: 2026-09-01 16:03:17 EDT
+Message TS: 1788292997.287589
+I'll put together the scope doc and share it Wednesday.
+*Sent using* <@U0EXAMPLE002|Claude>
