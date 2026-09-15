@@ -86,6 +86,13 @@ var digest = main([path.join(tmp, 'in.json'), '--config', path.join(tmp, 'cfg.js
 assert.ok(/Read \d+ messages across 2 conversations/.test(digest), 'the runner reads it');
 assert.strictEqual(digest.indexOf('NEEDS DANA'), -1, 'nothing the reader promised is filed as Dana\'s');
 
+/* Tuesday's real run: Sam's "I need an answer today" was a day old and past its deadline,
+   and the two-day grace hid it. Lena's undated question still waits its two days. */
+var tue = loops.detectLoops(msgs, [], { exec: 'you@example.com', today: '2026-09-15', principals: DANA, contacts: CONTACTS });
+var onTue = function (t) { return tue.open.filter(seed).some(function (l) { return l.what.indexOf(t) > -1; }); };
+assert.ok(onTue('vendor kickoff'), 'Tuesday: the overdue kickoff question is raised');
+assert.ok(!onTue('confirm the pilot start date'), 'and the undated one is still held');
+
 /* --- the digest itself, on the Wednesday the demo is recorded ---
  *
  * The redesign (2026-09-14) was approved against exactly this output: the seed run, read

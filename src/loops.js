@@ -678,8 +678,12 @@ function detectLoops(messages, events, opts) {
         var replied = msgs.slice(i + 1).some(function (n) { return n.out !== m.out && answers(q, n.body); });
         var age = daysBetween(day(m.date), today);
         if (replied) return;
-        if (age < 2) { held.push(m.id); return; }
+        /* Two days' grace stops a fresh question nagging before anyone could have answered
+         * it — unless the asker set a deadline and it has come. "I need an answer today"
+         * was held for its two days on the first real run, and an overdue question from a
+         * key account did not appear at all. */
         var ad = askDue(q, m, m.out);
+        if (age < 2 && !(ad.due && ad.due <= today)) { held.push(m.id); return; }
         out.push(m.out
           ? { type: 'awaiting_reply', threadId: tid, subject: m.subject, who: attribute(i, q), byUs: false,
               what: shorten(q, 110), said: day(m.date), age: age, due: ad.due, dueFrom: ad.dueFrom,
@@ -693,9 +697,10 @@ function detectLoops(messages, events, opts) {
       var pending = msgs.slice(lastOut + 1).filter(function (m) { return !m.out && askIn(m); });
       if (pending.length) {
         var first = pending[0], fAge = daysBetween(day(first.date), today);
-        if (fAge < 2) pending.forEach(function (p) { held.push(p.id); });
-        if (fAge >= 2) {
-          var fs = askIn(first), fd = askDue(fs, first, false);
+        var fs = askIn(first), fd = askDue(fs, first, false);
+        var fDue = !!(fd.due && fd.due <= today);   // its deadline has come: no grace
+        if (fAge < 2 && !fDue) pending.forEach(function (p) { held.push(p.id); });
+        if (fAge >= 2 || fDue) {
           out.push({
             type: 'unanswered_ask', threadId: tid, subject: first.subject,
             who: first.from, byUs: true, pendingCount: pending.length,
@@ -712,9 +717,10 @@ function detectLoops(messages, events, opts) {
        * gets answered. */
       var waiting = msgs.slice(lastIn + 1).filter(function (m) { return m.out && askIn(m); });
       var ours = waiting[0], oAge = ours && daysBetween(day(ours.date), today);
-      if (ours && oAge < 2) held.push(ours.id);
-      if (ours && oAge >= 2) {
-        var od = askDue(askIn(ours), ours, true);
+      var od = ours ? askDue(askIn(ours), ours, true) : null;
+      var oDue = !!(od && od.due && od.due <= today);   // a deadline we stated has come
+      if (ours && oAge < 2 && !oDue) held.push(ours.id);
+      if (ours && (oAge >= 2 || oDue)) {
         out.push({
           type: 'awaiting_reply', threadId: tid, subject: ours.subject,
           who: counterparty || (ours.to || [])[0], byUs: false,

@@ -175,4 +175,27 @@ assert.deepStrictEqual(hold(threaded([say(SAM, '17T10:00', 'Are we still on for 
 assert.deepStrictEqual(hold([say(SAM, '14T10:00', 'Are we still on for the vendor kickoff?')]), [],
   'and one old enough to raise is raised, not held');
 
+/* ---------------- 6. a stated deadline beats the two-day grace ---------------- */
+// Tuesday's real run (2026-09-15) held "…I need an answer today." for its two days, so
+// an overdue question from a key account did not appear at all.
+var raised = function (msgs, type) { return of(run(msgs), type).length; };
+assert.strictEqual(raised([say(SAM, '17T10:00', 'Are we still on for the vendor kickoff? I need an answer today.')], 'unanswered_ask'), 1,
+  'inbound: a day old and past its stated deadline — raised');
+assert.strictEqual(raised([say(SAM, '18T09:00', 'Can you confirm the pilot date? I need an answer today.')], 'unanswered_ask'), 1,
+  'and on the day itself');
+assert.strictEqual(raised([say(SAM, '17T10:00', 'Can you confirm the pilot date by Friday?')], 'unanswered_ask'), 1,
+  'a deadline in the question counts once it arrives');
+assert.strictEqual(raised([say(SAM, '17T10:00', 'Can you confirm the pilot date by Monday?')], 'unanswered_ask'), 0,
+  'but not before');
+assert.strictEqual(raised([say(SAM, '17T10:00', 'Can you confirm the pilot date?')], 'unanswered_ask'), 0,
+  'an undated question still gets its two days');
+assert.strictEqual(raised([say(ME, '17T10:00', 'Lena, does Friday work for a call?')], 'awaiting_reply'), 0,
+  'outbound: a day in our own question is a slot, not a deadline');
+assert.strictEqual(raised([say(ME, '17T10:00', 'Lena, can you send the signed copy? I need it by Friday.')], 'awaiting_reply'), 1,
+  'but a deadline we stated is one');
+assert.strictEqual(raised(threaded([say(SAM, '17T10:00', 'Are we still on for the vendor kickoff? I need an answer today.')]), 'unanswered_ask'), 1,
+  'in a thread, inbound');
+assert.strictEqual(raised(threaded([say(ME, '17T10:00', 'Can you send the signed copy? I need it by Friday.')]), 'awaiting_reply'), 1,
+  'in a thread, outbound');
+
 console.log('test_channel: ok');
