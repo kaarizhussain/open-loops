@@ -69,9 +69,8 @@ assert.ok(text.indexOf("I'll put together a scope doc and send it Wednesday.") >
 assert.ok(text.indexOf('#vector-freight') > -1, 'the channel name stands in for a subject');
 
 /* Numbered, because a reply quotes the number back. */
-// The piles, not FIRST — which cites the same numbers out of order on purpose.
-var piles = text.slice(text.indexOf('\n\n', text.indexOf('\nFIRST') + 1));
-var numbered = piles.split('\n').filter(function (l) { return /^ ?\d+  \S/.test(l); });
+// The brief, numbered in the order it reads — a reply's numbers match what was read.
+var numbered = text.split('-- thread --')[0].split('\n').filter(function (l) { return /^ ?\d+  \S/.test(l); });
 assert.ok(numbered.length >= 3, 'every open item is numbered, got ' + numbered.length);
 numbered.forEach(function (line, i) {
   assert.strictEqual(parseInt(line, 10), i + 1, 'numbering is contiguous: ' + line);
@@ -103,8 +102,38 @@ assert.ok(/1 hidden as wrong/.test(third), 'the count says something is being hi
 
 /* The instructions in full until the reader has answered once — that paragraph teaches
    the loop — and a two-line key after, because nobody rereads it every evening. */
-assert.ok(/isn't real/.test(text) && !/^Reply   3 7/m.test(text), 'the first digest explains replies in full');
-assert.ok(/^Reply   3 7  not real/m.test(third) && !/isn't real/.test(third), 'once answered, a key is enough');
+assert.ok(/isn't real/.test(text), 'the first digest explains replies in full');
+assert.ok(/^Reply  3 7 not real/m.test(third) && !/isn't real/.test(third), 'once answered, the key is enough');
+
+/* ---------------- replies typed in the digest's thread ----------------
+ * The details are posted as a reply under the digest, so the thread is where a reader
+ * is when they decide an item is wrong — and a thread reply is not in a read of the DM.
+ * The details message itself sits in that thread and contains "3 7"; it is not a reply. */
+var tLedger = path.join(dir, 'thread.json');
+var tFirst = main([write(input), '--ledger', tLedger]);
+var tBrief = tFirst.split('-- thread --')[0].trim(), tDetails = tFirst.split('-- thread --')[1].trim();
+var threadRead = function (parentTs, parentBody, replies) {
+  var who = function () { return 'From: Alex Rivera <' + ME + '> (U0EXAMPLE001)'; };
+  var out = ['=== THREAD PARENT MESSAGE ===', who(), 'Time: 2026-09-01 18:00:00 UTC', 'Message TS: ' + parentTs,
+             parentBody, '', '=== THREAD REPLIES (' + replies.length + ' total) ===', ''];
+  replies.forEach(function (r, i) {
+    out.push('--- Reply ' + (i + 1) + ' of ' + replies.length + ' ---', who(),
+             'Time: 2026-09-01 19:00:00 UTC', 'Message TS: ' + r[0], r[1], '');
+  });
+  return out.join('\n');
+};
+var dTs = at(2026, 9, 1, 18);
+var threaded2 = JSON.parse(JSON.stringify(input));
+threaded2.today = '2026-09-02';
+threaded2.dm = { channel: 'D0', text: me(dTs, '```\n' + tBrief + '\n```') };
+threaded2.dmThread = { text: threadRead(dTs, '```\n' + tBrief + '\n```', [
+  [at(2026, 9, 1, 18) .replace(/\.0+$/, '.000100'), '```\n' + tDetails + '\n```'],
+  [at(2026, 9, 1, 19), '1']
+]) };
+var tNext = main([write(threaded2), '--ledger', tLedger]);
+assert.ok(/Took your last reply — 1 item marked wrong/.test(tNext),
+  'a reply in the thread is read, and the details beside it are not: ' +
+  (tNext.match(/Took your last reply[^\n]*/) || ['(no acknowledgement)'])[0]);
 
 /* The same reply must not be re-read. It stays in the DM forever, and re-applying it
    against a now-shorter list would mark a different item every single run. */

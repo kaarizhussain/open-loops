@@ -151,6 +151,15 @@ And their own DM, which is where corrections come back:
 slack_read_channel(channel_id=<selfDm>, limit=20, response_format="detailed")
 ```
 
+And the thread under the most recent digest in it — the details live there, so replies
+get typed there too, and a thread reply does not appear in a read of the DM itself. Find
+the newest message whose text begins with ` ```OPEN LOOPS — for `, and:
+
+```
+slack_read_thread(channel_id=<the D… id the DM read printed>, message_ts=<its Message TS>,
+                  response_format="detailed")
+```
+
 **Write the input.** Only what was fetched — settings are already in the config.
 Every `text` is the connector's response **verbatim**; do not clean or reformat it, the
 adapter parses the raw output.
@@ -171,6 +180,7 @@ nothing.
   "conversations": [ { "channel": "#name", "members": [], "text": "<verbatim>" } ],
   "threads":       [ { "channel": "#name", "root": "<parent Message TS>", "text": "<verbatim>" } ],
   "events":        <the list_events response>,
+  "dmThread":      { "text": "<verbatim thread read under the last digest>" },
   "dm":            { "channel": "<selfDm>", "text": "<verbatim>" }
 }
 ```
@@ -188,11 +198,16 @@ node <checkout>/slack-run.js <input.json> --config <working dir>/openloops.confi
 Never pass `--dry` on a real run. A dry run does not record the digest's item order,
 and without that record their reply tomorrow cannot be resolved to the right items.
 
-**Post** to their own DM, wrapped in a triple-backtick block — the digest is aligned
-monospace and Slack's proportional font destroys it otherwise:
+**Post** in two parts. The output is split by a line reading exactly `-- thread --`: the
+brief above it is the message — what to do — and the details below it go in that
+message's thread — why. Never post the separator line. Each part goes in its own
+triple-backtick block; both are aligned monospace and Slack's proportional font destroys
+them otherwise:
 
 ```
-slack_send_message(channel_id=<selfDm>, message="```\n<digest verbatim>\n```")
+slack_send_message(channel_id=<selfDm>, message="```\n<brief verbatim>\n```")
+slack_send_message(channel_id=<selfDm>, thread_ts=<the ts that call returned>,
+                   message="```\n<details verbatim>\n```")
 ```
 
 Post it even when the list is short or empty. A day with nothing outstanding is useful

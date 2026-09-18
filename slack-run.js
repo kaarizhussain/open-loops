@@ -40,6 +40,8 @@ var { parseEvents } = require('./src/calendar.js');
 var { settings } = require('./src/config.js');
 
 var DIGEST_HEADER = /^\s*(?:```)?\s*OPEN LOOPS — for (\d{4}-\d{2}-\d{2})/;
+// The details the runner posts in the digest's thread. Its instructions contain "3 7".
+var DETAILS_HEADER = /^\s*(?:```)?\s*OPEN LOOPS DETAILS\b/;
 
 /* Names match exactly, or by prefix with a trailing star: "deals-*". Deliberately not
  * a general pattern language — a scope rule nobody can read at a glance is a scope
@@ -87,6 +89,8 @@ function marksFromDm(messages, store, rows) {
   seen.forEach(function (id) { known[id] = 1; });
 
   messages.forEach(function (m) {
+    // Its own details, posted under the digest — not a reply, whatever "3 7" it contains.
+    if (DETAILS_HEADER.test(m.body)) return;
     var head = m.body.match(DIGEST_HEADER);
     if (head) { forDate = head[1]; return; }      // this is a digest, not a reply to one
     if (!forDate || known[m.id]) return;
@@ -341,6 +345,17 @@ function main(argv) {
   // shows up one more time before disappearing.
   var dmMessages = input.dm ? parseChannel(input.dm.text,
     { channel: 'DM', tzOffset: cfg.tzOffset, self: cfg.you, selfUid: cfg.selfDm }) : [];
+  /* Replies typed in the digest's thread count too — the details live there, so that is
+   * where a reader is when they decide an item is wrong, and a thread reply does not
+   * appear in a read of the DM itself. Merged by timestamp; the thread read repeats the
+   * digest as its parent, which is kept once. */
+  if (input.dmThread && input.dmThread.text) {
+    var inDm = {};
+    dmMessages.forEach(function (m) { inDm[m.id] = 1; });
+    parseChannel(input.dmThread.text, { channel: 'DM', threadId: 'dm-thread', tzOffset: cfg.tzOffset,
+      self: cfg.you, selfUid: cfg.selfDm }).forEach(function (m) { if (!inDm[m.id]) dmMessages.push(m); });
+    dmMessages.sort(function (a, b) { return parseFloat(a.id) - parseFloat(b.id); });
+  }
   var replies = marksFromDm(dmMessages, store, rows);
 
   /* Phrases you have decided are never worth surfacing. Applied before the ledger
@@ -425,7 +440,7 @@ function main(argv) {
   result.open = ledger.shown;
   L.pruneLedger(rows, today, cfg.keepLedgerDays);
 
-  var keys = digest.digestOrder(result.open);
+  var keys = digest.digestOrder(result.open, today);
 
   /* Sample the silence. Everything else in this loop asks about things that appeared;
    * this is the only question that can say anything about what did not. */
@@ -465,17 +480,21 @@ function main(argv) {
    * back. Starts generous, because most workspaces never come near the ceiling. */
   var SLACK_LIMIT = 4000, FENCE = 8;      // the ``` wrapper the digest is posted inside
   var text, listCap = 12;
+  // Two messages now — the brief and its thread reply — so each has to fit on its own.
+  var longest = function (t) {
+    return Math.max.apply(null, t.split(digest.SPLIT).map(function (x) { return x.trim().length; }));
+  };
   do {
     text = renderAt(listCap);
     listCap = listCap > 4 ? listCap - 4 : listCap - 1;
-  } while (text.length + FENCE > SLACK_LIMIT && listCap >= 1);
+  } while (longest(text) + FENCE > SLACK_LIMIT && listCap >= 1);
   /* Measured across sixteen real mailboxes: the worst fits at 2 with 18% to spare and
    * at 1 with 34%. If a mailbox ever exhausts even that, the fixed parts are the cause
    * — the header, the first-moves block with its drafted notes, the spot check — and
    * the honest thing is to say the digest was too long rather than post one Slack will
    * reject and leave the reader with silence. */
-  if (text.length + FENCE > SLACK_LIMIT) {
-    text += '\n\nTOO LONG — this is ' + (text.length + FENCE) + ' characters and Slack ' +
+  if (longest(text) + FENCE > SLACK_LIMIT) {
+    text += '\n\nTOO LONG — this is ' + (longest(text) + FENCE) + ' characters and Slack ' +
       'takes 4000. Nothing was dropped to make it fit; the list is already at its ' +
       'smallest. Narrow the channels or shorten the window.';
   }

@@ -103,20 +103,38 @@ fs.writeFileSync(path.join(tmp, 'wcfg.json'), JSON.stringify({ you: 'you@example
   supporting: DANA, contacts: CONTACTS, lookbackDays: 3, replyKey: 'short',
   ledger: path.join(tmp, 'wed-ledger.json') }));
 var wed = main([path.join(tmp, 'wed.json'), '--config', path.join(tmp, 'wcfg.json'), '--dry']);
-var wl = wed.split('\n'), fi = wl.indexOf('FIRST');
-assert.ok(fi > -1, 'one item in the spotlight:\n' + wed);
-assert.ok(/^ 3  2d late\s+Answer Sam — "Are we still on for the vendor kickoff\?"$/.test(wl[fi + 1]),
-  'FIRST is Sam\'s question: ' + wl[fi + 1]);
+var wBrief = wed.split('-- thread --')[0], wl = wBrief.split('\n'), fi = wl.indexOf('TODAY — highest priority');
+assert.ok(fi > -1, 'TODAY leads the brief:\n' + wed);
+assert.ok(/^ 1  2d late\s+Answer Sam — "Are we still on for the vendor kickoff\?"$/.test(wl[fi + 1]),
+  'first: Sam\'s question, its deadline just arrived: ' + wl[fi + 1]);
 assert.ok(/"I need an answer today"/.test(wl[fi + 2]), 'with the sentence its deadline came from: ' + wl[fi + 2]);
-assert.ok(/^2 overdue · 1 due today · 3 due by Fri · 7 open$/m.test(wed), 'the state of the day in one line');
-assert.strictEqual(wed.split('Are we still on for the vendor kickoff').length - 1, 1, 'every loop appears once');
-assert.ok(/^ 3  2d late\s+↑ FIRST$/m.test(wed), 'its pile points at the spotlight instead');
+assert.ok(/^ 2  today\s+Chase Sam — "I'll put together the scope doc/.test(wl[fi + 3]), 'then what lands today: ' + wl[fi + 3]);
+assert.ok(/^ 3  Thu\s+Answer Sam — "Can you review the Q4 headcount plan/.test(wl[fi + 5]), 'then what lands tomorrow: ' + wl[fi + 5]);
+assert.ok(/^2 overdue · 1 due today · 3 due by Fri · 7 open$/m.test(wBrief), 'the state of the day in one line');
+assert.strictEqual(wBrief.split('Are we still on for the vendor kickoff').length - 1, 1, 'every loop appears once in the brief');
 assert.ok(/date from Lena's "by Tuesday"/.test(wed), 'a borrowed deadline says whose it was');
 assert.ok(/closed Mon by Lena: "Signed MSA attached — sorry for the delay\."/.test(wed),
   'and a closed one says what closed it');
 assert.ok(!/@org1\.example/.test(wed), 'people by name, not address');
 assert.strictEqual((wed.split('SPOT CHECK')[1] || '').indexOf('Signed MSA attached'), -1,
   'the closing message is not offered as one it found nothing in');
-assert.ok(/^Reply   3 7  not real/m.test(wed) && !/isn't real/.test(wed), 'the short key, as configured');
+assert.ok(/^Reply  3 7 not real/m.test(wBrief) && !/isn't real/.test(wed), 'the key only, as configured');
+
+/* The same day through a three-week window, which is what the daily run reads — seventeen
+   items, a dozen of them two-week-old test promises. On 2026-09-16 the brief led with
+   two of those, ahead of Sam's scope doc due that day, which did not make the brief at
+   all. What has just come due goes first; the old promises lead the one-liners. */
+fs.writeFileSync(path.join(tmp, 'dcfg.json'), JSON.stringify({ you: 'you@example.com', selfDm: 'U0EXAMPLE001',
+  contacts: CONTACTS, lookbackDays: 21, ledger: path.join(tmp, 'daily-ledger.json') }));
+var daily = main([path.join(tmp, 'wed.json'), '--config', path.join(tmp, 'dcfg.json'), '--dry']).split('-- thread --')[0];
+var dToday = daily.split('TODAY — highest priority')[1].split('\n\n')[0];
+var dRows = dToday.split('\n').filter(function (l) { return /^ ?\d+  \S/.test(l); });
+[/^ 1  2d late\s+Answer Sam — "Are we still on for the vendor kickoff/,
+ /^ 2  1d late\s+You promised — "I'll have the revenue numbers over to finance/,
+ /^ 3  today\s+Chase Sam — "I'll put together the scope doc/
+].forEach(function (rx, i) {
+  assert.ok(rx.test(dRows[i] || ''), 'what has just come due, then what lands today:\n' + dToday);
+});
+assert.ok(/ALSO OPEN[\s\S]*14d late/.test(daily), 'and the two-week-old promises lead what follows');
 
 console.log('test_replay_seed: ok');

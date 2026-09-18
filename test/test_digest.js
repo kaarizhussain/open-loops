@@ -11,13 +11,13 @@ global.OWNER = loops.OWNER;
 global.LABEL = loops.LABEL;
 global.loopKey = loops.loopKey;
 
-var { render, headline, digestOrder, actionList, draft, firstName } = require('../src/digest.js');
+var { render, headline, digestOrder, draft, firstName, SPLIT } = require('../src/digest.js');
 var F = require('../src/fixture.js');
 
 var opts = { exec: F.EXEC, today: F.TODAY, contacts: F.RELATIONSHIPS };
 var result = loops.detectLoops(F.MESSAGES, F.EVENTS, opts);
 var briefs = loops.meetingBriefs(F.MESSAGES, F.EVENTS, result.open, opts);
-var keys = digestOrder(result.open);
+var keys = digestOrder(result.open, F.TODAY);
 
 var text = render({
   today: F.TODAY, source: 'gmail',
@@ -26,24 +26,32 @@ var text = render({
   read: { threads: 18, capped: false, cap: '300-thread' },
   marked: 0
 });
+var parts = function (t) { var i = t.indexOf(SPLIT); return { brief: t.slice(0, i), details: t.slice(i + SPLIT.length) }; };
+var ROW = /^ ?\d+  \S/;
+var rows = function (t) { return t.split('\n').filter(function (l) { return ROW.test(l); }); };
+var brief = parts(text).brief, details = parts(text).details;
 
 assert.ok(text.indexOf('OPEN LOOPS — for ' + F.TODAY) === 0, 'the date comes off the object, not a clock');
-assert.ok(text.indexOf('Read 25 messages across 18 threads and 5 meetings.') > -1);
-assert.ok(text.indexOf('CHASE THEM') > -1, 'the owner sections render');
+assert.ok(text.indexOf(SPLIT) > 0, 'two parts: the brief, then the details for its thread');
+assert.ok(details.indexOf('Read 25 messages across 18 threads and 5 meetings.') > -1, 'what was read is in the details');
+assert.ok(details.indexOf('CHASE THEM') > -1, 'the owner piles are in the details');
 assert.ok(!/undefined|NaN|\[object/.test(text), 'nothing leaked through as undefined');
+assert.ok(/^\s*OPEN LOOPS DETAILS/.test(details.trim()), 'the details open with a header the reply parser ignores');
 
 /* --- numbering is what a reply quotes back, so it has to be exact --- */
 assert.strictEqual(keys.length, result.open.length, 'every open item gets a number');
 
-/* Measured on the piles. FIRST cites the same numbers out of order on purpose and would
-   otherwise be counted as part of the sequence. */
-var ROW = /^ ?\d+  \S/;
-var piles = function (t) { var i = t.indexOf('\nFIRST'); return i < 0 ? t : t.slice(t.indexOf('\n\n', i + 1)); };
-var numbered = piles(text).split('\n').filter(function (l) { return ROW.test(l); });
-assert.strictEqual(numbered.length, keys.length, 'one numbered line per open item');
-numbered.forEach(function (line, i) {
-  assert.strictEqual(parseInt(line, 10), i + 1, 'numbering runs 1..n in print order: ' + line);
+// The brief, in the order it reads: TODAY, then the one-liners. Numbers run 1..k.
+var bRows = rows(brief);
+assert.strictEqual(bRows.length, Math.min(8, result.open.length), 'three in TODAY, five below: ' + bRows.length);
+bRows.forEach(function (line, i) {
+  assert.strictEqual(parseInt(line, 10), i + 1, 'the brief numbers in reading order: ' + line);
 });
+assert.ok(new RegExp('\\+ ' + (result.open.length - 8) + ' more').test(brief), 'and says how many it left for the thread');
+
+// The details hold every item, each once.
+var dNums = rows(details).map(function (l) { return parseInt(l, 10); }).sort(function (a, b) { return a - b; });
+assert.deepStrictEqual(dNums, keys.map(function (_, i) { return i + 1; }), 'every item, once, in the details');
 
 /* --- the headline, now only for an empty list, in each of its four states --- */
 var mk = function (over) {
@@ -64,52 +72,48 @@ assert.ok(/Nothing overdue\. 1 thing lands today/.test(
 assert.ok(/quietest is Meridian MSA, untouched for 11 days/.test(
   headline([mk({ ageDays: 11 })])), 'and with no deadlines at all, to what has gone quiet');
 
-/* --- FIRST: the spotlight answers a different question from the piles --- */
+/* --- TODAY: what to do next --- */
+var today = brief.split('TODAY — highest priority')[1].split('\n\n')[0];
+assert.strictEqual(rows(today).length, 3, 'three items in TODAY');
+assert.ok(/Send an agenda —|Chase |Answer |You owe |Needs /.test(today), 'each names the move, not just the sentence');
+assert.ok(rows(today).every(function (l) { return l.length <= 100; }),
+  'no TODAY line runs on: ' + rows(today).filter(function (l) { return l.length > 100; }).join(' | '));
 
-/* The piles answer "what is outstanding, and who acts next". At nine in the morning
-   the question is "what do I do next", and no amount of sorting forty items answers
-   that — this is selection, not ordering. */
-var block = text.split('\nFIRST')[1].split('\n\n')[0].split('\n');
-var head = block.filter(function (l) { return ROW.test(l); });
-assert.strictEqual(head.length, 5, 'five moves on a long list, got: ' + head.join(' | '));
+// Every loop appears once in the brief.
+var bNums = bRows.map(function (l) { return parseInt(l, 10); });
+assert.strictEqual(new Set(bNums).size, bNums.length, 'no item twice in the brief');
 
-/* Numbered from the full list rather than renumbered, so replying "4" to reject
-   something means the same thing wherever in the digest you read it. */
-var refs = head.map(function (l) { return parseInt(l, 10); });
-assert.ok(refs.every(function (n) { return n >= 1 && n <= result.open.length; }),
-  'every reference points at a real item: ' + refs.join(','));
-assert.ok(refs.some(function (n, i) { return i && n < refs[i - 1]; }),
-  'and they are not in numeric order, because they are ranked by urgency not position');
-
-/* Every loop appears once. FIRST is a spotlight, not a second list: a spotlit item is
-   only pointed at from its pile. */
-refs.forEach(function (n) {
-  var inPile = numbered.filter(function (x) { return parseInt(x, 10) === n; })[0];
-  assert.ok(/↑ FIRST$/.test(inPile), 'item ' + n + ' is pointed at, not repeated: ' + inPile);
-});
-
-/* One per counterparty. Chasing three people about five things is three messages, and
-   five lines from one conversation is a single move dressed up as five. */
-var parties = actionList(result.open, 5).map(function (l) { return l.who; });
-assert.strictEqual(new Set(parties).size, parties.length, 'no counterparty appears twice');
-
-/* The verb comes from the signal type, where it can honestly come from. */
-assert.ok(/Send an agenda —/.test(text), 'a meeting with no agenda names the action');
-assert.ok(/Chase /.test(text), 'something someone else owes is a chase');
-var moveLines = block.filter(function (l) { return ROW.test(l) || /^\s+→ /.test(l); });
-/* 82 was the bound with an 8-space indent; the status column adds 7, so it moves to 90. */
-assert.ok(moveLines.every(function (l) { return l.length <= 90; }),
-  'no move or draft wraps — a list that wraps is not one you can scan: ' +
-  moveLines.filter(function (l) { return l.length > 90; }).join(' | '));
-
-/* A short list is already short, so the spotlight holds one item — and turning the long
-   spotlight off leaves that one. */
-var firstRows = function (t) { return t.split('\nFIRST')[1].split('\n\n')[0].split('\n').filter(function (l) { return ROW.test(l); }); };
-var few = { today: F.TODAY, messages: [], events: [], briefs: [],
-  result: { open: result.open.slice(0, 4), closed: [] } };
-assert.strictEqual(firstRows(render(few)).length, 1, 'a short list spotlights one item');
-assert.strictEqual(firstRows(render({ today: F.TODAY, messages: [], events: [], briefs: [],
-  actionList: 0, result: result })).length, 1, 'and so does a long one with the move list off');
+/* --- what to do first: the order, on items built to test it --- */
+var T = '2026-09-16';
+var it = function (id, over) {
+  var l = { type: 'owed_by_us', owner: 'you', status: 'open', what: id, subject: '#a' };
+  Object.keys(over).forEach(function (k) { l[k] = over[k]; });
+  return l;
+};
+var order = function (items) {
+  var copy = items.slice();
+  digestOrder(copy, T);
+  return copy.sort(function (a, b) { return a.n - b.n; }).map(function (l) { return l.what; });
+};
+assert.deepStrictEqual(order([
+  it('rest', {}),
+  it('old', { status: 'overdue', overdueDays: 14, due: '2026-09-02' }),
+  it('waiting', { type: 'unanswered_ask' }),
+  it('soon-fri', { due: '2026-09-18' }),
+  it('today', { status: 'due_today', due: '2026-09-16' }),
+  it('borrowed', { status: 'overdue', overdueDays: 1, due: '2026-09-15', dueFrom: { same: false } }),
+  it('arrived', { status: 'overdue', overdueDays: 2, due: '2026-09-14' })
+]), ['arrived', 'today', 'soon-fri', 'waiting', 'old', 'borrowed', 'rest'],
+  'just-arrived deadline, due soon (earliest first), someone waiting, other overdue, the rest');
+assert.deepStrictEqual(order([
+  it('mine', { status: 'overdue', overdueDays: 2, due: '2026-09-14' }),
+  it('theirs', { type: 'unanswered_ask', status: 'overdue', overdueDays: 2, due: '2026-09-14' })
+]), ['theirs', 'mine'], 'within a group, somebody waiting on you first');
+assert.deepStrictEqual(order([
+  it('a', { type: 'unanswered_ask', who: 'sam@a.io', status: 'overdue', overdueDays: 1, due: '2026-09-15' }),
+  it('b', { type: 'owed_to_us', owner: 'them', who: 'sam@a.io', status: 'due_today', due: '2026-09-16' }),
+  it('c', { type: 'unanswered_ask', who: 'sam@a.io', due: '2026-09-17' })
+]), ['a', 'b', 'c'], 'and no cap per person — three urgent things from Sam are three');
 
 /* --- the note to send, where sending a note is the move ---
  *
@@ -151,10 +155,14 @@ var anon = d({ who: 'hr@northstar.io' });
 assert.strictEqual(anon.indexOf('Hi '), -1, 'no greeting when there is no name');
 assert.ok(/^[A-Z]/.test(anon), 'and it still reads as a sentence: ' + anon);
 
-/* In the digest, only in FIRST — one line per move, where you are about to act. On
-   every item it would be clutter. */
-assert.ok(/→ Hi \w+ — /.test(text), 'the note appears under the move it belongs to');
-assert.strictEqual(piles(text).indexOf('→ '), -1, 'and never in the piles');
+/* The brief says what to do; the details say what you could say — and only for what is
+   in TODAY, where you are about to act. On every item it would be clutter. */
+assert.strictEqual(brief.indexOf('→ '), -1, 'no drafts in the brief');
+assert.ok(/→ Hi \w+ — /.test(details), 'they are in the details');
+var drafted = details.split('\n').map(function (l, i, all) {
+  return /^\s+→ /.test(l) ? parseInt(all.slice(0, i).reverse().filter(function (x) { return ROW.test(x); })[0], 10) : null;
+}).filter(function (n) { return n; });
+assert.ok(drafted.every(function (n) { return n <= 3; }), 'and only under TODAY\'s items: ' + drafted.join(','));
 
 /* --- things a second runtime will not have --- */
 var bare = render({
@@ -174,40 +182,29 @@ var capped = render({
 assert.ok(/across 40 conversations/.test(capped), 'a Slack read says conversations, not threads');
 assert.ok(/INCOMPLETE — stopped at the 40-conversation limit/.test(capped),
   'and names its own limit rather than Gmail\'s');
+assert.ok(/1 read warning — in the thread\./.test(parts(capped).brief),
+  'the brief counts the warning; the details carry it');
 
 /* --- fitting a long digest into a message that will actually send ---
  *
  * Slack refuses anything over 4,000 characters. A real mailbox goes far past it — three
  * Enron mailboxes rendered at 14k, 29k and 29k — and the runner is right to post
- * nothing rather than half a digest, so the reader would have got silence rather than a
- * long list. It never showed up against a test workspace, which produces eight items.
- *
- * The renderer does not own that limit, so capping is off unless asked for. */
+ * nothing rather than half a digest. The renderer does not own that limit, so capping
+ * is off unless asked for, and it only ever trims the details: the brief is bounded. */
 var uncapped = render({ today: F.TODAY, messages: F.MESSAGES, events: F.EVENTS,
                         result: result, briefs: briefs });
-var capped = render({ today: F.TODAY, messages: F.MESSAGES, events: F.EVENTS,
-                      result: result, briefs: briefs, listCap: 2 });
-
-var linesIn = function (t) {
-  return piles(t).split('\n').filter(function (l) { return ROW.test(l); }).length;
-};
-assert.strictEqual(linesIn(uncapped), result.open.length,
+var cappedFx = render({ today: F.TODAY, messages: F.MESSAGES, events: F.EVENTS,
+                        result: result, briefs: briefs, listCap: 2 });
+var detailRows = function (t) { return rows(parts(t).details).length; };
+assert.strictEqual(detailRows(uncapped), result.open.length,
   'with no cap asked for, every item still prints — the Slack ceiling is the runner\'s problem');
-assert.ok(linesIn(capped) < linesIn(uncapped), 'a cap actually shortens the list');
-assert.ok(capped.length < uncapped.length, 'and shortens the message');
-
-/* A list that quietly stops is indistinguishable from a quiet week, which is the exact
-   failure this tool exists to prevent. It has to say what it held back. */
-assert.ok(/… and \d+ more in this pile/.test(capped),
-  'the trim is announced with a count:\n' + capped);
-var heldTotal = (capped.match(/… and (\d+) more/g) || [])
+assert.ok(detailRows(cappedFx) < detailRows(uncapped), 'a cap actually shortens the list');
+assert.ok(/… and \d+ more in this pile/.test(cappedFx), 'the trim is announced with a count');
+var heldTotal = (parts(cappedFx).details.match(/… and (\d+) more/g) || [])
   .reduce(function (n, s) { return n + parseInt(s.match(/\d+/)[0], 10); }, 0);
-assert.strictEqual(linesIn(capped) + heldTotal, result.open.length,
+assert.strictEqual(detailRows(cappedFx) + heldTotal, result.open.length,
   'shown plus held equals the true total, so the count can be trusted');
-
-/* Numbers are assigned over the full list, so rejecting "7" means the same thing
-   whether or not the item above it was trimmed. */
-assert.ok(/^ ?\d+  \S/m.test(capped), 'capped items keep their original numbers');
+assert.strictEqual(parts(cappedFx).brief, parts(uncapped).brief, 'and the brief is untouched by it');
 
 /* --- conversations went in and no message came out ---
  *
@@ -227,7 +224,7 @@ var blindRun = function (msgCount, convs, unread) {
   });
 };
 var blind = blindRun(0, 3);
-assert.ok(/READ NOTHING/.test(blind), 'it must say it could not read anything');
+assert.ok(/READ NOTHING/.test(parts(blind).brief), 'it must say it could not read anything, in the brief');
 assert.ok(!/Genuinely/.test(blind), 'and must not claim the list is genuinely empty');
 assert.ok(/unknown rather than clear/.test(blind), 'an empty list here means unknown');
 
@@ -238,45 +235,42 @@ assert.ok(/Genuinely/.test(quiet), 'nothing outstanding is still allowed to be g
 assert.ok(!/READ NOTHING/.test(quiet));
 
 /* One channel empty while others parsed is a different message: it is named, and the
-   headline is left alone. Both causes are stated because they are indistinguishable
-   from in here and only one of them is fine. */
+   headline is left alone. */
 var partial = blindRun(12, 4, ['#legal', '#ops']);
-assert.ok(/NOTHING READ IN #legal, #ops/.test(partial), 'the empty channels are named');
+assert.ok(/NOTHING READ IN #legal, #ops/.test(parts(partial).details), 'the empty channels are named');
 assert.ok(!/READ NOTHING —/.test(partial), 'but this is not a total failure');
 assert.ok(!/NOTHING READ IN/.test(blind),
-  'and when nothing parsed at all, the headline says it once rather than twice');
+  'and when nothing parsed at all, it is said once rather than twice');
 
 /* --- found by running it against a real Slack workspace ---
  *
  * On Slack the "subject" is the channel name, and a workspace has a handful of those.
  * The line everybody reads once said "the oldest by 2 days is #all-open-loops" — naming
- * nothing that was actually late. The spotlight names the commitment; where it was said
- * goes on the line beneath. */
+ * nothing that was actually late. TODAY names the commitment; where it was said goes on
+ * the line beneath. */
 var spotlight = function (what) {
-  var out = render({
+  var out = parts(render({
     today: '2026-09-04', source: 'slack', listCap: 12, messages: [{}], events: [],
     result: { open: [{ type: 'owed_by_us', owner: 'you', status: 'overdue', overdueDays: 2,
                        what: what, subject: '#all-open-loops', who: '', n: 1 }],
               closed: [], dark: 0 },
     briefs: [], ledger: { shown: [], gone: [] }, marked: 0,
     read: { threads: 2, unread: [], shortRead: [], skipped: 0, windowDays: 21 }
-  }).split('\n');
-  var i = out.indexOf('FIRST');
+  })).brief.split('\n');
+  var i = out.indexOf('TODAY — highest priority');
   return { row: out[i + 1], meta: out[i + 2] };
 };
 var LONG = "I'm going to draft the onboarding doc and share it EOD tomorrow.";
-assert.ok(/onboarding doc/.test(spotlight(LONG).row), 'FIRST names the commitment');
+assert.ok(/onboarding doc/.test(spotlight(LONG).row), 'TODAY names the commitment');
 assert.ok(!/#all-open-loops/.test(spotlight(LONG).row), 'and not the channel, which everything in it shares');
 assert.ok(/#all-open-loops/.test(spotlight(LONG).meta), 'which goes underneath, as where it was said');
-/* A trimmed commitment already ends in an ellipsis and a stop was once added on top of
-   it — "share it…." */
 assert.ok(!/\.\.\.\.|…\./.test(spotlight(LONG).row), 'one full stop, not two');
 
 /* `who` can be empty, and "them — I'm going to draft the onboarding doc" is a
    placeholder printed where a name goes. */
 var moveLine = function (who) {
   var out = render({
-    today: '2026-09-04', source: 'slack', listCap: 12, actionList: 5,
+    today: '2026-09-04', source: 'slack', listCap: 12,
     messages: [{}], events: [],
     result: { open: new Array(9).fill(0).map(function (_, i) {
       return { type: 'owed_by_us', owner: 'you', status: 'overdue', overdueDays: 9 - i,
@@ -285,12 +279,12 @@ var moveLine = function (who) {
     briefs: [], ledger: { shown: [], gone: [] }, marked: 0,
     read: { threads: 1, unread: [], shortRead: [], skipped: 0, windowDays: 21 }
   }).split('\n');
-  return out[out.findIndex(function (s) { return /^FIRST/.test(s); }) + 1];
+  return out[out.indexOf('TODAY — highest priority') + 1];
 };
 assert.ok(!/them —/.test(moveLine('')), 'no counterparty means no name, not "them"');
 assert.ok(/You owe Lena — /.test(moveLine('lena@corp.io')), 'a real person is named: ' + moveLine('lena@corp.io'));
 
-/* --- the redesign's own rules, 2026-09-14 --- */
+/* --- the redesign's own rules --- */
 var one = function (b) {
   var base = { today: '2026-09-16', source: 'slack', messages: [], events: [], briefs: [],
                result: { open: [], closed: [] } };
@@ -304,9 +298,9 @@ var item = function (over) {
 };
 
 // Dates as a reader says them: a weekday within the week, a date beyond it.
-var dated = one({ result: { open: [item({ due: '2026-09-17' }), item({ n: 2, due: '2026-10-02', what: 'y' })], closed: [] } });
+var dated = parts(one({ result: { open: [item({ due: '2026-09-17' }), item({ n: 2, due: '2026-10-02', what: 'y' })], closed: [] } })).brief;
 assert.ok(/^OPEN LOOPS — for 2026-09-16 · Wed$/m.test(dated), 'the header keeps the date replies are matched on');
-assert.ok(/^ 1  Thu\s+↑ FIRST$/m.test(dated) && /^ 2  2 Oct\s+You: "y"$/m.test(dated),
+assert.ok(/^ 1  Thu\s+You promised — "x"$/m.test(dated) && /^ 2  2 Oct\s+You promised — "y"$/m.test(dated),
   'Thu this week, 2 Oct beyond it:\n' + dated);
 
 // NEW only when it tells you something.
@@ -320,10 +314,11 @@ assert.ok(!/NEW|\d new/.test(tagged(2)), 'when everything is new, nothing is mar
 assert.ok(/NEW/.test(tagged(1)) && /· 1 new/.test(tagged(1)) && /3d on the list/.test(tagged(1)),
   'on a mixed day the new one is marked and the old one says how long it has sat');
 
-// The reply instructions: in full by default, a key when asked.
-assert.ok(/isn't real/.test(one({})) && !/^Reply   3 7/m.test(one({})), 'in full by default');
-assert.ok(/^Reply   3 7  not real/m.test(one({ replyKey: 'short' })) && !/isn't real/.test(one({ replyKey: 'short' })),
-  'as a two-line key once the reader knows it');
+// The reply key is always on the brief; the full explanation is in the details until
+// the reader has answered once.
+assert.ok(/^Reply  3 7 not real · k 1 4 already knew/m.test(parts(one({})).brief), 'the key is on the brief');
+assert.ok(/isn't real/.test(parts(one({})).details), 'the full explanation is in the details by default');
+assert.ok(!/isn't real/.test(one({ replyKey: 'short' })), 'and gone once the reader knows it');
 
 // People by the name they go by — unless two share it.
 var ask = function (who, n) { return item({ type: 'unanswered_ask', what: 'Can you check?', who: who, n: n }); };
@@ -347,7 +342,9 @@ var why = one({ result: { open: [
 ] } });
 assert.ok(/· "I need an answer today"/.test(why), 'a deadline from the next sentence is quoted');
 assert.ok(/date from Lena's "by Tuesday"/.test(why), 'one from somebody else says whose');
-assert.ok(/^    Lena: "I'll get you the signed MSA back by Tuesday\."$/m.test(why) &&
-  /^      closed Mon by Lena: "Signed MSA attached\."$/m.test(why), 'and a closed item says what closed it:\n' + why);
+assert.ok(/^    Lena: "I'll get you the signed MSA back by Tuesday\."$/m.test(parts(why).details) &&
+  /^      closed Mon by Lena: "Signed MSA attached\."$/m.test(parts(why).details),
+  'and a closed item says what closed it, in the details:\n' + why);
+assert.ok(/\+ 1 closed in the thread ↓/.test(parts(why).brief), 'the brief points at it');
 
 console.log('digest: OK');

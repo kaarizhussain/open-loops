@@ -65,7 +65,9 @@ inside one is invisible without going back for it:
 slack_read_thread(channel_id=…, message_ts=<the root's Message TS>)
 ```
 
-Also read your own DM — that is where the last digest and any corrections are.
+Also read your own DM — that is where the last digest and any corrections are — and the
+thread under the latest digest, where its details are and where replies get typed too. A
+thread reply does not appear in a read of the DM itself.
 
 **2. Write what came back.** Only what was fetched — the settings are already in the
 config file:
@@ -81,6 +83,7 @@ config file:
     { "channel": "#deals", "root": "1788292991.482509", "text": "<slack_read_thread output>" }
   ],
   "dm": { "channel": "D0…", "text": "<connector output for your self-DM>" },
+  "dmThread": { "text": "<slack_read_thread output for the latest digest>" },
   "events": "<list_events response, object or raw JSON>"
 }
 ```
@@ -117,8 +120,15 @@ Add `--dry` to render without recording the run. Do that first: a real run consu
 the *new* flags, so previewing by hand afterwards would show a list with nothing marked
 new on it.
 
-**4. Post the output** to your own DM, wrapped in a triple-backtick block so the
-alignment survives Slack's proportional font.
+**4. Post the output** to your own DM, in two parts. It is split by a line reading
+`-- thread --`: the brief above it is the message, and the details below it are posted as
+a reply in that message's thread. Each in a triple-backtick block so the alignment
+survives Slack's proportional font; the separator itself is never posted.
+
+The brief is what to do: the counts, three items under TODAY with their evidence, a few
+one-liners, and a pointer to the thread. The details are why: every item with the
+sentence it came from, what closed and what closed it, what was read, any warnings, and
+the spot check.
 
 Two settings below shape what step 1 should fetch — `channels` and `supporting` — and
 one, `lookbackDays`, bounds how far back any of it looks. All three live in the config
@@ -179,7 +189,8 @@ people's work — which is also the version that needs nobody's permission to se
 
 ## Correcting it
 
-Reply in the same DM with the numbers that aren't real:
+Reply in the same DM — under the digest or in its thread — with the numbers that aren't
+real:
 
 ```
 3 7

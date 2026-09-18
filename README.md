@@ -77,43 +77,47 @@ between a mailbox and a calendar — the seam no single-product assistant reache
 
 ## What comes out
 
-From 25 messages and 5 meetings — the top of it:
+From 25 messages and 5 meetings, the brief — the message itself:
 
 ```
 OPEN LOOPS — for 2026-08-06 · Thu
-
-FIRST — one move each, most pressing first
- 7  6d late    You owe Greg — "I'll connect you with Sana this week."
-               Greg · Investor · Intro to Halcyon Robotics · 30 Jul
-               → Hi Greg — I still owe you this — sending it today, sorry for the lag.
- 8  today      Send an agenda — Larkspur Retail — renewal decision
-               m.osei@larkspurretail.com · Key account · Larkspur Retail — renewal decision · Thu
- 3  6d late    Chase Paul — "We will have their comments back to you by Friday Jul 31…"
-               Key account · Meridian MSA — redlines · 28 Jul
-               → Hi Paul — checking in on this — anything holding it up your end?
- ...
-
 4 overdue · 2 due today · 2 due by Fri · 15 open
 
-NEEDS THE EXECUTIVE (2) — Only they can produce or decide this — protect the time for it.
- 1  today      ↑ FIRST
- 2  Sat        You: "I'll review and get back to you before the deadline."
-               hr@northstar.io · People team · Sales comp plan — sign-off needed · Sun · date from People team's "by Aug 8"
-               note: stated 2026-08-08 is a weekend — last working day is 2026-08-07
+TODAY — highest priority
+ 1  1d late    Answer Program — "Can you confirm your final talk title and a short bio by…"
+               Conference · RevOps Summit — speaker confirmation · Sat
+ 2  3d late    Chase j.mercer — "We'll send the countersigned copy back Monday."
+               Partner · Solstice partner agreement · 27 Jul
+ 3  today      Send an agenda — Larkspur Retail — renewal decision
+               m.osei@larkspurretail.com · Key account · Larkspur Retail — renewal decision · Thu
 
-CHASE THEM (4) — Someone else owes this. Your move is the nudge.
- 3  6d late    ↑ FIRST
- 4  3d late    ↑ FIRST
- 5  no date    You asked: "Hi Paul — checking in on the redlines."
- ...
+NEEDS TO GO OUT TODAY
+  [LATE] Larkspur Retail — renewal decision — today, no agenda (m.osei@larkspurretail.com)
+  Vector Freight — Q3 QBR — tomorrow, no agenda (lena.borg@vectorfreight.com)
+
+ALSO OPEN — most pressing first
+ 4  today      Needs the executive: "Yes — I'll send it Thursday EOD."
+ 5  Fri        No agenda attached — Vector Freight — Q3 QBR
+ 6  Fri        You owe Rachel: "I'll book the venue by end of week — let me look at…"
+ 7  Sat        Needs the executive: "I'll review and get back to you before the deadline."
+ 8  asked Fri  Lena asked: "Could you send an agenda ahead of the QBR so our…"
+    + 7 more, 3 closed and today's spot check in the thread ↓
+
+Reply  3 7 not real · k 1 4 already knew · miss b answers the spot check
 ```
 
-It opens with what to do first, not with how many messages it read — a digest that
-leads with its own statistics is a system reporting on itself. FIRST spotlights the most
-pressing move — one per person on a long list — with a note to send, and every loop
-appears once: a spotlit item is only pointed at from its pile. The three piles are the
-assistant's actual working split: what only the executive can do, what someone else owes
-you, and what you can close out yourself.
+Two messages, because what the detector needs to remember and what a person needs to read
+are different lists. The brief says what to do: three items with their evidence, a few
+one-liners, and the way down. The details, posted as a reply in its thread, say why:
+every item grouped by who acts next — what only the executive can do, what someone else
+owes you, what you can close out yourself — with the sentence it came from, what closed
+and what closed it, what was read, any warnings, and the spot check.
+
+TODAY is chosen, not sorted by one score: a stated deadline that has just arrived, then
+what lands in the next three days, then someone waiting on your answer, then everything
+else overdue — which still leads the one-liners, so an old promise is never buried. It
+opens with what to do, not with how many messages it read; a digest that leads with its
+own statistics is a system reporting on itself.
 
 Every item quotes the sentence it came from and says who said it, where and when — and
 when a deadline was borrowed from another message, whose it was. What closed itself says

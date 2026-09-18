@@ -16,17 +16,26 @@
  * uses loopKey — in Apps Script every file shares one global scope, and in node the
  * tests assign them before requiring this.
  *
- * The shape, since 2026-09-14: a spotlight, a line of counts, then the piles — and every
- * loop appears once. The digest had grown into a report on the detector; this is the
- * version an assistant can take in within ten seconds, and it keeps the evidence: every
- * item quotes its sentence, says who said it and where, and says where a borrowed
- * deadline came from.
+ * Two parts, since 2026-09-17: a brief and its details. The detector should remember
+ * every loop; a person should not have to read every loop to know what to do next. The
+ * brief answers "what do I do" — three items and a handful of one-liners — and the
+ * details, posted as a thread reply under it, answer "why does it think so": every item
+ * with its sentence and evidence, what closed, what was read, the spot check. What is
+ * important for the detector to know and what is important for a human to read are not
+ * the same list, and the first real 17-item digest made that plain.
  */
 
 /* Who acts next, in the order an assistant would want to read it: what only the
  * executive can do first because it is short and needs protecting, then the chases,
  * then the long list you can absorb yourself. */
 var OWNER_ORDER = ['exec', 'them', 'you'];
+
+/* The line the runner's output is split on: the brief above it is posted as the message,
+ * the details below it as a reply in that message's thread. */
+var SPLIT = '-- thread --';
+
+/* How many the brief shows: TODAY with its evidence, then one line each. */
+var TODAY_N = 3, ALSO_N = 5;
 
 /* Name the pile after the person, when there is a person to name.
  *
@@ -58,6 +67,7 @@ function days(n) { return n + (n === 1 ? ' day' : ' days'); }
 var DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 var MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function utc(iso) { return new Date(String(iso).slice(0, 10) + 'T00:00:00Z'); }
+function plusDays(iso, n) { return new Date(+utc(iso) + n * 864e5).toISOString().slice(0, 10); }
 function dayLabel(iso, today) {
   if (!iso) return '';
   var d = utc(iso);
@@ -66,10 +76,8 @@ function dayLabel(iso, today) {
     ? DOW[d.getUTCDay()] : d.getUTCDate() + ' ' + MONTH[d.getUTCMonth()];
 }
 
-/* One sentence naming the worst of it, before any counts.
- *
- * Now only for an empty list — a list with anything on it opens with FIRST, which names
- * the item and the move rather than describing them. */
+/* One sentence naming the worst of it — now only for an empty list. A list with anything
+ * on it opens with TODAY, which names the items and the moves. */
 function headline(open, source) {
   if (!open.length) return 'Nothing outstanding. Genuinely — the list is empty.';
 
@@ -107,39 +115,47 @@ function headline(open, source) {
     ', untouched for ' + days(stale.ageDays));
 }
 
-/* Number the items in the order the digest prints them, and record which loop each
- * number refers to. Stamping `n` on the loop itself means the numbering and the
- * recorded order cannot drift apart — render just prints what this assigned. */
-function digestOrder(open) {
-  var keys = [], n = 0;
-  OWNER_ORDER.forEach(function (key) {
-    open.filter(function (l) { return l.owner === key; }).forEach(function (l) {
-      l.n = ++n;
-      keys.push(loopKey(l));
-    });
-  });
-  return keys;
+/* What to do first. Not the risk score on its own — that put a two-week-old promise to
+ * nobody in particular above a question whose asker had said "I need an answer today" —
+ * and not "someone is waiting" on its own either, which would bury your own old promises
+ * just because nobody is visibly chasing them. In order:
+ *
+ *   1. its own stated deadline has just arrived — passed within the last three days.
+ *      "I need an answer today", said Monday, on Wednesday.
+ *   2. it lands today or in the next three days, earliest first
+ *   3. somebody is waiting on your answer
+ *   4. anything else overdue: older promises, and deadlines borrowed from another
+ *      message, which are the detector's inference rather than anybody's stated date.
+ *      Not buried — these lead the one-liners under TODAY.
+ *   5. the rest
+ *
+ * Within a group, somebody waiting on you comes first, then the risk score. No cap per
+ * person: three urgent things from Sam are three urgent things.
+ *
+ * ponytail: "just arrived" is three days, the same horizon as "soon". Tune both against a
+ * real reader, not against the seed. */
+function borrowed(l) { return !!(l.dueFrom && !l.dueFrom.same); }
+function tier(l, today) {
+  if (l.due && !borrowed(l) && l.status === 'overdue' && l.overdueDays <= 3) return 1;
+  if (l.due && (l.status === 'due_today' || (today && l.due > today && l.due <= plusDays(today, 3)))) return 2;
+  if (l.type === 'unanswered_ask') return 3;
+  if (l.status === 'overdue') return 4;
+  return 5;
+}
+function rank(open, today) {
+  return open.map(function (l, i) {
+    var t = tier(l, today);
+    return { l: l, i: i, t: t, d: t === 2 ? String(l.due) : '', w: l.type === 'unanswered_ask' ? 0 : 1 };
+  }).sort(function (a, b) {
+    return a.t - b.t || (a.d < b.d ? -1 : a.d > b.d ? 1 : 0) || a.w - b.w || a.i - b.i;
+  }).map(function (x) { return x.l; });
 }
 
-/* What FIRST spotlights. It answers a different question from the piles.
- *
- * The piles answer "what is outstanding, and who acts next" — a status question. At
- * nine in the morning the question is "what do I do in the next hour", and no amount of
- * sorting a forty-item list answers that. This is selection rather than ordering.
- *
- * One per counterparty, because chasing three people about five things is three
- * messages rather than five. Taking the top five by risk alone can hand you five lines
- * that are all the same conversation, which is one move dressed up as five. */
-function actionList(open, limit) {
-  var seen = {}, out = [];
-  open.forEach(function (l) {
-    if (out.length >= limit) return;
-    var party = String(l.who || l.subject || '').toLowerCase();
-    if (seen[party]) return;
-    seen[party] = 1;
-    out.push(l);
-  });
-  return out;
+/* Number the items in the order the brief reads, and record which loop each number
+ * refers to. Stamping `n` on the loop itself means the numbering and the recorded order
+ * cannot drift apart — render just prints what this assigned. */
+function digestOrder(open, today) {
+  return rank(open, today).map(function (l, i) { l.n = i + 1; return loopKey(l); });
 }
 
 /* What the move is, rather than what the commitment said. "Chase Lena" is an
@@ -208,8 +224,8 @@ function nameBook(messages, items) {
 
 /* Someone with no usable first name, in a word. The company for a role address — "People
  * team" for hr@ — and otherwise the part before the @: "Chase j.mercer" says who, where
- * "Chase Partner" reads as a person called Partner. The full address is on the line
- * underneath either way. */
+ * "Chase Partner" reads as a person called Partner. The full address is in the details
+ * either way. */
 function callName(addr, l) {
   var local = String(addr).split('@')[0];
   return ROLE.test(local) && l.rel && String(addr).toLowerCase() === String(l.who || '').toLowerCase()
@@ -229,6 +245,21 @@ function lead(l, nm) {
   if (type === 'unanswered_ask') return (nm(l.who) || 'They') + ' asked: ' + q;
   if (type === 'owed_to_us') return (nm(l.who) || 'They') + ': ' + q;
   return 'You: ' + q;
+}
+
+/* One line for the brief's second tier: who, and enough of the sentence to recognise it.
+ * The person goes in the line because there is no evidence line under it to carry them. */
+function compact(l, nm) {
+  var type = l.openType || l.type, who = nm(l.who);
+  if (who && who.indexOf('@') > -1) who = callName(who, l);
+  var q = '"' + shortenBody(l.what, 54) + '"';
+  if (QUIET[type]) return shortenBody(l.what + ' — ' + l.subject, 64);
+  if (type === 'awaiting_reply') return 'You asked' + (who ? ' ' + who : '') + ': ' + q;
+  if (type === 'unanswered_ask') return (who || 'They') + ' asked: ' + q;
+  if (type === 'owed_to_us') return (who || 'They') + ': ' + q;
+  if (l.owner === 'them') return 'Chase ' + (who || 'them') + ': ' + q;
+  if (l.owner === 'exec') return 'Needs ' + (l.principal ? l.principal.label : 'the executive') + ': ' + q;
+  return (who ? 'You owe ' + who + ': ' : 'You: ') + q;
 }
 
 /* Why it believes the date. A deadline the sentence states needs no note; one it
@@ -306,9 +337,15 @@ function draft(l) {
   return name ? 'Hi ' + name + ' — ' + body : body.charAt(0).toUpperCase() + body.slice(1);
 }
 
+/* The status column. An undated question says when it was asked — "asked Mon" is how
+ * anyone would put it, where "no date" describes the detector's view of it. */
 function when(l, today) {
-  return !l.due ? (l.ageDays > 6 ? 'quiet ' + l.ageDays + 'd' : 'no date')
-    : l.status === 'overdue' ? l.overdueDays + 'd late'
+  if (!l.due) {
+    if (l.ageDays > 6) return 'quiet ' + l.ageDays + 'd';
+    var asked = l.type === 'awaiting_reply' || l.type === 'unanswered_ask';
+    return asked && l.said ? 'asked ' + dayLabel(l.said, today) : 'no date';
+  }
+  return l.status === 'overdue' ? l.overdueDays + 'd late'
     : l.status === 'due_today' ? 'today' : dayLabel(l.due, today);
 }
 
@@ -319,100 +356,49 @@ function row(n, status, text) {
   return (n ? (n < 10 ? ' ' + n : '' + n) : '  ') + '  ' + pad(status, 9) + '  ' + text;
 }
 
-function render(b) {
-  var L = [], p = function (s) { L.push(s == null ? '' : s); };
-  var r = b.result, open = r.open, today = b.today;
-  var read = b.read || {};
-  var nm = nameBook(b.messages, open.concat(r.closed || []));
-  var ctx = { today: today, slack: b.source === 'slack', many: (b.principals || []).length > 1,
-              mixed: !!(b.ledger && b.ledger.fresh > 0 && b.ledger.fresh < open.length) };
+/* Everything both parts need, worked out once. */
+function prep(b) {
+  var r = b.result, open = r.open, read = b.read || {};
+  var ranked = rank(open, b.today);
+  var s = {
+    b: b, r: r, open: open, read: read, today: b.today, ranked: ranked,
+    nm: nameBook(b.messages, open.concat(r.closed || [])),
+    ctx: { today: b.today, slack: b.source === 'slack', many: (b.principals || []).length > 1,
+           mixed: !!(b.ledger && b.ledger.fresh > 0 && b.ledger.fresh < open.length) },
+    /* Conversations were handed over and not one message came back out of them.
+     *
+     * "Nothing outstanding. Genuinely" is an assertion of confidence, and this is the
+     * one case where it is certainly false: the reader is being told the list is empty
+     * by something that could not read the input. The likeliest cause is the
+     * connector's display format moving — src/slack.js parses a presentation format
+     * nobody documents or promises to keep — and that failure is total and silent, so
+     * every channel comes back empty at once and the digest looks like a quiet week. */
+    blind: !b.messages.length && read.threads > 0
+  };
+  s.top = ranked.slice(0, TODAY_N);
+  s.also = ranked.slice(TODAY_N, TODAY_N + ALSO_N);
+  s.spot = !!(b.spotCheck && b.spotCheck.length);
+  s.brief = b.replyKey === 'short';
+  return s;
+}
 
-  var t0 = utc(today);
-  p('OPEN LOOPS — for ' + today + (isNaN(t0) ? '' : ' · ' + DOW[t0.getUTCDay()]));
-  p('');
-  /* Conversations were handed over and not one message came back out of them.
-   *
-   * "Nothing outstanding. Genuinely" is an assertion of confidence, and this is the
-   * one case where it is certainly false: the reader is being told the list is empty
-   * by something that could not read the input. The likeliest cause is the connector's
-   * display format moving — src/slack.js parses a presentation format nobody documents
-   * or promises to keep — and that failure is total and silent, so every channel comes
-   * back empty at once and the digest looks like a quiet week. */
-  var blind = !b.messages.length && read.threads > 0;
-
-  /* FIRST — the spotlight, and the one section everybody reads.
-   *
-   * One item on a short list; on a long one, one move per counterparty, up to
-   * `actionList`. Every loop appears once: a spotlit item is not printed again in its
-   * pile, only pointed at, so the digest never reads as the same list twice. Numbered
-   * from the full list, so replying "4" means the same thing wherever you read it. */
-  var cap = b.actionList === undefined ? 5 : b.actionList;
-  var spot = blind || !open.length ? [] : actionList(open, open.length > 8 && cap ? cap : 1);
-  var drafted = false;
-  if (blind) {
-    p('READ NOTHING — ' + read.threads + ' conversation' + (read.threads === 1 ? ' was' : 's were') +
-      ' handed over and no message could be parsed out of any of them. This is not a' +
-      ' quiet day. Until it is fixed this digest can say nothing about what is' +
-      ' outstanding, so treat the empty list below as unknown rather than clear.');
-  } else if (!spot.length) {
-    p(headline(open, b.source));
-  } else {
-    p(spot.length > 1 ? 'FIRST — one move each, most pressing first' : 'FIRST');
-    spot.forEach(function (l) {
-      p(row(l.n, when(l, today), move(l, nm)));
-      p(IND + meta(l, nm, ctx));
-      // Only where a note is the move. Paste it, send it, and the next run sees the
-      // message and closes the loop without anyone ticking anything.
-      var note = draft(l);
-      if (note) { p(IND + '→ ' + note); drafted = true; }
-    });
-  }
-  p('');
-
-  /* The state of the day in one line: how much is late, how much lands soon, how much
-   * there is. What changed since the last run rides on the end, because the rest of this
-   * is the same list it was and a reader who knows that will not scan it again. */
-  var t = utc(today), toFri = isNaN(t) ? 0 : (5 - t.getUTCDay() + 7) % 7;
-  var fri = toFri ? new Date(+t + toFri * 864e5).toISOString().slice(0, 10) : null;
-  var counts = [];
-  var over = open.filter(function (l) { return l.status === 'overdue'; }).length;
-  var dueNow = open.filter(function (l) { return l.status === 'due_today'; }).length;
-  var soon = fri ? open.filter(function (l) {
-    return l.due && l.status !== 'overdue' && l.status !== 'due_today' && l.due > today && l.due <= fri;
-  }).length : 0;
-  if (over) counts.push(over + ' overdue');
-  if (dueNow) counts.push(dueNow + ' due today');
-  if (soon) counts.push(soon + ' due by Fri');
-  counts.push(open.length + ' open');
-  if (b.ledger) {
-    if (ctx.mixed) counts.push(b.ledger.fresh + ' new');
-    if (b.ledger.gone.length) counts.push(b.ledger.gone.length + ' cleared');
-    if (b.ledger.aged && b.ledger.aged.length) counts.push(b.ledger.aged.length + ' aged out');
-    if (b.ledger.suppressed) counts.push(b.ledger.suppressed + ' hidden as wrong');
-  }
-  p(counts.join(' · '));
-
-  /* Say the reply landed. Correcting something and seeing no acknowledgement is how
-   * a reader learns the correction does not matter, and then they stop sending them. */
-  if (b.marked) {
-    p('Took your last reply — ' + b.marked + (b.marked === 1 ? ' item' : ' items') +
-      ' marked wrong and dropped for good.');
-  }
-
-  /* Warnings stay at the top. Each one changes how far the list below can be trusted,
-   * and a caveat read after the list is a caveat read too late. */
+/* Everything that changes how far the list can be trusted. In full in the details; the
+ * brief carries a count, because a caveat nobody sees is not a caveat, and a paragraph of
+ * them above the list is the report the brief exists to replace. */
+function warnings(s) {
+  var b = s.b, read = s.read, out = [];
   /* The calendar response could not be read at all. Two of the seven signals live in the
    * gap between messages and meetings, so both are off for this run — and "0 meetings"
    * would otherwise read as a quiet diary. */
   if (read.calendarError) {
-    p('CALENDAR NOT READ — the calendar response could not be parsed, so unprepped' +
+    out.push('CALENDAR NOT READ — the calendar response could not be parsed, so unprepped' +
       ' meetings and unbooked calls were not checked this run.');
   }
   /* Handed over and empty. Only worth a line when some other channel did parse —
      when none did, the READ NOTHING line has already said it in stronger terms
      and naming all of them again is the same news twice. */
-  if (!blind && (read.unread || []).length) {
-    p('NOTHING READ IN ' + read.unread.slice(0, 6).join(', ') +
+  if (!s.blind && (read.unread || []).length) {
+    out.push('NOTHING READ IN ' + read.unread.slice(0, 6).join(', ') +
       ((read.unread.length > 6) ? ' and ' + (read.unread.length - 6) + ' more' : '') +
       ' — either nobody has posted there, or the read came back empty. Those look the' +
       ' same from here, and only one of them is fine.');
@@ -426,65 +412,161 @@ function render(b) {
    * nobody finished. Saying which channels and how far back is the whole point: a
    * quiet channel and a truncated one look identical from here, and only the reader
    * can tell them apart. */
-  (read.shortRead || []).slice(0, 4).forEach(function (s) {
-    p('INCOMPLETE — ' + s.channel + ' was only read back to ' + s.from +
+  (read.shortRead || []).slice(0, 4).forEach(function (x) {
+    out.push('INCOMPLETE — ' + x.channel + ' was only read back to ' + x.from +
       ', not ' + (read.windowStart || 'the start of the window') +
       '. If it is busy rather than quiet, anything older is missing and may be' +
       ' reported as cleared.');
   });
   if (!(read.shortRead || []).length && read.capped) {
-    p('INCOMPLETE — stopped at the ' + (read.cap || 'read') + ' limit. The oldest of it was ' +
+    out.push('INCOMPLETE — stopped at the ' + (read.cap || 'read') + ' limit. The oldest of it was ' +
       'not read, which is where overdue items live.');
   }
   /* Replies live behind a separate fetch, so a promise made inside a thread is simply
    * absent rather than wrong. A list that quietly omits things is worse than one that
    * says what it missed. */
   if (read.unfetchedThreads) {
-    p('INCOMPLETE — ' + read.unfetchedThreads +
+    out.push('INCOMPLETE — ' + read.unfetchedThreads +
       (read.unfetchedThreads === 1 ? ' thread had replies that were not read.'
                                    : ' threads had replies that were not read.') +
       ' Anything promised inside them is missing from this list.');
   }
-  /* A reply that named an item number but did not lead with it. Not acted on — "call
-   * Dana at 3" is a note, and the self-DM is where notes live — but never silently, or
-   * somebody retypes the same correction all week wondering why the item will not go
-   * away. Being able to say this is what makes it safe to read replies strictly. */
-  (b.ignoredReplies || []).slice(0, 3).forEach(function (line) {
-    p('NOT READ AS A CORRECTION — "' + String(line).slice(0, 56) +
-      '". Reply with just the number, like "3", to reject one.');
-  });
   /* A signal with no evidence to reason about must say so. Chat gives a channel
    * roster where mail gives a recipient list, so "did a recap go out" is a question
    * this source cannot answer — and a silent nothing there reads identically to a
    * week where every meeting was followed up on. */
   if (b.dark && b.dark.no_followup) {
-    p('NOT CHECKED — ' + b.dark.no_followup +
+    out.push('NOT CHECKED — ' + b.dark.no_followup +
       (b.dark.no_followup === 1 ? ' past meeting was not checked' : ' past meetings were not checked') +
       ' for a follow-up. Recaps go out by mail and this run only read chat, so there is' +
       ' nothing here to tell a sent recap from an unsent one.');
   }
-  /* A standing meeting that never carries an agenda is how that meeting is run, not a
-   * fresh oversight every week. Suppressed rather than listed — but said out loud,
-   * because a suppression nobody can see is indistinguishable from a rule that does
-   * not work. */
-  if (b.dark && b.dark.quietSeries) {
-    p('Not listed: ' + b.dark.quietSeries +
-      (b.dark.quietSeries === 1 ? ' recurring meeting has' : ' recurring meetings have') +
-      ' no agenda, and no occurrence of theirs ever has. Put one on any occurrence and' +
-      ' the series starts being checked.');
+  return out;
+}
+
+/* The counts: how much is late, how much lands soon, how much there is — and what
+ * changed since the last run, because the rest is the same list it was and a reader who
+ * knows that will not read it again. */
+function counts(s) {
+  var open = s.open, today = s.today, b = s.b, out = [];
+  var t = utc(today), toFri = isNaN(t) ? 0 : (5 - t.getUTCDay() + 7) % 7;
+  var fri = toFri ? plusDays(today, toFri) : null;
+  var over = open.filter(function (l) { return l.status === 'overdue'; }).length;
+  var dueNow = open.filter(function (l) { return l.status === 'due_today'; }).length;
+  var soon = fri ? open.filter(function (l) {
+    return l.due && l.status !== 'overdue' && l.status !== 'due_today' && l.due > today && l.due <= fri;
+  }).length : 0;
+  if (over) out.push(over + ' overdue');
+  if (dueNow) out.push(dueNow + ' due today');
+  if (soon) out.push(soon + ' due by Fri');
+  out.push(open.length + ' open');
+  if (b.ledger) {
+    if (s.ctx.mixed) out.push(b.ledger.fresh + ' new');
+    if (b.ledger.gone.length) out.push(b.ledger.gone.length + ' cleared');
+    if (b.ledger.aged && b.ledger.aged.length) out.push(b.ledger.aged.length + ' aged out');
+    if (b.ledger.suppressed) out.push(b.ledger.suppressed + ' hidden as wrong');
   }
-  p('');
+  return out.join(' · ');
+}
+
+/* The brief — the message itself. What do I need to do. */
+function renderBrief(s) {
+  var L = [], p = function (x) { L.push(x == null ? '' : x); };
+  var b = s.b, nm = s.nm, today = s.today;
+  var t0 = utc(today);
+  p('OPEN LOOPS — for ' + today + (isNaN(t0) ? '' : ' · ' + DOW[t0.getUTCDay()]));
+  p(counts(s));
+  if (s.blind) {
+    p('READ NOTHING — ' + s.read.threads + ' conversation' + (s.read.threads === 1 ? ' was' : 's were') +
+      ' handed over and no message could be parsed out of any of them. This is not a' +
+      ' quiet day. Until it is fixed this digest can say nothing about what is' +
+      ' outstanding, so treat the empty list below as unknown rather than clear.');
+  } else if (!s.open.length) {
+    p(headline(s.open, b.source));
+  }
+  /* Say the reply landed. Correcting something and seeing no acknowledgement is how
+   * a reader learns the correction does not matter, and then they stop sending them. */
+  if (b.marked) {
+    p('Took your last reply — ' + b.marked + (b.marked === 1 ? ' item' : ' items') +
+      ' marked wrong and dropped for good.');
+  }
+  /* A reply that named an item number but did not lead with it. Not acted on — "call
+   * Dana at 3" is a note, and the self-DM is where notes live — but never silently, or
+   * somebody retypes the same correction all week wondering why the item will not go
+   * away. In the brief, because the reader is the one who typed it. */
+  (b.ignoredReplies || []).slice(0, 3).forEach(function (line) {
+    p('NOT READ AS A CORRECTION — "' + String(line).slice(0, 56) +
+      '". Reply with just the number, like "3", to reject one.');
+  });
+  var w = warnings(s).length;
+  if (w) p(w + (w === 1 ? ' read warning' : ' read warnings') + ' — in the thread.');
+
+  if (s.top.length) {
+    p('');
+    p('TODAY — highest priority');
+    s.top.forEach(function (l) {
+      p(row(l.n, when(l, today), move(l, nm)));
+      p(IND + meta(l, nm, s.ctx));
+    });
+  }
 
   var due = (b.briefs || []).filter(function (x) { return x.prepDue; });
   if (due.length) {
+    p('');
     p('NEEDS TO GO OUT TODAY');
     due.forEach(function (x) {
       p('  ' + (x.prepLate ? '[LATE] ' : '') + x.title + ' — ' +
         (x.inDays === 0 ? 'today' : x.inDays === 1 ? 'tomorrow' : 'in ' + x.inDays + ' days') +
         ', no agenda' + (x.attendees.length ? ' (' + x.attendees[0] + ')' : ''));
     });
-    p('');
   }
+
+  if (s.also.length) {
+    p('');
+    p('ALSO OPEN — most pressing first');
+    s.also.forEach(function (l) { p(row(l.n, when(l, today), compact(l, nm))); });
+  }
+  /* The way down. Counted, never a silent trim — "and 9 more" tells a reader the brief
+   * is bounded, where a list that simply ends looks complete. */
+  var rest = s.open.length - s.top.length - s.also.length, parts = [];
+  if (rest > 0) parts.push(rest + ' more');
+  if (s.r.closed.length) parts.push(s.r.closed.length + ' closed');
+  if (s.spot) parts.push("today's spot check");
+  if (s.open.length || parts.length) {
+    p('    ' + (parts.length
+      ? '+ ' + (parts.length > 1 ? parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1] : parts[0]) + ' in the thread ↓'
+      : 'Why each of these is here: in the thread ↓'));
+  }
+
+  p('');
+  p('Reply  3 7 not real · k 1 4 already knew' + (s.spot ? ' · miss b answers the spot check' : ''));
+  return L.join('\n');
+}
+
+/* The details — the thread reply. Why does it think so. Its first line must never read
+ * as a digest header: the reply parser keys on that, and ignores this one by its own. */
+function renderDetails(s) {
+  var L = [], p = function (x) { L.push(x == null ? '' : x); };
+  var b = s.b, r = s.r, nm = s.nm, today = s.today, read = s.read;
+  var drafted = false;
+
+  p('OPEN LOOPS DETAILS — for ' + today);
+  p('Every open item with the sentence it came from, who said it, where, and why it is dated.');
+
+  var w = warnings(s);
+  if (w.length) { p(''); w.forEach(p); }
+  /* A standing meeting that never carries an agenda is how that meeting is run, not a
+   * fresh oversight every week. Suppressed rather than listed — but said out loud,
+   * because a suppression nobody can see is indistinguishable from a rule that does
+   * not work. */
+  if (b.dark && b.dark.quietSeries) {
+    p('');
+    p('Not listed: ' + b.dark.quietSeries +
+      (b.dark.quietSeries === 1 ? ' recurring meeting has' : ' recurring meetings have') +
+      ' no agenda, and no occurrence of theirs ever has. Put one on any occurrence and' +
+      ' the series starts being checked.');
+  }
+  p('');
 
   /* How many of each pile to actually print.
    *
@@ -493,26 +575,22 @@ function render(b) {
    * digest would not have been shortened, it would have failed to send, on somebody's
    * first day, with the runner correctly refusing to post half of one.
    *
-   * The items are already risk-ordered and the ordering is already trusted — it is what
-   * FIRST selects on. So this takes the top of each pile and says out loud what it held
-   * back. Saying so is not decoration: a list that quietly stops is indistinguishable
-   * from a quiet week, which is the failure this whole thing exists to prevent. */
-  /* Off unless asked. The 4,000-character ceiling belongs to Slack, so the fitting is
-   * the Slack runner's job — a renderer that silently truncates by default would hide
-   * items from every other caller too, including the tests that check it shows all of
-   * them. Passing 0 or nothing prints everything. */
+   * The items are already ordered and the order is already trusted — it is what TODAY
+   * selects on. So this takes the top of each pile and says out loud what it held back.
+   * Off unless asked: the ceiling belongs to Slack, so the fitting is the Slack runner's
+   * job, and a renderer that silently truncated by default would hide items from every
+   * other caller too. Passing 0 or nothing prints everything. */
   var perPile = b.listCap === undefined ? 0 : b.listCap;
   OWNER_ORDER.forEach(function (key) {
-    var items = open.filter(function (l) { return l.owner === key; });
+    var items = s.ranked.filter(function (l) { return l.owner === key; });
     if (!items.length) return;
     // "Yours to handle" says what it is; the other two need their one line of why.
     p(ownerTitle(key, b.principals).toUpperCase() + ' (' + items.length + ')' +
       (key === 'you' ? '' : ' — ' + OWNER[key].note));
     var held = perPile ? items.length - perPile : 0;
     (perPile ? items.slice(0, perPile) : items).forEach(function (l) {
-      if (spot.indexOf(l) > -1) { p(row(l.n, when(l, today), '↑ FIRST')); return; }
       p(row(l.n, when(l, today), lead(l, nm)));
-      p(IND + meta(l, nm, ctx));
+      p(IND + meta(l, nm, s.ctx));
       if (l.weekendShift) p(IND + 'note: stated ' + l.due + ' is a weekend — last working day is ' + l.workDue);
       /* Late by the letter, normal for them. Chasing here is the thing that makes an
        * assistant look careless to the people it matters most with. */
@@ -520,10 +598,13 @@ function render(b) {
         p(IND + 'note: they usually take ' + l.usualDays + 'd — ' + l.ageDays +
           'd in, so this is not late for them yet');
       }
+      /* A note to send, for what is in TODAY — the items about to be acted on. Here
+       * rather than in the brief: the brief says what to do, this says what you could
+       * say. Paste it, send it, and the next run sees the message and closes the loop. */
+      var note = s.top.indexOf(l) > -1 ? draft(l) : null;
+      if (note) { p(IND + '→ ' + note); drafted = true; }
     });
-    /* Never a silent trim. The count is the whole point of the line — "and 187 more"
-     * tells a reader the tool is bounded, where a list that simply ends tells them
-     * nothing and looks complete. */
+    /* Never a silent trim. */
     if (held > 0) {
       p('      … and ' + held + ' more in this pile, ranked below these. ' +
         'Raise `listCap` to see them.');
@@ -564,8 +645,6 @@ function render(b) {
    * says only "closed" asks to be taken on trust, which is what the rest of it avoids. */
   if (r.closed.length) {
     p('CLOSED ITSELF (' + r.closed.length + ')');
-    // Bounded by the same knob as the piles: on a busy mailbox this ran to ten entries
-    // and 700 characters of good news, which is the cheapest thing to shorten.
     r.closed.slice(0, perPile || 10).forEach(function (l) {
       p('    ' + lead(l, nm));
       if (l.closedBy) {
@@ -577,47 +656,39 @@ function render(b) {
     p('');
   }
 
-  // The boundary everything above is judged inside, once the list has been read.
+  // The boundary everything above is judged inside.
   p('Read ' + b.messages.length + ' messages' +
     (read.threads ? ' across ' + read.threads + (b.source === 'slack' ? ' conversations' : ' threads') : '') +
     ' and ' + b.events.length + ' meetings' +
     (read.windowDays ? ', going back ' + read.windowDays + ' days.' : '.') +
     // Deliberately out of scope, which is different from missed — say which.
     (read.skipped ? ' ' + read.skipped + ' left out of scope on purpose.' : ''));
-
   if (drafted) p('Drafts only — nothing here has been sent. Verify before acting on any of it.');
 
-  /* How to answer it. In full until the reader has answered once — that paragraph is
-   * what teaches the loop, and the loop is the only way this learns anything — then as a
-   * two-line key, because the same explanation every evening is read once and then
-   * skimmed past forever. */
-  var brief = b.replyKey === 'short';
-  if (!brief) {
+  /* How to answer it, in full until the reader has answered once — that paragraph is
+   * what teaches the loop, and the loop is the only way this learns anything. After that
+   * the key on the brief is enough. */
+  if (!s.brief) {
     p('');
     p("Anything here that isn't real? Reply with just its number — \"3 7\" — and those");
     p('stop coming back. That reply is the only record of what this gets wrong.');
     p('Already knew about one? Put it on a line starting with k — "k 1 4". It stays on');
     p('the list; it just stops counting as something this told you.');
+    p('Reply here in the thread or under the digest; both are read.');
   }
 
   /* The only question in here that can say anything about what was missed. Everything
    * else asks about things that appeared, and a miss produces nothing to reject. */
-  var checking = b.spotCheck && b.spotCheck.length;
-  if (checking) {
+  if (s.spot) {
     p('');
     p('SPOT CHECK — it found nothing in these. Did it miss something?');
     b.spotCheck.forEach(function (m, i) {
       p('  ' + String.fromCharCode(97 + i) + '  ' + pad(shortenBody(m.body, 60), 62) + (m.subject || ''));
     });
-    if (!brief) {
+    if (!s.brief) {
       p('Reply "miss b d" for any that did contain a commitment, or "miss" on its own');
       p('if none did. Saying none is what makes the rest of it evidence.');
     }
-  }
-  if (brief) {
-    p('');
-    p('Reply   3 7  not real        k 1 4  already knew');
-    if (checking) p('        miss b d  it missed those        miss  it missed nothing');
   }
 
   if (b.recall) {
@@ -662,7 +733,14 @@ function render(b) {
   return L.join('\n');
 }
 
+/* Both parts, split by SPLIT: the brief is the message, the details go in its thread. */
+function render(b) {
+  var s = prep(b);
+  return renderBrief(s) + '\n\n' + SPLIT + '\n\n' + renderDetails(s);
+}
+
 if (typeof module !== 'undefined') {
-  module.exports = { render: render, headline: headline, digestOrder: digestOrder, ownerTitle: ownerTitle, actionList: actionList, draft: draft, firstName: firstName,
-                     OWNER_ORDER: OWNER_ORDER };
+  module.exports = { render: render, headline: headline, digestOrder: digestOrder, rank: rank,
+                     ownerTitle: ownerTitle, draft: draft, firstName: firstName,
+                     OWNER_ORDER: OWNER_ORDER, SPLIT: SPLIT };
 }
