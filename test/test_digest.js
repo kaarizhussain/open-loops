@@ -114,6 +114,15 @@ assert.deepStrictEqual(order([
   it('b', { type: 'owed_to_us', owner: 'them', who: 'sam@a.io', status: 'due_today', due: '2026-09-16' }),
   it('c', { type: 'unanswered_ask', who: 'sam@a.io', due: '2026-09-17' })
 ]), ['a', 'b', 'c'], 'and no cap per person — three urgent things from Sam are three');
+// Priority decays by who is waiting: their late question stays at the top, while your
+// own late promise — and your own late question to someone else — drop after three days.
+assert.deepStrictEqual(order([
+  it('my-promise', { status: 'overdue', overdueDays: 9, due: '2026-09-07' }),
+  it('my-ask', { type: 'awaiting_reply', owner: 'them', status: 'overdue', overdueDays: 9, due: '2026-09-07' }),
+  it('soon', { due: '2026-09-17' }),
+  it('their-ask', { type: 'unanswered_ask', status: 'overdue', overdueDays: 9, due: '2026-09-07' })
+]), ['their-ask', 'soon', 'my-promise', 'my-ask'],
+  'somebody waiting on you does not age out of the top; your own overdue items do');
 
 /* --- the note to send, where sending a note is the move ---
  *

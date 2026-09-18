@@ -137,4 +137,22 @@ var dRows = dToday.split('\n').filter(function (l) { return /^ ?\d+  \S/.test(l)
 });
 assert.ok(/ALSO OPEN[\s\S]*14d late/.test(daily), 'and the two-week-old promises lead what follows');
 
+/* Friday, the same data. The real run that day dropped Sam's kickoff question — asked
+   Monday, "I need an answer today", still unanswered — to sixth, because four days late
+   had aged it out of "just arrived". Somebody waiting on you does not age out. */
+fs.writeFileSync(path.join(tmp, 'fri.json'), JSON.stringify({ today: '2026-09-18', tzOffset: -240,
+  conversations: convs, threads: threads }));
+var fri = main([path.join(tmp, 'fri.json'), '--config', path.join(tmp, 'dcfg.json'), '--dry']).split('-- thread --')[0];
+var fRows = fri.split('TODAY — highest priority')[1].split('\n\n')[0].split('\n')
+  .filter(function (l) { return /^ ?\d+  \S/.test(l); });
+[/^ 1  4d late\s+Answer Sam — "Are we still on for the vendor kickoff/,
+ /^ 2  1d late\s+Answer Sam — "Can you review the Q4 headcount plan/,
+ // Then the rest of the just-arrived group by risk — here Sam's scope doc, which carries
+ // the key-account weight this fixture gives his company (the live config has none, so
+ // there it was the revenue-numbers promise).
+ /^ 3  2d late\s+Chase Sam — "I'll put together the scope doc/
+].forEach(function (rx, i) {
+  assert.ok(rx.test(fRows[i] || ''), 'Friday: the questions waiting on you first:\n' + fRows.join('\n'));
+});
+
 console.log('test_replay_seed: ok');

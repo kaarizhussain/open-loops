@@ -121,7 +121,11 @@ function headline(open, source) {
  * just because nobody is visibly chasing them. In order:
  *
  *   1. its own stated deadline has just arrived — passed within the last three days.
- *      "I need an answer today", said Monday, on Wednesday.
+ *      "I need an answer today", said Monday, on Wednesday. And when it is somebody
+ *      else's question to you, it stays here however late it gets: on the first real
+ *      runs Sam's kickoff question was first on Wednesday and sixth by Friday, falling
+ *      as it got more overdue. A promise of your own decays; somebody waiting on you
+ *      does not.
  *   2. it lands today or in the next three days, earliest first
  *   3. somebody is waiting on your answer
  *   4. anything else overdue: older promises, and deadlines borrowed from another
@@ -136,7 +140,8 @@ function headline(open, source) {
  * real reader, not against the seed. */
 function borrowed(l) { return !!(l.dueFrom && !l.dueFrom.same); }
 function tier(l, today) {
-  if (l.due && !borrowed(l) && l.status === 'overdue' && l.overdueDays <= 3) return 1;
+  if (l.due && !borrowed(l) && l.status === 'overdue' &&
+      (l.overdueDays <= 3 || l.type === 'unanswered_ask')) return 1;
   if (l.due && (l.status === 'due_today' || (today && l.due > today && l.due <= plusDays(today, 3)))) return 2;
   if (l.type === 'unanswered_ask') return 3;
   if (l.status === 'overdue') return 4;
