@@ -9,9 +9,11 @@ anywhere that knows about it. Open Loops reads Slack and the calendar, extracts 
 promises, works out which ones closed on their own, and ranks what's left by how close it
 is to falling over.
 
-```bash
-npx skills add kaarizhussain/open-loops
-```
+**Use it with Claude or with ChatGPT through the Codex app.** Both run the same
+local detector and deliver the results to Slack.
+
+- [ChatGPT / Codex setup](#chatgpt-integration-via-the-codex-app)
+- [Claude setup](#claude-setup)
 
 **That is the whole product: a skill.** There is no app and nothing to log into. It reads
 your channels and your calendar, posts a ranked list to your own Slack DM each evening,
@@ -25,9 +27,10 @@ and you correct it by replying to the message. The output is text, and it looks 
 Anyone pointing this at a workspace they do not personally own is right to ask, and it
 should be answerable without reading the source.
 
-**Nowhere.** The detector is local code with no network calls in it — there are none in
-`src/` or `slack-run.js`. The only things touching a network are the Slack and calendar
-connectors you already have, and the digest posting back to your own DM.
+**The detector runs locally.** There are no network calls in `src/` or `slack-run.js`.
+Claude or Codex retrieves messages through your connected Slack and calendar tools
+and posts the digest to your own DM. Those connector responses are also processed
+by the host assistant; local detection does not mean the data never leaves your machine.
 
 **You choose what it reads.** `channels.include` is an allowlist: name two channels and
 it reads two channels. Direct messages are never included unless you add them by name,
@@ -36,8 +39,9 @@ commitment anyone is tracking.
 
 **What lands on disk** is `ledger.json`, in your working directory. By default it keeps
 the sentence each commitment came from, so the digest can say what cleared.
-`"storeText": false` keeps the tracking — keys, dates, verdicts, accuracy — and writes no
-message text at all. That costs less than it sounds like: every open item is re-detected
+`"storeText": false` keeps the tracking — keys, dates, verdicts, accuracy — and removes
+stored row text, learned phrases and the rerun snapshot's text on the next real run.
+It does not erase raw input captures or separate backups. Every open item is re-detected
 from live messages on each run and still quotes its sentence in full. The one thing lost
 is *cleared since the last run*, which reads from the ledger and falls back to
 `(text not kept)`.
@@ -160,16 +164,15 @@ source is an adapter concern, not an engine concern:
 detectLoops(messages, events, { exec: 'dana@northstar.io', today: '2026-08-06' })
 ```
 
-One adapter ships: [`SLACK.md`](SLACK.md) reads Slack through a connector and posts the
-digest back as a DM. It is deliberately the only one — a second runtime was maintained
-for a while over Gmail and Calendar, and keeping two consumers honest cost more than the
-second one returned. Writing another is a small job, and *Pointing it at something else*
-below says exactly what it has to produce.
+The Slack runner supports both [Claude](SLACK.md) and [Codex](CODEX.md), accepting
+verbatim connector text or structured Slack records. Both use the same detector,
+ledger and digest renderer. *Pointing it at something else* below describes the
+normalized input needed for another source.
 
 **Deterministic is load-bearing, not a preference.** No model decides what counts as a
-commitment, so the same mailbox produces the same list tomorrow, nothing is sent to a
-third party, and the whole thing can be read by someone deciding whether to approve it.
-On the Slack path a model fetches and posts; it never judges.
+commitment: the same messages, settings and evaluation date produce the same detections.
+Classification happens in local code. On the Slack path the host assistant fetches
+and posts; it never judges.
 
 ## Who you support
 
@@ -256,20 +259,63 @@ None were visible in review, and every one looked obvious afterwards.
 
 ## Quick start
 
-### Use it in the Codex app
+### ChatGPT integration via the Codex app
 
-Claude and Codex use the same detector. From a local checkout, install the Codex skill:
+This integration runs in the **Codex desktop app**, using its Slack connection and
+local Node.js execution. It is not a hosted ChatGPT web app or a custom GPT. You need
+Git, Node.js, and a Slack connection in Codex with channel history, thread reads,
+user profiles and message posting. No OpenAI API key or additional Node dependencies
+are required.
+
+**1. Clone the repository and install the skill.**
 
 ```bash
+git clone https://github.com/kaarizhussain/open-loops.git
+cd open-loops
 node tools/install-codex.js
 ```
 
-Then ask Codex: **“Use $open-loops to set up my Slack digest.”** Connect the Slack
-plugin in Codex; Claude's connection does not carry over. Calendar is optional.
-The installer records this checkout's location, so keep the checkout in place.
-Restart Codex if the skill does not appear. This adds a local skill, not a schedule.
+If you already have a checkout, run the installer there. It installs the skill in
+your personal Codex skills directory and records the checkout's location, so keep
+that folder in place. Restart Codex if the skill does not appear.
+
+**2. Connect Slack in Codex.** Claude's Slack authorization does not carry over.
+Google Calendar is optional and needs its own connection for meeting coverage.
+
+**3. Ask Codex to set it up.**
+
+> Use $open-loops to set up my Slack digest. I am an executive assistant supporting
+> Dana. Help me choose the channels to track, then run the first digest.
+
+Replace Dana with the executive or executives you support. Setup saves your channel
+allowlist and supported executives in `openloops.config.json`. Codex fetches the
+messages, runs the detector, and posts the brief to your self-DM with the details
+in its thread. Reply with `3 7` to reject items, `k 1 4` for items you already knew,
+or `miss b` to answer the spot check.
+
+**4. Schedule it after the first successful run.** Ask Codex to run it daily at your
+preferred local time. Installation alone does not create a schedule. Local scheduled
+runs need the computer awake and the app running.
+
+**Alongside Claude:** use separate data directories and ledgers while comparing the
+two hosts. Stop the old schedule before migrating to a shared ledger; two schedulers
+must not write to it concurrently.
+
+**Tested in a Slack sandbox:** channel and thread reads, EA/executive ownership,
+digest delivery, completion matching, and a numbered correction processed in a
+simulated next-day run. Live calendar access and unattended Codex scheduling have
+not yet been validated.
 
 See [Codex setup](CODEX.md) for prerequisites, data formats, and running alongside Claude.
+
+### Claude setup
+
+```bash
+npx skills add kaarizhussain/open-loops
+```
+
+Ask Claude to set up Open Loops with its connected Slack tools. See the
+[Claude Slack workflow](SLACK.md) for the setup and daily run instructions.
 
 ### Run the code and demo
 
