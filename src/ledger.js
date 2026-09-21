@@ -58,7 +58,10 @@ function mergeLedger(rows, loops, today, opts) {
   // Retention mode: keep the key and the verdict, drop the words. Suppression still
   // works; what is lost is being able to read back what an item said.
   var keepText = !opts || opts.storeText !== false;
-  rows.forEach(function (r) { byKey[cell(r[COL.key])] = r; });
+  rows.forEach(function (r) {
+    if (!keepText) { r[COL.who] = ''; r[COL.what] = ''; }
+    byKey[cell(r[COL.key])] = r;
+  });
 
   loops.forEach(function (l) {
     var k = loopKey(l), row = byKey[k];
@@ -100,7 +103,7 @@ function mergeLedger(rows, loops, today, opts) {
    * today, so that running the digest twice in one day does not quietly swallow
    * everything that cleared between the two.
    */
-  var gone = [], aged = [];
+  var gone = [], aged = [], unknown = [];
   /* An item the reader muted is not an item that closed. It is absent from today's
      list because they said it was never real, which is the opposite of finished — and
      CLEARED is the one section of the digest that is pure good news. */
@@ -120,6 +123,15 @@ function mergeLedger(rows, loops, today, opts) {
     if (touched[cell(r[COL.key])]) return;
     if (wasMuted[cell(r[COL.key])]) return;
     if (cell(r[COL.gone_on]) || isWrong(r[COL.verdict])) return;
+    // Missing source data cannot prove completion. Explicit detector evidence can.
+    var parts = cell(r[COL.key]).split('|');
+    var missingSource = opts && ((parts.length === 2 && opts.calendarRead === false) ||
+      (parts.length > 2 && opts.availableThreads && opts.availableThreads.indexOf(parts[1]) === -1));
+    if (opts && (opts.preserveMissing || missingSource) &&
+        (opts.closedKeys || []).indexOf(cell(r[COL.key])) === -1) {
+      unknown.push({ key: cell(r[COL.key]), what: cell(r[COL.what]), who: cell(r[COL.who]) });
+      return;
+    }
     r[COL.gone_on] = today;
     // Reported as plain fields rather than a raw row, so whatever renders this does
     // not need to know the ledger's column layout.
@@ -129,7 +141,7 @@ function mergeLedger(rows, loops, today, opts) {
     else gone.push(item);
   });
 
-  return { shown: shown, fresh: fresh, suppressed: suppressed, gone: gone, aged: aged };
+  return { shown: shown, fresh: fresh, suppressed: suppressed, gone: gone, aged: aged, unknown: unknown };
 }
 
 /* The two numbers the fortnight is for.

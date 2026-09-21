@@ -491,6 +491,12 @@ function hedged(s) {
   return c < 0 || h < c;
 }
 var DELIVER = /\b(attached|here['’]?s|here is|just sent|sent (?:it|you|over|through)|sending (?:it|over)|done|signed|uploaded|shared|forwarded|all set)\b/i;
+// A delivery word inside a denial, question or future plan is not completion.
+function delivered(text) {
+  return DELIVER.test(text) && !/\?/.test(text) &&
+    !/\b(?:not|never|yet|haven['’]?t|hasn['’]?t|isn['’]?t|wasn['’]?t|didn['’]?t|don['’]?t|won['’]?t|cannot|can['’]?t)\b/i.test(text) &&
+    !COMMIT.test(text) && !/\b(?:will|going to|plan to|expect to|should|would|could|might|must|need to)\b/i.test(text);
+}
 var ASK = /\b(can you|could you|would you|please|need your|need you to|waiting on|any update|following up|checking in|let me know|confirm)\b/i;
 /* An intro is an email, not a meeting — keep those as plain promises. */
 var MEETINGY = /\b(call|meeting|sync|chat|conversation|walk (?:you|them) through)\b/i;
@@ -825,12 +831,12 @@ function detectLoops(messages, events, opts) {
        * on the strength of one word about something else. An attachment has no
        * sentence of its own, so there the message body is all the evidence there is. */
       var evidence = n.attach ? [n.body]
-        : sentences(n.body).filter(function (x) { return DELIVER.test(x); });
+        : sentences(n.body).filter(delivered);
 
       evidence.forEach(function (d) {
         // Recomputed per sentence: two deliveries in one message close in sequence.
         var open = promises.filter(function (p) {
-          return !p.closer && p.m.out === n.out && p.at < j;
+          return !p.closer && p.m.from.toLowerCase() === n.from.toLowerCase() && p.at < j;
         });
         if (!open.length) return;
 
@@ -861,6 +867,10 @@ function detectLoops(messages, events, opts) {
       var due = parseDue(s, m.date), dueFrom = null;
       for (var k = i - 1; k >= 0 && !due; k--) {
         if (msgs[k].out === m.out) continue;
+        // A channel contains unrelated conversations. Inherit only from a related
+        // request on the same day; real threads retain their conversation boundary.
+        if (stream && (day(msgs[k].date) !== day(m.date) ||
+            !ASK.test(msgs[k].body) || !answers(s, msgs[k].body))) continue;
         due = parseDue(msgs[k].body, msgs[k].date);
         // Borrowed from the other side, so the digest has to say whose date it is.
         if (due) dueFrom = { text: msgs[k].body, from: msgs[k].from, same: false };

@@ -250,6 +250,7 @@ function main(argv) {
   var today = flag('today', input.today || new Date().toISOString().slice(0, 10));
   var store = fileStore(flag('ledger', cfg.ledger));
   store.beginRun(today);    // a second run today starts from before the first
+  if (cfg.storeText === false) store.dropText();
 
   /* Every conversation becomes messages in the shape loops.js already takes. The
    * channel name stands in for a subject line, which Slack does not have. */
@@ -268,7 +269,7 @@ function main(argv) {
      * posted in look identical from here, so this does not claim which — but the two
      * are worth different reactions and only one of them is fine, and saying nothing
      * lets the bad one pass as the good one. */
-    if (!got.length) unread.push(c.channel);
+    if (!got.length && !(c.complete === true && Array.isArray(c.messages) && c.messages.length === 0)) unread.push(c.channel);
     got.forEach(function (m) {
       byId[m.id] = m;
       if (m.hasThread) roots[m.id] = c.channel;   // has replies a channel read omits
@@ -286,11 +287,13 @@ function main(argv) {
     // A thread inherits its channel's scope — excluding #hr and then reading a thread
     // inside it would be an exclusion that does not exclude.
     if (!inScope(t.channel, cfg.channels)) { skippedThreads++; return; }
-    readConversation(t, {
+    var repliesRead = readConversation(t, {
       channel: t.channel, members: t.members || [], threadId: t.root,
       tzOffset: cfg.tzOffset, self: cfg.you, selfUid: cfg.selfUid || cfg.selfDm, users: input.users
-    }).forEach(function (m) { byId[m.id] = m; });
-    delete roots[t.root];
+    });
+    repliesRead.forEach(function (m) { byId[m.id] = m; });
+    if (repliesRead.length) delete roots[t.root];
+    else unread.push(t.channel + ' thread ' + t.root);
   });
 
   var messages = Object.keys(byId).map(function (k) { return byId[k]; })
@@ -330,7 +333,8 @@ function main(argv) {
       if (!oldestIn[ch] || d < oldestIn[ch]) oldestIn[ch] = d;
     });
     Object.keys(oldestIn).sort().forEach(function (ch) {
-      if (oldestIn[ch] > cut) shortRead.push({ channel: ch, from: oldestIn[ch] });
+      var complete = convs.some(function (c) { return c.channel === ch && c.complete === true; });
+      if (oldestIn[ch] > cut && !complete) shortRead.push({ channel: ch, from: oldestIn[ch] });
     });
 
     messages = messages.filter(function (m) { return m.date.slice(0, 10) >= cut; });
@@ -434,11 +438,23 @@ function main(argv) {
     .filter(function (s) { return !already[s.phrase]; })
     .map(function (s) { return { phrase: s.phrase, count: s.count, since: today }; });
 
+  var incomplete = unread.length > 0 || unfetched.length > 0 || shortRead.length > 0 ||
+    !!calendarError || convs.length === skipped ||
+    convs.concat(threadsIn).some(function (c) { return c.complete === false; });
+  var closedKeys = [];
+  result.closed.forEach(function (l) {
+    closedKeys.push(loops.loopKey(Object.assign({}, l, { type: l.openType })));
+    // A scheduling promise is stored under this type until a calendar hold exists.
+    if (l.byUs) closedKeys.push(loops.loopKey(Object.assign({}, l, { type: 'agreed_unscheduled' })));
+  });
   var ledger = L.mergeLedger(rows, result.open, today,
                              { storeText: cfg.storeText !== false, mutedKeys: mutedKeys,
-                               windowStart: cut });
+                               windowStart: cut, preserveMissing: incomplete, closedKeys: closedKeys,
+                               availableThreads: convs.filter(function (c) { return inScope(c.channel, cfg.channels); }).map(function (c) { return c.channel; })
+                                 .concat(threadsIn.filter(function (t) { return inScope(t.channel, cfg.channels); }).map(function (t) { return t.root; })),
+                               calendarRead: input.events != null && !calendarError });
   result.open = ledger.shown;
-  L.pruneLedger(rows, today, cfg.keepLedgerDays);
+  if (!ledger.unknown.length) L.pruneLedger(rows, today, cfg.keepLedgerDays);
 
   var keys = digest.digestOrder(result.open, today);
 

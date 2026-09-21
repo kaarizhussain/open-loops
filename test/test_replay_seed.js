@@ -110,9 +110,9 @@ assert.ok(/^ 1  2d late\s+Answer Sam — "Are we still on for the vendor kickoff
 assert.ok(/"I need an answer today"/.test(wl[fi + 2]), 'with the sentence its deadline came from: ' + wl[fi + 2]);
 assert.ok(/^ 2  today\s+Chase Sam — "I'll put together the scope doc/.test(wl[fi + 3]), 'then what lands today: ' + wl[fi + 3]);
 assert.ok(/^ 3  Thu\s+Answer Sam — "Can you review the Q4 headcount plan/.test(wl[fi + 5]), 'then what lands tomorrow: ' + wl[fi + 5]);
-assert.ok(/^2 overdue · 1 due today · 3 due by Fri · 7 open$/m.test(wBrief), 'the state of the day in one line');
+assert.ok(/^1 overdue · 1 due today · 3 due by Fri · 7 open$/m.test(wBrief), 'the state of the day in one line');
 assert.strictEqual(wBrief.split('Are we still on for the vendor kickoff').length - 1, 1, 'every loop appears once in the brief');
-assert.ok(/date from Lena's "by Tuesday"/.test(wed), 'a borrowed deadline says whose it was');
+assert.ok(!/date from Lena's "by Tuesday"/.test(wed), 'an unrelated channel promise cannot date the redline follow-up');
 assert.ok(/closed Mon by Lena: "Signed MSA attached — sorry for the delay\."/.test(wed),
   'and a closed one says what closed it');
 assert.ok(!/@org1\.example/.test(wed), 'people by name, not address');

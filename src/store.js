@@ -64,6 +64,17 @@ function fileStore(file) {
   return {
     path: file,
 
+    // Scrub the rerun snapshot too, or beginRun can resurrect yesterday's text.
+    // Keep this in memory until the normal flush so --dry stays read-only.
+    dropText: function () {
+      var scrub = function (s) {
+        (s.rows || []).forEach(function (r) { r[L.COL.who] = ''; r[L.COL.what] = ''; });
+        s.learned = [];
+        if (s.before) scrub(s.before.state);
+      };
+      scrub(state);
+    },
+
     /* The run that counts for a date is the last one.
      *
      * The first real run read a thread wrong, was recorded, and was run again corrected —

@@ -71,9 +71,13 @@ and ledger paths, even if a task uses a worktree.
 corrections, invalid-input handling, and skill installation. Live connector access
 and unattended posting still need a manual run in the target Codex account.
 
-The existing detector's review findings also apply here. In particular, incomplete
-reads must not update the ledger, and `storeText:false` does not scrub previously
-stored text. Raw connector captures can contain message text. Codex sees connector
+Incomplete reads retain missing commitments as not verified, instead of clearing
+them. Mark a conversation `complete:true` only after pagination confirms full coverage
+of the requested window; use `complete:false` for a known partial read. Without that
+confirmation the runner conservatively checks the earliest returned date.
+`storeText:false` scrubs stored row text, learned phrases and the rerun snapshot on
+the next real run. Raw connector captures and separate backups are not scrubbed.
+Codex sees connector
 responses; local detection does not mean that all data stays outside the host app.
 
 Official documentation: [skills](https://learn.chatgpt.com/docs/build-skills) and

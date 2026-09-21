@@ -420,8 +420,8 @@ function warnings(s) {
   (read.shortRead || []).slice(0, 4).forEach(function (x) {
     out.push('INCOMPLETE — ' + x.channel + ' was only read back to ' + x.from +
       ', not ' + (read.windowStart || 'the start of the window') +
-      '. If it is busy rather than quiet, anything older is missing and may be' +
-      ' reported as cleared.');
+      '. If it is busy rather than quiet, older items are missing; their completion' +
+      ' cannot be verified.');
   });
   if (!(read.shortRead || []).length && read.capped) {
     out.push('INCOMPLETE — stopped at the ' + (read.cap || 'read') + ' limit. The oldest of it was ' +
@@ -468,6 +468,7 @@ function counts(s) {
   if (b.ledger) {
     if (s.ctx.mixed) out.push(b.ledger.fresh + ' new');
     if (b.ledger.gone.length) out.push(b.ledger.gone.length + ' cleared');
+    if (b.ledger.unknown && b.ledger.unknown.length) out.push(b.ledger.unknown.length + ' not verified');
     if (b.ledger.aged && b.ledger.aged.length) out.push(b.ledger.aged.length + ' aged out');
     if (b.ledger.suppressed) out.push(b.ledger.suppressed + ' hidden as wrong');
   }
@@ -619,6 +620,14 @@ function renderDetails(s) {
 
   /* Dropped off the list since the last run. The only good news in here, which is
    * reason enough to keep it. */
+  var unknown = (b.ledger && b.ledger.unknown) || [];
+  if (unknown.length) {
+    p('NOT VERIFIED (' + unknown.length + ') — source coverage is incomplete; these remain in the ledger.');
+    unknown.slice(0, perPile || 10).forEach(function (g) {
+      p('  ' + (g.what || '(text not kept)') + (g.who ? '  — ' + g.who : ''));
+    });
+    p('');
+  }
   if (b.ledger && b.ledger.gone.length) {
     p('CLEARED SINCE THE LAST RUN (' + b.ledger.gone.length + ')');
     b.ledger.gone.forEach(function (g) {

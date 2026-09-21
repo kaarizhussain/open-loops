@@ -50,8 +50,8 @@ with a user ID in `selfDm` still works. Do not assume that a user ID is a DM cha
 Write a nonempty allowlist: an empty include list currently means all supplied channels.
 Other DMs are opt-in by name. On Windows use forward slashes or JSON-escaped backslashes.
 
-By default the ledger contains message text. `storeText:false` avoids storing text
-in new rows, but does not scrub an existing ledger or raw input files. Explain this
+By default the ledger contains message text. `storeText:false` scrubs existing row
+text, learned phrases and the rerun snapshot on a real run, but not raw inputs or backups. Explain this
 limit when requested; do not claim all data stays outside Codex. Connector responses
 are processed in the Codex conversation as well as by the local detector.
 
@@ -124,9 +124,11 @@ including pagination. If a provider uses a different envelope, map its actual fi
 to that schema without inferring attendees, agendas or dates.
 
 Before a real run, stop on failed/truncated channel or thread reads and explain which
-source is incomplete. The current ledger treats disappearing detections as cleared;
-passing partial data would damage its history. If a previously used calendar fails,
-also stop rather than clearing its old items. `--dry` can preview incomplete input,
+source is incomplete. The ledger preserves missing commitments as not verified, but
+a partial digest still cannot describe all outstanding work. Set `complete:true` on
+each conversation only when pagination confirms full requested coverage, even if empty;
+otherwise use `complete:false`. If a previously used calendar fails, also stop.
+`--dry` can preview incomplete input,
 but label that output incomplete and do not post it as the daily digest.
 
 Run from the data directory:
