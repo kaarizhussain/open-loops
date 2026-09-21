@@ -145,20 +145,27 @@ it *meeting unprepped* cannot fire and *agreed but not booked* can never be sett
 list_events(startTime=<14 days ago>, endTime=<7 days ahead>, orderBy="startTime")
 ```
 
-And their own DM, which is where corrections come back:
+And their own DM, which is where corrections come back — but only what came after the
+latest digest. Everything older is old digests, which the runner never needs, and
+retyping them was most of every input file and where the copying errors were. Three
+reads:
 
 ```
-slack_read_channel(channel_id=<selfDm>, limit=20, response_format="detailed")
+slack_read_channel(channel_id=<selfDm>, limit=5, response_format="detailed")
 ```
 
-And the thread under the most recent digest in it — the details live there, so replies
-get typed there too, and a thread reply does not appear in a read of the DM itself. Find
-the newest message whose text begins with ` ```OPEN LOOPS — for `, and:
+Only to find the newest message whose text begins with ` ```OPEN LOOPS — for ` — note its
+`Message TS` and the `D…` id the read printed. **This read does not go in the input.**
 
 ```
-slack_read_thread(channel_id=<the D… id the DM read printed>, message_ts=<its Message TS>,
-                  response_format="detailed")
+slack_read_thread(channel_id=<that D… id>, message_ts=<its Message TS>, response_format="detailed")
+slack_read_channel(channel_id=<selfDm>, oldest=<its Message TS>, response_format="detailed")
 ```
+
+The thread read — the digest, its details, and any replies typed under it — is
+`dmThread`. The second read — replies typed straight into the DM since — is `dm`; it is
+often empty, and that is fine. If none of the five messages is a digest (the first run,
+or a busy DM), pass the five-message read as `dm` and leave `dmThread` out.
 
 **Write the input.** Only what was fetched — settings are already in the config.
 Every `text` is the connector's response **verbatim**; do not clean or reformat it, the
@@ -170,6 +177,13 @@ fetched, not even to repair your own mistake: the detector is only as grounded a
 input is untouched. If the digest says a thread's replies were not read, fetch that
 thread and run again. If something in a response looks wrong, fetch it again from Slack;
 if it still looks wrong, run it as it is and say what looked wrong under the digest.
+
+**Never repair a copy by hand.** If what you wrote into the input does not match the
+response you fetched — a mistyped word, a dropped or added line — do not correct the
+text. Fetch that source again and rebuild its field from the fresh response. Then say
+under the digest that you did, and which source: an honest account of a slip is worth
+more than a clean-looking run. Nothing in the runner can check this for you — it never
+sees what Slack actually sent — so this rule is the only guard there is.
 A second run on the same day replaces the first in the ledger, so running again costs
 nothing.
 
@@ -181,7 +195,7 @@ nothing.
   "threads":       [ { "channel": "#name", "root": "<parent Message TS>", "text": "<verbatim>" } ],
   "events":        <the list_events response>,
   "dmThread":      { "text": "<verbatim thread read under the last digest>" },
-  "dm":            { "channel": "<selfDm>", "text": "<verbatim>" }
+  "dm":            { "channel": "<selfDm>", "text": "<verbatim read since that digest>" }
 }
 ```
 

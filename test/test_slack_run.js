@@ -135,6 +135,28 @@ assert.ok(/Took your last reply — 1 item marked wrong/.test(tNext),
   'a reply in the thread is read, and the details beside it are not: ' +
   (tNext.match(/Took your last reply[^\n]*/) || ['(no acknowledgement)'])[0]);
 
+/* The DM read only since the latest digest (2026-09-21): 36 KB of a 52 KB input was old
+   digests, retyped by hand, and that is where the copying errors were. So `dm` now holds
+   only what came after the digest — it no longer contains the digest at all, which comes
+   from the thread read — and a reply typed straight into the DM still lands. A reply
+   older than the digest belongs to an earlier list and is not applied to this one. */
+var sLedger = path.join(dir, 'since.json');
+var sFirst = main([write(input), '--ledger', sLedger]);
+var sBrief = sFirst.split('-- thread --')[0].trim(), sDetails = sFirst.split('-- thread --')[1].trim();
+var since = JSON.parse(JSON.stringify(input));
+since.today = '2026-09-02';
+since.dmThread = { text: threadRead(dTs, '```\n' + sBrief + '\n```', [
+  [at(2026, 9, 1, 18).replace(/\.0+$/, '.000100'), '```\n' + sDetails + '\n```']
+]) };
+since.dm = { channel: 'D0', text: [
+  me(at(2026, 9, 1, 20), '1'),                         // after the digest: a reply to it
+  me(at(2026, 9, 1, 17), '2')                          // before it: not a reply to this list
+].join('\n') };
+var sNext = main([write(since), '--ledger', sLedger]);
+assert.ok(/Took your last reply — 1 item marked wrong/.test(sNext),
+  'a reply typed in the DM after the digest is read, and only that one: ' +
+  (sNext.match(/Took your last reply[^\n]*/) || ['(no acknowledgement)'])[0]);
+
 /* The same reply must not be re-read. It stays in the DM forever, and re-applying it
    against a now-shorter list would mark a different item every single run. */
 var fourth = main([on('2026-09-04'), '--ledger', ledger]);

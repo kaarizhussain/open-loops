@@ -65,9 +65,11 @@ inside one is invisible without going back for it:
 slack_read_thread(channel_id=…, message_ts=<the root's Message TS>)
 ```
 
-Also read your own DM — that is where the last digest and any corrections are — and the
-thread under the latest digest, where its details are and where replies get typed too. A
-thread reply does not appear in a read of the DM itself.
+Also read your own DM — that is where corrections come back — but only since the latest
+digest: find it with a short read, then read its thread (the digest, its details, and
+replies typed under it) and the DM from its timestamp on (replies typed straight into the
+DM). A thread reply does not appear in a read of the DM itself. Older DM history is old
+digests the runner never needs; reading and retyping it made up most of every input.
 
 **2. Write what came back.** Only what was fetched — the settings are already in the
 config file:
