@@ -34,7 +34,7 @@ global.LABEL = loops.LABEL;
 global.loopKey = loops.loopKey;
 
 var digest = require('./src/digest.js');
-var { parseChannel } = require('./src/slack.js');
+var { readConversation } = require('./src/slack-json.js');
 var { fileStore } = require('./src/store.js');
 var { parseEvents } = require('./src/calendar.js');
 var { settings } = require('./src/config.js');
@@ -260,9 +260,9 @@ function main(argv) {
   var convs = [].concat(input.conversations || []), threadsIn = [].concat(input.threads || []);
   convs.forEach(function (c) {
     if (!inScope(c.channel, cfg.channels)) { skipped++; return; }
-    var got = parseChannel(c.text, {
+    var got = readConversation(c, {
       channel: c.channel, members: c.members || [], tzOffset: cfg.tzOffset,
-      self: cfg.you, selfUid: cfg.selfDm
+      self: cfg.you, selfUid: cfg.selfUid || cfg.selfDm, users: input.users
     });
     /* Handed over and nothing came out. A fetch that failed and a channel nobody has
      * posted in look identical from here, so this does not claim which — but the two
@@ -286,9 +286,9 @@ function main(argv) {
     // A thread inherits its channel's scope — excluding #hr and then reading a thread
     // inside it would be an exclusion that does not exclude.
     if (!inScope(t.channel, cfg.channels)) { skippedThreads++; return; }
-    parseChannel(t.text, {
+    readConversation(t, {
       channel: t.channel, members: t.members || [], threadId: t.root,
-      tzOffset: cfg.tzOffset, self: cfg.you, selfUid: cfg.selfDm
+      tzOffset: cfg.tzOffset, self: cfg.you, selfUid: cfg.selfUid || cfg.selfDm, users: input.users
     }).forEach(function (m) { byId[m.id] = m; });
     delete roots[t.root];
   });
@@ -343,17 +343,17 @@ function main(argv) {
 
   // Yesterday's corrections land before today's list is built, or a rejected item
   // shows up one more time before disappearing.
-  var dmMessages = input.dm ? parseChannel(input.dm.text,
-    { channel: 'DM', tzOffset: cfg.tzOffset, self: cfg.you, selfUid: cfg.selfDm }) : [];
+  var dmMessages = input.dm ? readConversation(input.dm,
+    { channel: 'DM', tzOffset: cfg.tzOffset, self: cfg.you, selfUid: cfg.selfUid || cfg.selfDm, users: input.users }) : [];
   /* Replies typed in the digest's thread count too — the details live there, so that is
    * where a reader is when they decide an item is wrong, and a thread reply does not
    * appear in a read of the DM itself. Merged by timestamp; the thread read repeats the
    * digest as its parent, which is kept once. */
-  if (input.dmThread && input.dmThread.text) {
+  if (input.dmThread) {
     var inDm = {};
     dmMessages.forEach(function (m) { inDm[m.id] = 1; });
-    parseChannel(input.dmThread.text, { channel: 'DM', threadId: 'dm-thread', tzOffset: cfg.tzOffset,
-      self: cfg.you, selfUid: cfg.selfDm }).forEach(function (m) { if (!inDm[m.id]) dmMessages.push(m); });
+    readConversation(input.dmThread, { channel: 'DM', threadId: input.dmThread.root, tzOffset: cfg.tzOffset,
+      self: cfg.you, selfUid: cfg.selfUid || cfg.selfDm, users: input.users }).forEach(function (m) { if (!inDm[m.id]) dmMessages.push(m); });
     dmMessages.sort(function (a, b) { return parseFloat(a.id) - parseFloat(b.id); });
   }
   var replies = marksFromDm(dmMessages, store, rows);

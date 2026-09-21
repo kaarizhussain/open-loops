@@ -5,6 +5,15 @@ description: Track commitments made and received in Slack, and send a daily dige
 
 # Open Loops
 
+## Choose the host
+
+In the **Codex app**, read [the Codex workflow](references/codex.md) and follow it
+instead of the Claude connector calls and scheduling instructions below. The same
+detector and ledger are used by both hosts; connector names and response formats are
+not interchangeable. This skill needs local Node.js execution and persistent files.
+
+In **Claude**, follow the workflow below.
+
 Finds the things nobody is chasing — a promise made three weeks ago in a thread nobody
 reopened, a call agreed to that never reached a calendar, a question that got no answer
 — and posts a ranked list to the user's own Slack DM each day.

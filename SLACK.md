@@ -16,6 +16,9 @@ Monday, which is not true of anything that asks a model what counts as a commitm
 
 ## Set it up once
 
+**Codex app:** see [Codex setup](CODEX.md). It uses the same runner with a Codex
+workflow and accepts structured Slack messages as well as the text format below.
+
 **The short way.** Install the skill and ask Claude to set up Open Loops:
 
 ```bash

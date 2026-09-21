@@ -256,6 +256,23 @@ None were visible in review, and every one looked obvious afterwards.
 
 ## Quick start
 
+### Use it in the Codex app
+
+Claude and Codex use the same detector. From a local checkout, install the Codex skill:
+
+```bash
+node tools/install-codex.js
+```
+
+Then ask Codex: **“Use $open-loops to set up my Slack digest.”** Connect the Slack
+plugin in Codex; Claude's connection does not carry over. Calendar is optional.
+The installer records this checkout's location, so keep the checkout in place.
+Restart Codex if the skill does not appear. This adds a local skill, not a schedule.
+
+See [Codex setup](CODEX.md) for prerequisites, data formats, and running alongside Claude.
+
+### Run the code and demo
+
 No dependencies, no install, no API keys.
 
 ```bash
