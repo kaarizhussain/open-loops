@@ -54,7 +54,7 @@ what is left:
 
 ```
 slack_list_user_channels(types="public_channel,private_channel")
-slack_read_channel(channel_id=…, limit=100)
+slack_read_channel(channel_id=…, oldest=<window start>, limit=100)
 ```
 
 Note the missing `im`. Direct messages are opt-in — add them to `types` only when you
@@ -81,11 +81,12 @@ config file:
 {
   "today": "2026-09-01",
   "conversations": [
-    { "channel": "#deals", "members": [], "text": "<connector output>" },
-    { "channel": "D0…", "members": ["lena@vectorfreight.com"], "text": "<a DM, if you read DMs>" }
+    { "channel": "#deals", "members": [], "oldest": "<requested bound>",
+      "pages": [{ "text": "<connector output>", "pagination_info": "<verbatim>" }] }
   ],
   "threads": [
-    { "channel": "#deals", "root": "1788292991.482509", "text": "<slack_read_thread output>" }
+    { "channel": "#deals", "root": "1788292991.482509", "oldest": "<requested bound>",
+      "pages": [{ "text": "<slack_read_thread output>", "pagination_info": "<verbatim>" }] }
   ],
   "dm": { "channel": "D0…", "text": "<connector output for your self-DM>" },
   "dmThread": { "text": "<slack_read_thread output for the latest digest>" },
@@ -111,8 +112,10 @@ boundary — the tightest one Slack offers, and the only one as narrow as an ema
 thread's. If a root's replies are not supplied, the digest says so rather than
 quietly leaving them out.
 
-`text` is the connector's response verbatim. The adapter parses it, including the
-`Message TS` line — the human date carries a timezone abbreviation and is ignored.
+Each page's `text` and separate `pagination_info` are copied verbatim. The final page's
+metadata and the exact `oldest` sent with the request establish source coverage. Legacy
+top-level `text` remains accepted but carries no coverage evidence. The adapter parses
+the `Message TS` line; the human date carries a timezone abbreviation and is ignored.
 
 **3. Run it:**
 

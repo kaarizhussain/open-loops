@@ -378,7 +378,7 @@ function prep(b) {
      * connector's display format moving — src/slack.js parses a presentation format
      * nobody documents or promises to keep — and that failure is total and silent, so
      * every channel comes back empty at once and the digest looks like a quiet week. */
-    blind: !b.messages.length && read.threads > 0
+    blind: !b.messages.length && read.threads > 0 && read.confirmedEmpty !== read.threads
   };
   s.top = ranked.slice(0, TODAY_N);
   s.also = ranked.slice(TODAY_N, TODAY_N + ALSO_N);
@@ -408,20 +408,14 @@ function warnings(s) {
       ' — either nobody has posted there, or the read came back empty. Those look the' +
       ' same from here, and only one of them is fine.');
   }
-  /* A read that did not reach the start of the window.
-   *
-   * The fetch takes a fixed number of newest messages, so a busy channel hands back
-   * three days where three weeks were asked for. Everything older is simply absent —
-   * and absence is exactly what the ledger reads as CLEARED. A promise made a
-   * fortnight ago would be reported as done, by a tool built to catch the thing
-   * nobody finished. Saying which channels and how far back is the whole point: a
-   * quiet channel and a truncated one look identical from here, and only the reader
-   * can tell them apart. */
+  /* Reads whose copied pagination evidence is missing, unrecognized, or partial.
+   * This is source-specific: missing history in one channel cannot make another
+   * channel's ledger rows uncertain. */
   (read.shortRead || []).slice(0, 4).forEach(function (x) {
-    out.push('INCOMPLETE — ' + x.channel + ' was only read back to ' + x.from +
-      ', not ' + (read.windowStart || 'the start of the window') +
-      '. If it is busy rather than quiet, older items are missing; their completion' +
-      ' cannot be verified.');
+    out.push('INCOMPLETE — ' + x.channel + (x.reason
+      ? ': ' + x.reason + '; completion cannot be verified from missing items.'
+      : ' was only read back to ' + x.from + ', not ' + (read.windowStart || 'the start of the window') +
+        '. Coverage is uncertain; completion cannot be verified from missing items.'));
   });
   if (!(read.shortRead || []).length && read.capped) {
     out.push('INCOMPLETE — stopped at the ' + (read.cap || 'read') + ' limit. The oldest of it was ' +
@@ -622,7 +616,7 @@ function renderDetails(s) {
    * reason enough to keep it. */
   var unknown = (b.ledger && b.ledger.unknown) || [];
   if (unknown.length) {
-    p('NOT VERIFIED (' + unknown.length + ') — source coverage is incomplete; these remain in the ledger.');
+    p('NOT VERIFIED (' + unknown.length + ') — source coverage is incomplete or unknown; these remain in the ledger.');
     unknown.slice(0, perPile || 10).forEach(function (g) {
       p('  ' + (g.what || '(text not kept)') + (g.who ? '  — ' + g.who : ''));
     });

@@ -35,6 +35,7 @@ global.loopKey = loops.loopKey;
 
 var digest = require('./src/digest.js');
 var { readConversation } = require('./src/slack-json.js');
+var { coverage, emptyResponse } = require('./src/slack-coverage.js');
 var { fileStore } = require('./src/store.js');
 var { parseEvents } = require('./src/calendar.js');
 var { settings } = require('./src/config.js');
@@ -255,6 +256,21 @@ function main(argv) {
   /* Every conversation becomes messages in the shape loops.js already takes. The
    * channel name stands in for a subject line, which Slack does not have. */
   var byId = {}, roots = {}, skipped = 0, skippedThreads = 0, unread = [];
+  var window = cfg.lookbackDays;
+  var cut = window ? new Date(new Date(today + 'T00:00:00Z') - window * 864e5).toISOString().slice(0, 10) : null;
+  var sourceCoverage = {}, coverageParent = {}, coverageLabel = {};
+  var shortRead = [], confirmedEmpty = 0;
+  function recordCoverage(source, key, got, parent, label) {
+    var read = coverage(source, cut, cfg.tzOffset);
+    if (!got.length && !emptyResponse(source)) {
+      read = { state: 'unknown', reason: 'the response could not be parsed' };
+    }
+    // Duplicate source entries cannot override an uncertain fetch. Pages belong in pages[].
+    if (!sourceCoverage[key] || sourceCoverage[key].state === 'complete') sourceCoverage[key] = read;
+    coverageParent[key] = parent || null;
+    coverageLabel[key] = label || key;
+    return read;
+  }
   /* A model writes this file, and models vary the shape — one conversation as an object
    * rather than a list of one. [].concat takes both, so a shape slip no longer kills the
    * unattended run before it can say anything at all. */
@@ -269,7 +285,11 @@ function main(argv) {
      * posted in look identical from here, so this does not claim which — but the two
      * are worth different reactions and only one of them is fine, and saying nothing
      * lets the bad one pass as the good one. */
-    if (!got.length && !(c.complete === true && Array.isArray(c.messages) && c.messages.length === 0)) unread.push(c.channel);
+    var read = recordCoverage(c, c.channel, got, null, c.channel);
+    if (!got.length) {
+      if (read.state === 'complete' && emptyResponse(c)) confirmedEmpty++;
+      else unread.push(c.channel);
+    }
     got.forEach(function (m) {
       byId[m.id] = m;
       if (m.hasThread) roots[m.id] = c.channel;   // has replies a channel read omits
@@ -292,53 +312,26 @@ function main(argv) {
       tzOffset: cfg.tzOffset, self: cfg.you, selfUid: cfg.selfUid || cfg.selfDm, users: input.users
     });
     repliesRead.forEach(function (m) { byId[m.id] = m; });
+    var read = recordCoverage(t, t.root, repliesRead, t.channel,
+      t.channel + ' thread ' + t.root);
     if (repliesRead.length) delete roots[t.root];
-    else unread.push(t.channel + ' thread ' + t.root);
+    if (!repliesRead.length) unread.push(t.channel + ' thread ' + t.root);
   });
 
   var messages = Object.keys(byId).map(function (k) { return byId[k]; })
     .sort(function (a, b) { return parseFloat(a.id) - parseFloat(b.id); });
 
-  /* How far back to look.
-   *
-   * An unthreaded channel has no conversation boundary of its own, so this window is
-   * the only thing bounding closure matching there: read three weeks, and a delivery
-   * can only be confused with a promise from the same three weeks. Without it that
-   * claim was just a sentence in the documentation.
-   *
-   * ponytail: the window is a real trade, not a free knob. Anything that ages out is
-   * no longer detected, and the ledger reads "no longer detected" as cleared — so too
-   * short a window quietly reports long-silent promises as done, which is the failure
-   * this whole thing exists to prevent. Widen before narrowing. */
-  var window = cfg.lookbackDays;
-  var cut = null, shortRead = [];
-  if (window) {
-    cut = new Date(new Date(today + 'T00:00:00Z') - window * 864e5).toISOString().slice(0, 10);
-
-    /* Which conversations did not go back far enough.
-     *
-     * The fetch reads a fixed number of newest messages, so a busy channel returns
-     * three days where the window asks for three weeks. Everything older is simply
-     * absent — and absence is what this reads as CLEARED. A promise made a fortnight
-     * ago in an active channel would be announced as done, by a tool whose entire
-     * purpose is catching the thing nobody finished.
-     *
-     * There is no flag saying a read was truncated, but there is evidence: if the
-     * oldest message a conversation returned is newer than the window start, that
-     * conversation was either silent before then or cut short, and the two are
-     * indistinguishable from here. Say so rather than guess. */
-    var oldestIn = {};
-    messages.forEach(function (m) {
-      var ch = m.subject || '?', d = m.date.slice(0, 10);
-      if (!oldestIn[ch] || d < oldestIn[ch]) oldestIn[ch] = d;
-    });
-    Object.keys(oldestIn).sort().forEach(function (ch) {
-      var complete = convs.some(function (c) { return c.channel === ch && c.complete === true; });
-      if (oldestIn[ch] > cut && !complete) shortRead.push({ channel: ch, from: oldestIn[ch] });
-    });
-
-    messages = messages.filter(function (m) { return m.date.slice(0, 10) >= cut; });
-  }
+  // Coverage comes from fetch evidence, never from a phrase in a Slack message or
+  // from the date of the oldest message that happened to be returned.
+  Object.keys(sourceCoverage).sort().forEach(function (key) {
+    var read = sourceCoverage[key];
+    var parent = coverageParent[key];
+    if (read.state !== 'complete' &&
+        !(parent && sourceCoverage[parent] && sourceCoverage[parent].state !== 'complete')) {
+      shortRead.push({ channel: coverageLabel[key], reason: read.reason });
+    }
+  });
+  if (cut) messages = messages.filter(function (m) { return m.date.slice(0, 10) >= cut; });
 
   // Roots whose replies nobody fetched. Saying so beats a digest that looks complete.
   var unfetched = Object.keys(roots);
@@ -438,9 +431,6 @@ function main(argv) {
     .filter(function (s) { return !already[s.phrase]; })
     .map(function (s) { return { phrase: s.phrase, count: s.count, since: today }; });
 
-  var incomplete = unread.length > 0 || unfetched.length > 0 || shortRead.length > 0 ||
-    !!calendarError || convs.length === skipped ||
-    convs.concat(threadsIn).some(function (c) { return c.complete === false; });
   var closedKeys = [];
   result.closed.forEach(function (l) {
     closedKeys.push(loops.loopKey(Object.assign({}, l, { type: l.openType })));
@@ -449,12 +439,19 @@ function main(argv) {
   });
   var ledger = L.mergeLedger(rows, result.open, today,
                              { storeText: cfg.storeText !== false, mutedKeys: mutedKeys,
-                               windowStart: cut, preserveMissing: incomplete, closedKeys: closedKeys,
-                               availableThreads: convs.filter(function (c) { return inScope(c.channel, cfg.channels); }).map(function (c) { return c.channel; })
-                                 .concat(threadsIn.filter(function (t) { return inScope(t.channel, cfg.channels); }).map(function (t) { return t.root; })),
+                               windowStart: cut, closedKeys: closedKeys,
+                               availableThreads: Object.keys(sourceCoverage).filter(function (key) {
+                                 return sourceCoverage[key].state === 'complete';
+                               }),
                                calendarRead: input.events != null && !calendarError });
   result.open = ledger.shown;
-  if (!ledger.unknown.length) L.pruneLedger(rows, today, cfg.keepLedgerDays);
+  L.pruneLedger(rows, today, cfg.keepLedgerDays);
+  // Retention deletion is not completion, and expired rows no longer remain in the ledger.
+  var retained = {};
+  rows.forEach(function (r) { retained[L.cell(r[L.COL.key])] = true; });
+  ['gone', 'aged', 'unknown'].forEach(function (kind) {
+    ledger[kind] = ledger[kind].filter(function (item) { return retained[item.key]; });
+  });
 
   var keys = digest.digestOrder(result.open, today);
 
@@ -531,7 +528,7 @@ function main(argv) {
     /* Conversations skipped, not threads. One counter served both, and only the
        conversation count was reduced by it — so skipping a thread under-reported how
        much was read, and enough of them printed a negative number of conversations. */
-    read: { threads: convs.length - skipped,
+    read: { threads: convs.length - skipped, confirmedEmpty: confirmedEmpty,
             capped: shortRead.length > 0, shortRead: shortRead, unread: unread,
             calendarError: calendarError,
             windowStart: cut,

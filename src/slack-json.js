@@ -48,6 +48,21 @@ function parseMessages(messages, opts) {
 }
 
 function readConversation(conversation, opts) {
+  if (Object.prototype.hasOwnProperty.call(conversation, 'pages')) {
+    if (!Array.isArray(conversation.pages) || 'text' in conversation || 'messages' in conversation) {
+      throw new Error('Supply pages, messages or text for a Slack conversation, not a mixture');
+    }
+    var byId = {};
+    conversation.pages.forEach(function (page) {
+      if (!page || typeof page !== 'object' || 'pages' in page ||
+          (!('text' in page) && !('messages' in page))) {
+        throw new Error('Each Slack page needs text or messages');
+      }
+      readConversation(page, opts).forEach(function (m) { byId[m.id] = m; });
+    });
+    return Object.keys(byId).map(function (id) { return byId[id]; })
+      .sort(function (a, b) { return Number(a.id) - Number(b.id); });
+  }
   if (Object.prototype.hasOwnProperty.call(conversation, 'messages')) {
     if (Object.prototype.hasOwnProperty.call(conversation, 'text')) {
       throw new Error('Supply messages or text for a Slack conversation, not both');

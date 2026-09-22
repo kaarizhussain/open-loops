@@ -125,6 +125,13 @@ function mergeLedger(rows, loops, today, opts) {
     if (cell(r[COL.gone_on]) || isWrong(r[COL.verdict])) return;
     // Missing source data cannot prove completion. Explicit detector evidence can.
     var parts = cell(r[COL.key]).split('|');
+    var item = { key: cell(r[COL.key]), what: cell(r[COL.what]), who: cell(r[COL.who]) };
+    var said = parts[2];
+    if (windowStart && /^\d{4}-\d{2}-\d{2}$/.test(said || '') && said < windowStart) {
+      r[COL.gone_on] = today;
+      aged.push(item);
+      return;
+    }
     var missingSource = opts && ((parts.length === 2 && opts.calendarRead === false) ||
       (parts.length > 2 && opts.availableThreads && opts.availableThreads.indexOf(parts[1]) === -1));
     if (opts && (opts.preserveMissing || missingSource) &&
@@ -135,10 +142,7 @@ function mergeLedger(rows, loops, today, opts) {
     r[COL.gone_on] = today;
     // Reported as plain fields rather than a raw row, so whatever renders this does
     // not need to know the ledger's column layout.
-    var item = { key: cell(r[COL.key]), what: cell(r[COL.what]), who: cell(r[COL.who]) };
-    var said = cell(r[COL.key]).split('|')[2];
-    if (windowStart && /^\d{4}-\d{2}-\d{2}$/.test(said || '') && said < windowStart) aged.push(item);
-    else gone.push(item);
+    gone.push(item);
   });
 
   return { shown: shown, fresh: fresh, suppressed: suppressed, gone: gone, aged: aged, unknown: unknown };

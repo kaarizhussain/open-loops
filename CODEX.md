@@ -43,13 +43,14 @@ Slack records in `messages`, without generating Claude-specific response banners
 }
 ```
 
-Each conversation, thread, `dm`, or `dmThread` takes either `text` or `messages`.
+Each work conversation and thread uses `pages`, with the exact requested `oldest` and
+each page's separate `pagination_info`. A page takes either verbatim `text` or structured
+`messages`. The self-DM reads remain unpaged and take either `text` or `messages`.
 The structured fields are documented in the Codex workflow. Map actual connector
-fields, preserving their values; the adapter is a documented input contract, not a
-claim that every Codex Slack tool returns this exact envelope. Invalid structured
-records fail before the ledger is written. Config, scope, ranking, rendering, and
-numbered corrections are shared across hosts. `selfUid` separates Slack user identity
-from the posting destination `selfDm`; legacy user IDs in `selfDm` remain supported.
+fields without changing their values. Invalid structured records fail before the ledger
+is written. Config, scope, ranking, rendering, and numbered corrections are shared
+across hosts. `selfUid` separates Slack user identity from the posting destination
+`selfDm`; legacy user IDs in `selfDm` remain supported.
 
 Preview with `node slack-run.js input.json --config /path/to/config.json --dry`.
 A real run omits `--dry`, so tomorrow's numbered corrections have a saved item order.
@@ -71,10 +72,11 @@ and ledger paths, even if a task uses a worktree.
 corrections, invalid-input handling, and skill installation. Live connector access
 and unattended posting still need a manual run in the target Codex account.
 
-Incomplete reads retain missing commitments as not verified, instead of clearing
-them. Mark a conversation `complete:true` only after pagination confirms full coverage
-of the requested window; use `complete:false` for a known partial read. Without that
-confirmation the runner conservatively checks the earliest returned date.
+Incomplete reads retain missing commitments from that source as not verified, instead
+of clearing them. The runner establishes coverage from the final page's
+`pagination_info` and the requested `oldest`; message dates and phrases inside Slack
+messages are not coverage evidence. `complete:true` is a fallback only when connector
+pagination metadata is unavailable and the final response had no next cursor.
 `storeText:false` scrubs stored row text, learned phrases and the rerun snapshot on
 the next real run. Raw connector captures and separate backups are not scrubbed.
 Codex sees connector

@@ -127,16 +127,53 @@ one-off, but a tier only in the input is gone the next day.
 **Fetch.** Each in-scope channel:
 
 ```
-slack_read_channel(channel_id=…, limit=100, response_format="detailed")
+slack_read_channel(channel_id=…, oldest=<window start>, limit=100,
+                   response_format="detailed")
 ```
 
-**Keep paging until you reach the start of the window.** That call returns the newest 100
-messages, so on a busy channel it hands back three days when the config asks for three
-weeks. Everything older is simply missing — and the detector reads missing as *cleared*,
-so a promise made a fortnight ago is announced as done by the one tool built to catch it.
-Follow `next_cursor` until the oldest message is past `lookbackDays`, or the channel runs
-out. The digest prints an INCOMPLETE line naming any channel it only saw part of, so if
-you see one, that channel needed another page.
+**Fetch and preserve pagination evidence.** For each in-scope work channel, request
+history with `oldest` at the start of the lookback window (local midnight, expressed
+as Slack epoch seconds), then follow cursors until no more pages remain. If you omit
+`oldest`, fetch the whole history. A quiet first day is not evidence of a partial read.
+Fetch every page of each required thread's replies as well.
+
+Use this exact shape for each conversation and thread; threads also require `root`:
+
+```json
+{
+  "channel": "#name",
+  "oldest": "<exact epoch-seconds value sent in the request>",
+  "pages": [
+    { "text": "<verbatim first page message text>", "pagination_info": "<verbatim pagination metadata>" },
+    { "text": "<verbatim next page message text>", "pagination_info": "<verbatim pagination metadata>" }
+  ]
+}
+```
+
+Keep pages in fetch order. Copy message text and the separate `pagination_info`
+field unchanged; do not concatenate pages or append metadata to message text. Omit
+`oldest` only if no oldest parameter was sent. Never substitute the timestamp of the
+oldest returned message for the requested value. Keep the same requested bound while
+following cursors. If the connector supplied no pagination metadata, omit that field.
+
+The runner reads coverage from the final page's `pagination_info`, never from phrases
+inside Slack messages. No more pages proves coverage only if the requested `oldest`
+is at or before the window start, or was omitted. The runner checks this bound too.
+
+Only when pagination metadata is unavailable in the copied response may you supply
+`complete:true` on the conversation or thread, and only after the final response
+returned no next cursor and no indication that more pages remain. Use `complete:false`
+for a known partial or failed fetch; omit it when coverage is unknown. Metadata takes
+precedence over this fallback. Do not invent evidence or flags to remove a warning.
+Legacy `text` remains accepted as a single page without pagination evidence; without
+the fallback flag its coverage is unknown.
+
+Unknown or incomplete coverage preserves unverified commitments from that source only.
+Other sources resolve normally, and explicit completion evidence still counts.
+Commitments outside the lookback window age out without being reported as completed.
+
+**Self-DM reads are not coverage reads and are never paged.** Keep the five-message
+lookup and the two correction reads below exactly as described.
 
 Any message containing a line like `Thread: 2 replies (latest: …)` is a thread root
 whose replies are **not** in the channel read. Fetch each one — a promise made inside a
@@ -200,8 +237,8 @@ nothing.
 {
   "today": "<YYYY-MM-DD, local>",
   "tzOffset": <minutes from UTC, negative west>,
-  "conversations": [ { "channel": "#name", "members": [], "text": "<verbatim>" } ],
-  "threads":       [ { "channel": "#name", "root": "<parent Message TS>", "text": "<verbatim>" } ],
+  "conversations": [ { "channel": "#name", "members": [], "oldest": "<requested bound>", "pages": [ { "text": "<verbatim>", "pagination_info": "<verbatim>" } ] } ],
+  "threads":       [ { "channel": "#name", "root": "<parent Message TS>", "pages": [ { "text": "<verbatim>", "pagination_info": "<verbatim>" } ] } ],
   "events":        <the list_events response>,
   "dmThread":      { "text": "<verbatim thread read under the last digest>" },
   "dm":            { "channel": "<selfDm>", "text": "<verbatim read since that digest>" }

@@ -63,12 +63,20 @@ switching writers; preserve the existing ledger so corrections are retained.
 
 Read the config first. Apply its include/exclude rules before fetching. Fetch all pages
 covering `lookbackDays` (21 by default), and all pages of each root's thread replies.
+Use the `pages`, `pagination_info`, and requested `oldest` format and coverage rules in
+SKILL.md's "Fetch and preserve pagination evidence" section. Set `oldest` to the window
+start in Slack epoch seconds and exhaust that requested range; omit it only if the
+request had no oldest parameter. Preserve each page's pagination metadata verbatim.
+Self-DM reads are not coverage reads and are never paged. Use the five-message lookup
+and two correction reads described in SKILL.md.
 Read the last digest in the self-DM, replies after it, and replies in that digest's thread.
 Use the local date and the current numeric UTC offset in minutes for `today`/`tzOffset`.
 
 The runner accepts either the original verbatim Claude `text` format or structured
 `messages` on each conversation, thread, DM and DM thread. Use one form per object.
-For Codex, map source fields to the structured form without changing message text,
+Inside `pages`, each page may use `messages` instead of `text` when the connector
+returns structured records; keep `pagination_info` alongside it. Never mix `pages`
+with top-level `text` or `messages`. For Codex, map source fields to the structured form without changing message text,
 timestamps, IDs, attachment filenames, or threading. Do not invent missing fields or
 manufacture Claude's display banners. Keep raw connector responses until the run is
 verified so a mapping can be checked against its source.
@@ -84,25 +92,33 @@ verified so a mapping can be checked against its source.
   "conversations": [{
     "channel": "#chosen-channel",
     "members": [],
-    "messages": [{
-      "ts": "1790000000.000001",
-      "user": "U034DEF",
-      "text": "I will send the contract tomorrow.",
-      "reply_count": 1
+    "oldest": "1788148800.000000",
+    "pages": [{
+      "pagination_info": "There are no more messages available.\n",
+      "messages": [{
+        "ts": "1790000000.000001",
+        "user": "U034DEF",
+        "text": "I will send the contract tomorrow.",
+        "reply_count": 1
+      }]
     }]
   }],
   "threads": [{
     "channel": "#chosen-channel",
     "root": "1790000000.000001",
-    "messages": [{
-      "ts": "1790000000.000001",
-      "user": "U034DEF",
-      "text": "I will send the contract tomorrow."
-    }, {
-      "ts": "1790000010.000001",
-      "user": "U012ABC",
-      "thread_ts": "1790000000.000001",
-      "text": "Thanks."
+    "oldest": "1788148800.000000",
+    "pages": [{
+      "pagination_info": "There are no more messages in this thread.\n",
+      "messages": [{
+        "ts": "1790000000.000001",
+        "user": "U034DEF",
+        "text": "I will send the contract tomorrow."
+      }, {
+        "ts": "1790000010.000001",
+        "user": "U012ABC",
+        "thread_ts": "1790000000.000001",
+        "text": "Thanks."
+      }]
     }]
   }],
   "dm": { "messages": [] },
@@ -115,7 +131,8 @@ verified so a mapping can be checked against its source.
 fields. Map user profile email/name separately under `users`; omit unknown profiles
 rather than guessing. Supply `members` only for a DM, with the other person's address.
 For `dmThread`, include its digest root timestamp as `root` and the full parent/replies
-as `messages`. Use the original digest header so numbered corrections resolve correctly.
+as `messages`. Self-DM objects intentionally keep the unpaged form. Use the original
+digest header so numbered corrections resolve correctly.
 
 Calendar input uses the existing `{ "events": [...] }` response shape described in
 `src/calendar.js`: id, summary, start.dateTime or start.date, attendees, organizer,
@@ -125,9 +142,11 @@ to that schema without inferring attendees, agendas or dates.
 
 Before a real run, stop on failed/truncated channel or thread reads and explain which
 source is incomplete. The ledger preserves missing commitments as not verified, but
-a partial digest still cannot describe all outstanding work. Set `complete:true` on
-each conversation only when pagination confirms full requested coverage, even if empty;
-otherwise use `complete:false`. If a previously used calendar fails, also stop.
+a partial digest still cannot describe all outstanding work. Use `complete` only as
+the fallback defined in SKILL.md: `true` only after a final response with no next
+cursor and no indication of more pages, `false` for a known partial or failed read,
+and omit it for unknown coverage. The runner checks requested `oldest` in either case.
+If a previously used calendar fails, also stop.
 `--dry` can preview incomplete input,
 but label that output incomplete and do not post it as the daily digest.
 
