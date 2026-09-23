@@ -95,7 +95,7 @@ input.dm.text = [
 ].join('\n');
 
 var third = main([on('2026-09-03'), '--ledger', ledger]);
-assert.ok(/Took your last reply — 1 item marked wrong/.test(third),
+assert.ok(/Took your last reply — 1 marked not real, dropped for good/.test(third),
   'the correction is acknowledged: ' + third.split('\n').slice(4, 8).join(' | '));
 assert.strictEqual(third.indexOf(firstItem), -1, 'and that item is gone: ' + firstItem);
 assert.ok(/1 hidden as wrong/.test(third), 'the count says something is being hidden');
@@ -128,10 +128,12 @@ threaded2.today = '2026-09-02';
 threaded2.dm = { channel: 'D0', text: me(dTs, '```\n' + tBrief + '\n```') };
 threaded2.dmThread = { text: threadRead(dTs, '```\n' + tBrief + '\n```', [
   [at(2026, 9, 1, 18) .replace(/\.0+$/, '.000100'), '```\n' + tDetails + '\n```'],
-  [at(2026, 9, 1, 19), '1']
+  // Its own timestamp: the '1' in input.dm above is a different message, under another
+  // ledger's digest, and a reply is recognised by its timestamp.
+  [at(2026, 9, 1, 19).replace(/\.0+$/, '.000200'), '1']
 ]) };
 var tNext = main([write(threaded2), '--ledger', tLedger]);
-assert.ok(/Took your last reply — 1 item marked wrong/.test(tNext),
+assert.ok(/Took your last reply — 1 marked not real, dropped for good/.test(tNext),
   'a reply in the thread is read, and the details beside it are not: ' +
   (tNext.match(/Took your last reply[^\n]*/) || ['(no acknowledgement)'])[0]);
 
@@ -153,9 +155,103 @@ since.dm = { channel: 'D0', text: [
   me(at(2026, 9, 1, 17), '2')                          // before it: not a reply to this list
 ].join('\n') };
 var sNext = main([write(since), '--ledger', sLedger]);
-assert.ok(/Took your last reply — 1 item marked wrong/.test(sNext),
+assert.ok(/Took your last reply — 1 marked not real, dropped for good/.test(sNext),
   'a reply typed in the DM after the digest is read, and only that one: ' +
   (sNext.match(/Took your last reply[^\n]*/) || ['(no acknowledgement)'])[0]);
+
+/* ---------------- a reply belongs to the digest it answers ----------------
+ * 2026-09-22: a second setup posted its own digest into the same DM from its own ledger.
+ * "k 4" meant its #4 and marked this ledger's #4, because the two were matched by date.
+ * Each digest now carries a reference, and the ledger remembers which list each one
+ * numbered — including a same-day re-run's, where two lists share a date. */
+var fresh = function (today) {
+  var o = JSON.parse(JSON.stringify(input));
+  o.today = today; o.dm = { channel: 'D0', text: '' }; delete o.dmThread;
+  return o;
+};
+var halves = function (t) { return { brief: t.split('-- thread --')[0].trim(), details: t.split('-- thread --')[1].trim() }; };
+var itemAt = function (t, n) {
+  var r = halves(t).brief.split('\n').filter(function (l) { return l.indexOf(' ' + n + '  ') === 0 && /"/.test(l); })[0];
+  return r ? r.match(/"(.+)"/)[1].replace(/…$/, '') : null;
+};
+var refOf = function (t) { return (t.split('\n')[0].match(/· ref ([0-9a-f]{4})$/) || [])[1]; };
+var digestThread = function (ts, t, replies) {
+  var h = halves(t);
+  return { root: ts, text: threadRead(ts, '```\n' + h.brief + '\n```',
+    [[ts.replace(/\.0+$/, '.000100'), '```\n' + h.details + '\n```']].concat(replies)) };
+};
+
+var oursRun = main([write(fresh('2026-09-01')), '--ledger', path.join(dir, 'ours.json')]);
+assert.ok(refOf(oursRun), 'the header carries a reference: ' + oursRun.split('\n')[0]);
+assert.strictEqual(main([write(fresh('2026-09-01')), '--ledger', path.join(dir, 'ours.json'), '--dry']).split('\n')[0],
+  oursRun.split('\n')[0], 'the same list numbered the same way gets the same reference');
+
+// Another setup's digest in the same DM, answered: its own ledger, a different list.
+var theirsIn = fresh('2026-09-01');
+theirsIn.conversations = theirsIn.conversations.slice(1);
+var theirsRun = main([write(theirsIn), '--ledger', path.join(dir, 'theirs.json')]);
+var theirRef = refOf(theirsRun);
+assert.ok(theirRef && theirRef !== refOf(oursRun), 'precondition: a different list has a different reference');
+var alien = fresh('2026-09-02');
+alien.dmThread = digestThread(at(2026, 9, 1, 18), theirsRun,
+  [[at(2026, 9, 1, 19).replace(/\.0+$/, '.000300'), '1']]);
+var alienNext = main([write(alien), '--ledger', path.join(dir, 'ours.json')]);
+assert.ok(!/Took your last reply/.test(alienNext), 'a reply to a digest this ledger did not produce is not applied');
+assert.ok(!/hidden as wrong/.test(alienNext) && alienNext.indexOf(itemAt(oursRun, 1)) !== -1,
+  'and nothing is hidden by it');
+assert.ok(new RegExp('NOT APPLIED — "1" answers a digest this ledger did not produce \\(2026-09-01, ref ' +
+  theirRef + '\\)').test(alienNext),
+  'the reader is told why: ' + (alienNext.match(/NOT APPLIED[^\n]*/) || ['(nothing said)'])[0]);
+alien.today = '2026-09-03';
+assert.ok(!/NOT APPLIED/.test(main([write(alien), '--ledger', path.join(dir, 'ours.json')])),
+  'once, not every day');
+
+/* A re-run numbers a different list. A reply typed under the first run's digest before it
+   meant the first run's item — not whatever holds that number now. */
+var reLedger = path.join(dir, 'rerun.json');
+var reDay1 = fresh('2026-09-02');
+var reFirst = main([write(reDay1), '--ledger', reLedger]);
+var later = fresh('2026-09-02');
+later.conversations[2].text += '\n' + them('Sana Iyer', 'sana@halcyon.io', 'U03', at(2026, 9, 2, 12),
+  'Can you send the signed NDA by today? Legal needs it before noon.');
+var dryAgain = main([write(later), '--ledger', reLedger, '--dry']);
+var n = [1, 2, 3].filter(function (k) { return itemAt(reFirst, k) !== itemAt(dryAgain, k); })[0];
+assert.ok(n, 'precondition: the re-run numbers its list differently');
+later.dmThread = [digestThread(at(2026, 9, 2, 10), reFirst, [[at(2026, 9, 2, 11), String(n)]])];
+var reAgain = main([write(later), '--ledger', reLedger]);
+assert.ok(/Took your last reply — 1 marked not real/.test(reAgain), 'the reply to the first run is applied');
+assert.strictEqual(reAgain.indexOf(itemAt(reFirst, n)), -1, 'to the item it pointed at then: ' + itemAt(reFirst, n));
+assert.ok(reAgain.indexOf(itemAt(dryAgain, n)) !== -1, 'not the one holding that number now: ' + itemAt(dryAgain, n));
+// The item was new in the rolled-back run, so the reply made its row — and it keeps its words.
+var rejectedRow = JSON.parse(fs.readFileSync(reLedger, 'utf8')).rows.filter(function (r) { return r[L.COL.verdict] === 'x'; })[0];
+assert.ok(rejectedRow && rejectedRow[L.COL.what].indexOf(itemAt(reFirst, n)) === 0,
+  'the rejected row says what it rejected: ' + JSON.stringify(rejectedRow));
+
+/* A re-run reads yesterday's thread and today's: the day was rolled back, so both sets of
+   corrections apply again — each once. "k" keeps its item and says so. */
+var twoLedger = path.join(dir, 'two.json');
+var d1 = main([write(fresh('2026-09-01')), '--ledger', twoLedger]);
+var day2 = fresh('2026-09-02');
+day2.dmThread = [digestThread(at(2026, 9, 1, 18), d1, [[at(2026, 9, 1, 19), '1']])];
+var d2 = main([write(day2), '--ledger', twoLedger]);
+assert.ok(!/DM READ/.test(d2), 'a first run of the day read from yesterday: no warning');
+var gone1 = itemAt(d1, 1), gone2 = itemAt(d2, 2), kept3 = itemAt(d2, 3);
+day2.dmThread.push(digestThread(at(2026, 9, 2, 18), d2,
+  [[at(2026, 9, 2, 19), '2'], [at(2026, 9, 2, 20), 'k 3']]));
+var d2again = main([write(day2), '--ledger', twoLedger]);
+assert.ok(/Took your last reply — 2 marked not real, dropped for good · 1 marked already known\./.test(d2again),
+  'both threads, each reply once, and k is not called a rejection: ' +
+  (d2again.match(/Took your last reply[^\n]*/) || ['(no acknowledgement)'])[0]);
+assert.ok(d2again.indexOf(gone1) === -1 && d2again.indexOf(gone2) === -1, 'both rejections hold');
+assert.ok(d2again.indexOf(kept3) !== -1, 'the known item stays listed');
+assert.ok(/2 hidden as wrong/.test(d2again), 'hidden twice, not four times');
+assert.ok(!/DM READ/.test(d2again), 'read from yesterday: no warning');
+
+// The same re-run given only today's thread: yesterday's corrections were never read.
+day2.dmThread = [day2.dmThread[1]];
+var d2short = main([write(day2), '--ledger', twoLedger, '--dry']);
+assert.ok(/DM READ — started at today's own digest/.test(d2short),
+  'a read that began at today\'s digest says so: ' + (d2short.match(/DM READ[^\n]*/) || ['(nothing said)'])[0]);
 
 /* The same reply must not be re-read. It stays in the DM forever, and re-applying it
    against a now-shorter list would mark a different item every single run. */
@@ -660,6 +756,23 @@ assert.strictEqual(answering('3').checked, 0, 'rejecting an item says nothing ab
 assert.strictEqual(answering('3').marked, 1, 'though the rejection itself still lands');
 assert.strictEqual(answering('remember to call Dana').checked, 0,
   'and a note to yourself is not a spot check answer');
+
+/* A digest without a reference: from before references, resolved by date as it always
+   was — or, dated on or after the day this ledger started printing them, not this
+   ledger's at all (another setup still on older code). */
+var refStub = Object.assign({}, stub, {
+  refsSince: function () { return '2026-09-03'; },
+  recallRef: function (r) { return r === 'ab12' ? { date: '2026-09-03', keys: ['k1', 'k2', 'k3'], asked: [] } : null; }
+});
+var under = function (header) {
+  var rows = [['k1', '2026-09-01', '2026-09-03', '', 'owed_by_us', 'a', 'x', '']];
+  return marksFromDm([{ id: 'd1', body: header }, { id: 'r1', body: '1' }], refStub, rows);
+};
+assert.strictEqual(under('OPEN LOOPS — for 2026-09-02 · Wed').marked, 1, 'older and unreferenced: by date');
+assert.strictEqual(under('OPEN LOOPS — for 2026-09-03 · Thu').marked, 0, 'unreferenced from the first referenced day: not ours');
+assert.strictEqual(under('OPEN LOOPS — for 2026-09-03 · Thu').foreign.length, 1, 'and said so');
+assert.strictEqual(under('```OPEN LOOPS — for 2026-09-03 · Thu · ref ab12').marked, 1, 'a known reference: its own list');
+assert.strictEqual(under('OPEN LOOPS — for 2026-09-03 · Thu · ref cd34').marked, 0, 'an unknown one: nothing');
 
 /* --- malformed input must not take the unattended run down ---
  *

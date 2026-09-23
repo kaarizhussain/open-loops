@@ -66,6 +66,8 @@ function mergeLedger(rows, loops, today, opts) {
   loops.forEach(function (l) {
     var k = loopKey(l), row = byKey[k];
     touched[k] = 1;
+    // A row a reply created before the item had one (see slack-run's marksFromDm) has no words yet.
+    if (row && keepText && !cell(row[COL.what])) { row[COL.who] = l.who || ''; row[COL.what] = l.what || ''; }
 
     if (row && isWrong(row[COL.verdict])) {
       /* Still detected, just hidden — so its clock has to keep running. Leaving
@@ -465,6 +467,15 @@ function parseMarks(text, max) {
 /* Resolve those numbers against the list as it was sent, not as it stands now —
  * item 3 this morning is not item 3 tomorrow. Returns how many were newly marked.
  * Only ever fills a blank verdict, so re-reading the same reply changes nothing. */
+/* A row for an item a reply names before the ledger has one.
+ *
+ * A same-day re-run starts from before the day's first run, so an item that first
+ * appeared in that run has no row yet — and a rejection with no row to land on was
+ * dropped without a word. The verdict goes on this; mergeLedger fills in the words. */
+function placeholderRow(key, date) {
+  return [key, date, date, '', String(key).split('|')[0], '', '', ''];
+}
+
 function applyMarks(rows, keys, marks) {
   var byKey = {}, n = 0;
   rows.forEach(function (r) { byKey[cell(r[COL.key])] = r; });
@@ -482,7 +493,7 @@ function applyMarks(rows, keys, marks) {
 if (typeof module !== 'undefined') {
   module.exports = {
     mergeLedger: mergeLedger, precision: precision, isWrong: isWrong, isKnown: isKnown,
-    cell: cell, daysApart: daysApart, parseMarks: parseMarks, applyMarks: applyMarks,
+    cell: cell, daysApart: daysApart, parseMarks: parseMarks, applyMarks: applyMarks, placeholderRow: placeholderRow,
     pruneLedger: pruneLedger, suggestMutes: suggestMutes, applyMutes: applyMutes,
     phrases: phrases, sampleQuiet: sampleQuiet, recall: recall, tempos: tempos,
     LEDGER_COLS: LEDGER_COLS, COL: COL

@@ -192,26 +192,36 @@ list_events(startTime=<14 days ago>, endTime=<7 days ahead>, orderBy="startTime"
 ```
 
 And their own DM, which is where corrections come back — but only what came after the
-latest digest. Everything older is old digests, which the runner never needs, and
-retyping them was most of every input file and where the copying errors were. Three
-reads:
+last digest before today. Everything older is old digests, which the runner never needs,
+and retyping them was most of every input file and where the copying errors were. Reads:
 
 ```
 slack_read_channel(channel_id=<selfDm>, limit=5, response_format="detailed")
 ```
 
-Only to find the newest message whose text begins with ` ```OPEN LOOPS — for ` — note its
-`Message TS` and the `D…` id the read printed. **This read does not go in the input.**
+Only to find the digests — messages whose text begins with ` ```OPEN LOOPS — for ` — and
+note each one's `Message TS`, the date in its header, and the `D…` id the read printed.
+**This read does not go in the input.** The one to start from is the newest digest whose
+header date is **before today**. A digest dated today is this run's own earlier output:
+this is a re-run, and that digest is read as well, never started from.
 
 ```
 slack_read_thread(channel_id=<that D… id>, message_ts=<its Message TS>, response_format="detailed")
 slack_read_channel(channel_id=<selfDm>, oldest=<its Message TS>, response_format="detailed")
 ```
 
-The thread read — the digest, its details, and any replies typed under it — is
-`dmThread`. The second read — replies typed straight into the DM since — is `dm`; it is
-often empty, and that is fine. If none of the five messages is a digest (the first run,
-or a busy DM), pass the five-message read as `dm` and leave `dmThread` out.
+On a re-run, also `slack_read_thread` each digest dated today.
+
+The thread reads — each digest, its details, and any replies typed under it — are
+`dmThread`: a list, one entry per thread read, each with its digest's `Message TS` as
+`root`. The channel read — replies typed straight into the DM since, and on a re-run
+today's digest itself — is `dm`; it is often empty, and that is fine. If none of the five
+messages is a digest dated before today (the first run, or a busy DM), pass the
+five-message read as `dm`, add the thread of any digest dated today to `dmThread`, and
+otherwise leave `dmThread` out.
+
+Each digest's header ends with a reference (`· ref 7c1e`). The runner uses it to tell
+which numbered list a reply answers; copy headers exactly, as with everything else.
 
 **Write the input.** Only what was fetched — settings are already in the config.
 Every `text` is the connector's response **verbatim**; do not clean or reformat it, the
@@ -240,7 +250,7 @@ nothing.
   "conversations": [ { "channel": "#name", "members": [], "oldest": "<requested bound>", "pages": [ { "text": "<verbatim>", "pagination_info": "<verbatim>" } ] } ],
   "threads":       [ { "channel": "#name", "root": "<parent Message TS>", "pages": [ { "text": "<verbatim>", "pagination_info": "<verbatim>" } ] } ],
   "events":        <the list_events response>,
-  "dmThread":      { "text": "<verbatim thread read under the last digest>" },
+  "dmThread":      [ { "root": "<digest Message TS>", "text": "<verbatim thread read under it>" } ],
   "dm":            { "channel": "<selfDm>", "text": "<verbatim read since that digest>" }
 }
 ```

@@ -24,6 +24,7 @@
  * only thing that reliably distinguishes them: digests start with a known header.
  */
 var fs = require('fs');
+var crypto = require('crypto');
 var loops = require('./src/loops.js');
 var L = require('./src/ledger.js');
 
@@ -40,7 +41,7 @@ var { fileStore } = require('./src/store.js');
 var { parseEvents } = require('./src/calendar.js');
 var { settings } = require('./src/config.js');
 
-var DIGEST_HEADER = /^\s*(?:```)?\s*OPEN LOOPS — for (\d{4}-\d{2}-\d{2})/;
+var DIGEST_HEADER = /^\s*(?:```)?\s*OPEN LOOPS — for (\d{4}-\d{2}-\d{2})(?:[^\n]*· ref ([0-9a-f]{4})\b)?/;
 // The details the runner posts in the digest's thread. Its instructions contain "3 7".
 var DETAILS_HEADER = /^\s*(?:```)?\s*OPEN LOOPS DETAILS\b/;
 
@@ -85,26 +86,47 @@ function inScope(name, scope) {
  * whatever is on screen now. Each reply is acted on once — it stays in the DM
  * forever, and re-applying it against a later, shorter list marks different items. */
 function marksFromDm(messages, store, rows) {
-  var seen = store.seenReplies(), known = {}, marked = 0, forDate = null;
-  var misses = [], checked = 0, ignored = [], counted = {};
+  var seen = store.seenReplies(), known = {}, marked = 0, wrong = 0, knew = 0, cur = null;
+  var misses = [], checked = 0, ignored = [], counted = {}, foreign = [], dates = [];
+  var since = store.refsSince ? store.refsSince() : null;
   seen.forEach(function (id) { known[id] = 1; });
 
   messages.forEach(function (m) {
     // Its own details, posted under the digest — not a reply, whatever "3 7" it contains.
     if (DETAILS_HEADER.test(m.body)) return;
     var head = m.body.match(DIGEST_HEADER);
-    if (head) { forDate = head[1]; return; }      // this is a digest, not a reply to one
-    if (!forDate || known[m.id]) return;
+    if (head) {                                    // this is a digest, not a reply to one
+      dates.push(head[1]);
+      cur = digestMemo(head[1], head[2] || null, store, since);
+      return;
+    }
+    if (!cur || known[m.id]) return;
+    var forDate = cur.date, keys = cur.keys, asked = cur.asked;
 
-    var keys = store.recallDigest(forDate);
-    var asked = store.audit().asked[forDate] || [];
+    /* Under a digest this ledger did not produce. Its numbers belong to somebody else's
+     * list — on 2026-09-22 a "k 4" meant for another setup's #4 marked this one's #4 —
+     * so nothing is applied, and the reader is told once. */
+    if (cur.foreign) {
+      known[m.id] = 1;
+      seen.push(m.id);
+      foreign.push({ text: m.body.trim().split('\n')[0], date: forDate, ref: cur.ref });
+      return;
+    }
     if (!keys.length && !asked.length) return;    // no memo for that digest
 
     known[m.id] = 1;
     seen.push(m.id);
 
     var marks = L.parseMarks(m.body, keys.length);
-    marked += L.applyMarks(rows, keys, marks);
+    [].concat(marks.wrong || [], marks.knew || []).forEach(function (i) {
+      var key = keys[i - 1];
+      if (key && !rows.some(function (r) { return L.cell(r[L.COL.key]) === key; })) {
+        rows.push(L.placeholderRow(key, forDate));
+      }
+    });
+    var w = L.applyMarks(rows, keys, { wrong: marks.wrong });
+    var k = L.applyMarks(rows, keys, { knew: marks.knew });
+    wrong += w; knew += k; marked += w + k;
     /* A reply that named an item but did not lead with the number is a note, not a
      * correction. Saying so is what makes it safe to be strict — the reader finds out
      * the same evening instead of retyping it all week. */
@@ -126,8 +148,8 @@ function marksFromDm(messages, store, rows) {
      * Once per digest, not once per reply. The sample belongs to the digest, and two
      * messages under one digest are two replies to the same question — counting it
      * twice inflates the denominator and flatters the rate. */
-    if (asked.length && marks.answered && !counted[forDate]) {
-      counted[forDate] = 1;
+    if (asked.length && marks.answered && !counted[cur.id]) {
+      counted[cur.id] = 1;
       checked += asked.length;
       marks.missed.forEach(function (letter) {
         var at = letter.charCodeAt(0) - 97;
@@ -136,7 +158,30 @@ function marksFromDm(messages, store, rows) {
     }
   });
 
-  return { marked: marked, seen: seen, misses: misses, checked: checked, ignored: ignored };
+  return { marked: marked, wrong: wrong, knew: knew, seen: seen, misses: misses, checked: checked,
+           ignored: ignored, foreign: foreign, dates: dates };
+}
+
+/* Which numbered list a digest header refers to.
+ *
+ * By its reference when it has one. Without one it is either from before references
+ * existed — resolved by date, as it always was — or, dated after this ledger started
+ * printing them, from something else writing into the DM. */
+function digestMemo(date, ref, store, since) {
+  if (ref) {
+    var memo = store.recallRef ? store.recallRef(ref) : null;
+    return memo ? { id: ref, ref: ref, date: date, keys: memo.keys || [], asked: memo.asked || [] }
+                : { id: ref, ref: ref, date: date, foreign: true };
+  }
+  if (since && date >= since) return { id: date, ref: null, date: date, foreign: true };
+  return { id: date, ref: null, date: date, keys: store.recallDigest(date),
+           asked: store.audit().asked[date] || [] };
+}
+
+// Short: it only has to tell apart the few digests one DM read can contain.
+function digestRef(date, keys, asked) {
+  return crypto.createHash('sha1').update([date].concat(keys, ['--'], asked).join('\n'))
+    .digest('hex').slice(0, 4);
 }
 
 /* How it has been doing, out of the ledger alone — no fetching, no input file.
@@ -345,15 +390,26 @@ function main(argv) {
   /* Replies typed in the digest's thread count too — the details live there, so that is
    * where a reader is when they decide an item is wrong, and a thread reply does not
    * appear in a read of the DM itself. Merged by timestamp; the thread read repeats the
-   * digest as its parent, which is kept once. */
-  if (input.dmThread) {
-    var inDm = {};
-    dmMessages.forEach(function (m) { inDm[m.id] = 1; });
-    readConversation(input.dmThread, { channel: 'DM', threadId: input.dmThread.root, tzOffset: cfg.tzOffset,
-      self: cfg.you, selfUid: cfg.selfUid || cfg.selfDm, users: input.users }).forEach(function (m) { if (!inDm[m.id]) dmMessages.push(m); });
-    dmMessages.sort(function (a, b) { return parseFloat(a.id) - parseFloat(b.id); });
-  }
+   * digest as its parent, which is kept once.
+   *
+   * One thread, or several: a re-run reads the thread of today's earlier digest as well
+   * as yesterday's, because both may have been answered. */
+  var inDm = {};
+  dmMessages.forEach(function (m) { inDm[m.id] = 1; });
+  [].concat(input.dmThread || []).forEach(function (t) {
+    readConversation(t, { channel: 'DM', threadId: t.root, tzOffset: cfg.tzOffset,
+      self: cfg.you, selfUid: cfg.selfUid || cfg.selfDm, users: input.users }).forEach(function (m) {
+      if (!inDm[m.id]) { inDm[m.id] = 1; dmMessages.push(m); }
+    });
+  });
+  dmMessages.sort(function (a, b) { return parseFloat(a.id) - parseFloat(b.id); });
   var replies = marksFromDm(dmMessages, store, rows);
+  /* The read began at today's own digest although there was an earlier one to begin at.
+   * Corrections typed under that earlier digest were never handed over, and a re-run
+   * starts from before today's first run — so they would silently stop applying. */
+  var startedToday = replies.dates.length > 0 &&
+    replies.dates.every(function (d) { return d === today; }) &&
+    store.digestDates().some(function (d) { return d < today; });
 
   /* Phrases you have decided are never worth surfacing. Applied before the ledger
    * sees anything, so a muted item is not "suppressed" — it never becomes an item at
@@ -472,6 +528,7 @@ function main(argv) {
    * So: how many commitments this read produced, against how many messages in the same
    * read produced nothing. Closed items count as found — recall is about whether the
    * detector saw the commitment, not about whether it is still outstanding. */
+  var ref = digestRef(today, keys, sample.map(function (m) { return m.id; }));
   var foundToday = result.open.length + result.closed.length;
   var score = L.recall(foundToday, silent.length,
                        audit.checked + replies.checked, audit.missed.length + replies.misses.length);
@@ -520,7 +577,9 @@ function main(argv) {
      * assistant is asked "what do I need before this". Same items, read the way you
      * read them the night before. Built and unused until there was a calendar. */
     briefs: loops.meetingBriefs(messages, events, result.open, opts),
-    ledger: ledger, marked: replies.marked, principals: cfg.supporting,
+    ledger: ledger, marked: replies.marked, markedWrong: replies.wrong, markedKnew: replies.knew,
+    ref: ref, foreignReplies: replies.foreign, dmStartedToday: startedToday,
+    principals: cfg.supporting,
     muted: muted, mutes: L.suggestMutes(rows).filter(function (s) { return !already[s.phrase]; }),
     learnedNow: fresh, learnedAll: learned,
     spotCheck: sample, recall: score, dark: result.dark, ignoredReplies: replies.ignored,
@@ -542,6 +601,7 @@ function main(argv) {
   if (argv.indexOf('--dry') === -1) {
     store.writeLedger(rows);
     store.rememberDigest(today, keys);
+    store.rememberRef(ref, today, keys, sample.map(function (m) { return m.id; }));
     store.rememberReplies(replies.seen);
     if (fresh.length) store.remember(fresh);
     if (replies.checked || replies.misses.length) {

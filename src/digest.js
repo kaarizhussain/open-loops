@@ -399,6 +399,17 @@ function warnings(s) {
     out.push('CALENDAR NOT READ — the calendar response could not be parsed, so unprepped' +
       ' meetings and unbooked calls were not checked this run.');
   }
+  /* Replies under a digest this ledger did not produce — another setup posting into the
+   * same DM, whose numbers mean another list. Not applied, and said once. */
+  (s.b.foreignReplies || []).slice(0, 3).forEach(function (x) {
+    out.push('NOT APPLIED — "' + String(x.text).slice(0, 40) + '" answers a digest this ledger' +
+      ' did not produce (' + x.date + ', ' + (x.ref ? 'ref ' + x.ref : 'no ref') + ').' +
+      ' Another setup may be posting into this DM.');
+  });
+  if (s.b.dmStartedToday) {
+    out.push('DM READ — started at today\'s own digest, so corrections under the previous' +
+      ' one were not read. Read from the last digest before today and run again.');
+  }
   /* Handed over and empty. Only worth a line when some other channel did parse —
      when none did, the READ NOTHING line has already said it in stronger terms
      and naming all of them again is the same news twice. */
@@ -474,7 +485,8 @@ function renderBrief(s) {
   var L = [], p = function (x) { L.push(x == null ? '' : x); };
   var b = s.b, nm = s.nm, today = s.today;
   var t0 = utc(today);
-  p('OPEN LOOPS — for ' + today + (isNaN(t0) ? '' : ' · ' + DOW[t0.getUTCDay()]));
+  p('OPEN LOOPS — for ' + today + (isNaN(t0) ? '' : ' · ' + DOW[t0.getUTCDay()]) +
+    (b.ref ? ' · ref ' + b.ref : ''));
   p(counts(s));
   if (s.blind) {
     p('READ NOTHING — ' + s.read.threads + ' conversation' + (s.read.threads === 1 ? ' was' : 's were') +
@@ -487,8 +499,13 @@ function renderBrief(s) {
   /* Say the reply landed. Correcting something and seeing no acknowledgement is how
    * a reader learns the correction does not matter, and then they stop sending them. */
   if (b.marked) {
-    p('Took your last reply — ' + b.marked + (b.marked === 1 ? ' item' : ' items') +
-      ' marked wrong and dropped for good.');
+    /* Split by what the mark does. "k" keeps the item listed, and calling it dropped told
+     * the reader an item had gone that was still there. */
+    var took = [];
+    var wrong = b.markedWrong != null ? b.markedWrong : b.marked, knew = b.markedKnew || 0;
+    if (wrong) took.push(wrong + ' marked not real, dropped for good');
+    if (knew) took.push(knew + ' marked already known');
+    p('Took your last reply — ' + took.join(' · ') + '.');
   }
   /* A reply that named an item number but did not lead with it. Not acted on — "call
    * Dana at 3" is a note, and the self-DM is where notes live — but never silently, or

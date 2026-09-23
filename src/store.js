@@ -4,7 +4,8 @@
  * properties. Everywhere else there is no spreadsheet, so this is the same six
  * operations backed by one JSON file:
  *
- *   { rows: [[...], ...], digests: { 'YYYY-MM-DD': [key, ...] }, seen: [id, ...] }
+ *   { rows: [[...], ...], digests: { 'YYYY-MM-DD': [key, ...] }, seen: [id, ...],
+ *     refs: { '<ref>': { date, keys, asked } }, refsSince: 'YYYY-MM-DD' }
  *
  * Rows keep the spreadsheet's array-of-arrays shape rather than becoming objects.
  * That looks like an odd choice for a JSON file, and it is deliberate: the same
@@ -20,7 +21,7 @@ var fs = require('fs');
 var path = require('path');
 var L = require('./ledger.js');
 
-var EMPTY = { rows: [], digests: {}, seen: [], learned: [], audit: { checked: 0, missed: [], asked: {}, quiet: 0, found: 0 } };
+var EMPTY = { rows: [], digests: {}, refs: {}, refsSince: null, seen: [], learned: [], audit: { checked: 0, missed: [], asked: {}, quiet: 0, found: 0 } };
 
 function load(file) {
   try {
@@ -28,6 +29,8 @@ function load(file) {
     return {
       rows: Array.isArray(raw.rows) ? raw.rows : [],
       digests: raw.digests && typeof raw.digests === 'object' ? raw.digests : {},
+      refs: raw.refs && typeof raw.refs === 'object' ? raw.refs : {},
+      refsSince: typeof raw.refsSince === 'string' ? raw.refsSince : null,
       seen: Array.isArray(raw.seen) ? raw.seen : [],
       learned: Array.isArray(raw.learned) ? raw.learned : [],
       audit: raw.audit && typeof raw.audit === 'object'
@@ -88,9 +91,13 @@ function fileStore(file) {
      * again under the digest that replaced it. */
     beginRun: function (date) {
       if (state.before && state.before.date === date) {
-        var keep = state.before;
+        var keep = state.before, refs = state.refs, since = state.refsSince;
         state = JSON.parse(JSON.stringify(keep.state));
         state.before = keep;
+        /* Except the digests already posted. The earlier run today is rolled back, but its
+         * digest is in the DM and may have been answered — by its numbering, not this run's. */
+        state.refs = refs;
+        state.refsSince = since;
       } else {
         var snap = JSON.parse(JSON.stringify(state));
         delete snap.before;
@@ -118,6 +125,30 @@ function fileStore(file) {
     },
 
     recallDigest: function (date) { return state.digests[date] || []; },
+
+    /* The same memo, by the reference printed in the digest's header rather than its date.
+     * A date names a day, and two digests can share one: a re-run, or another setup posting
+     * into the same DM from its own ledger. Only a reference says which list a reply saw. */
+    rememberRef: function (ref, date, keys, asked) {
+      state.refs[ref] = { date: date, keys: keys, asked: asked || [] };
+      if (!state.refsSince) state.refsSince = date;
+      Object.keys(state.refs).sort(function (a, b) {
+        return state.refs[a].date < state.refs[b].date ? -1 : state.refs[a].date > state.refs[b].date ? 1 : 0;
+      }).slice(0, -14).forEach(function (r) { delete state.refs[r]; });
+      flush();
+    },
+
+    recallRef: function (ref) { return state.refs[ref] || null; },
+
+    // The first day digests carried a reference. A digest without one from then on is not ours.
+    refsSince: function () { return state.refsSince; },
+
+    // Every date a digest was produced for, so a read can tell whether it missed one.
+    digestDates: function () {
+      var d = Object.keys(state.digests);
+      Object.keys(state.refs).forEach(function (r) { d.push(state.refs[r].date); });
+      return d;
+    },
 
     seenReplies: function () { return state.seen.slice(); },
 

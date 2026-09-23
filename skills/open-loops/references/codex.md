@@ -69,7 +69,8 @@ start in Slack epoch seconds and exhaust that requested range; omit it only if t
 request had no oldest parameter. Preserve each page's pagination metadata verbatim.
 Self-DM reads are not coverage reads and are never paged. Use the five-message lookup
 and two correction reads described in SKILL.md.
-Read the last digest in the self-DM, replies after it, and replies in that digest's thread.
+Start from the last digest dated before today: its thread, and the DM after it. On a
+re-run, also read the thread of each digest dated today. Never start from today's digest.
 Use the local date and the current numeric UTC offset in minutes for `today`/`tzOffset`.
 
 The runner accepts either the original verbatim Claude `text` format or structured
@@ -130,9 +131,10 @@ verified so a mapping can be checked against its source.
 `thread_ts`, `reply_count`, and `files:[{"name":"contract.pdf"}]` are optional source
 fields. Map user profile email/name separately under `users`; omit unknown profiles
 rather than guessing. Supply `members` only for a DM, with the other person's address.
-For `dmThread`, include its digest root timestamp as `root` and the full parent/replies
-as `messages`. Self-DM objects intentionally keep the unpaged form. Use the original
-digest header so numbered corrections resolve correctly.
+`dmThread` is a list, one entry per digest thread read; give each its digest root
+timestamp as `root` and the full parent/replies as `messages`. Self-DM objects intentionally keep the unpaged form. Use the original
+digest header, including its `· ref` reference, so numbered corrections resolve
+against the list they answered.
 
 Calendar input uses the existing `{ "events": [...] }` response shape described in
 `src/calendar.js`: id, summary, start.dateTime or start.date, attendees, organizer,

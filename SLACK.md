@@ -89,7 +89,7 @@ config file:
       "pages": [{ "text": "<slack_read_thread output>", "pagination_info": "<verbatim>" }] }
   ],
   "dm": { "channel": "D0…", "text": "<connector output for your self-DM>" },
-  "dmThread": { "text": "<slack_read_thread output for the latest digest>" },
+  "dmThread": [{ "root": "<digest Message TS>", "text": "<slack_read_thread output for the last digest before today>" }],
   "events": "<list_events response, object or raw JSON>"
 }
 ```
@@ -223,6 +223,14 @@ the list can be trusted; it says nothing about whether it is worth reading.
 **Both directions of a self-DM are you**, so a digest is told from a correction by the
 only thing that reliably separates them: digests begin with `OPEN LOOPS — for <date>`.
 Everything after one, until the next, is read as a reply to it.
+
+**A reply is matched to the list it answered, not to its date.** Each header ends with a
+reference (`· ref 7c1e`) built from that digest's numbered list, and the ledger keeps
+the numbering behind every reference it printed. A reply under a digest whose reference
+the ledger does not know — another setup posting into the same DM from its own ledger —
+is not applied, and the details say so once. Found 2026-09-22, when a `k 4` meant for
+another setup's #4 marked this ledger's #4. The same memo is what lets a same-day re-run
+apply replies to the day's first digest by that digest's numbering.
 
 Each reply is acted on exactly once. It stays in the DM forever, and re-applying it
 against a later, shorter list would mark a different item every run.

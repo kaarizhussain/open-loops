@@ -40,13 +40,13 @@ var data = { today:'2026-09-21',spotCheck:0, users:opts.users, conversations:[{c
 var original = { ...data, conversations:[{channel:'#deals',text:banner(raw)}] };
 assert.strictEqual(run(data,true),run(original,true),'both hosts produce the same full digest');
 assert.ok(!fs.existsSync(ledger),'preview does not write the ledger');
-run(data);
+var posted = run(data);   // the digest as posted, reference and all
 var before = fs.readFileSync(ledger,'utf8');
 assert.throws(function () { run({...data,conversations:[{channel:'#deals',messages:[{...raw,ts:'broken'}]}]}); });
 assert.strictEqual(fs.readFileSync(ledger,'utf8'),before,'malformed structured input never changes saved state');
 var excluded = {...data,conversations:data.conversations.concat({channel:'#private',messages:[{...raw,ts:'broken'}]})};
 assert.doesNotThrow(function () { run(excluded,true); }, 'scope checked before parsing excluded channels');
-var digest = {ts:'1790020000.000001',user:'U123',text:'OPEN LOOPS — for 2026-09-21'};
+var digest = {ts:'1790020000.000001',user:'U123',text:posted.split('\n')[0]};
 var correction = {ts:'1790020001.000001',user:'U123',thread_ts:digest.ts,text:'1'};
 var corrected = run({...data,today:'2026-09-22',dmThread:{root:digest.ts,messages:[digest,correction]}});
 assert.ok(/0 open/.test(corrected),'structured self-DM thread corrections suppress the recorded item');
