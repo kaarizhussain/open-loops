@@ -158,7 +158,10 @@ Run from the data directory:
 node "<checkout>/slack-run.js" "<input.json>" --config "<data>/openloops.config.json" --dry
 ```
 
-Inspect parsing warnings and verify all intended sources were read. Then run the same
+Inspect parsing warnings and verify all intended sources were read. **In this
+repository's own deployment, Codex stops here:** the scheduled Claude task is the only
+writer to the ledger and the self-DM (see AGENTS.md), so Codex previews with `--dry` and
+does not post. Elsewhere, where Codex is the only writer, run the same
 command without `--dry` to record the digest and the item order for corrections.
 Split stdout on the line `-- thread --`. Post the first part verbatim to the self-DM,
 then the second verbatim in its returned Slack thread. Wrap each part in triple

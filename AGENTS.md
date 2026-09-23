@@ -11,6 +11,14 @@ imports this file; keep the rules here, in one place.
   goes live at the next 18:00 run.
 - Commit locally when work is done and tested; leave the push to the owner.
 
+## One writer per ledger
+
+- Only the scheduled Claude task (`open-loops-daily`) runs the digest for real and posts
+  it to the self-DM. Every other agent — Codex included — runs with `--dry` and never
+  posts, until the owner changes this line.
+- Two setups posting from two ledgers put two numbered lists in one DM, and a reply
+  meant for one lands on the other (2026-09-22).
+
 ## One agent at a time
 
 - Two agents never edit this checkout at once. Before starting, run `git status` and
