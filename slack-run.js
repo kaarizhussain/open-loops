@@ -42,8 +42,12 @@ var { parseEvents } = require('./src/calendar.js');
 var { settings } = require('./src/config.js');
 
 var DIGEST_HEADER = /^\s*(?:```)?\s*OPEN LOOPS — for (\d{4}-\d{2}-\d{2})(?:[^\n]*· ref ([0-9a-f]{4})\b)?/;
-// The details the runner posts in the digest's thread. Its instructions contain "3 7".
-var DETAILS_HEADER = /^\s*(?:```)?\s*OPEN LOOPS DETAILS\b/;
+/* What a run posts under its own digest, besides the digest: the details (whose
+ * instructions contain "3 7") and any run notes. Both post as the reader, so only the
+ * header tells them from a reply — and a notes line like "3 items aged out" leads with
+ * a number, which is a rejection (2026-09-23). Exact headers only: a reply that merely
+ * starts "OPEN LOOPS …" is the reader's, and is read like any other. */
+var GENERATED_HEADER = /^\s*(?:```)?\s*OPEN LOOPS (?:DETAILS|NOTES) — /;
 
 /* Names match exactly, or by prefix with a trailing star: "deals-*". Deliberately not
  * a general pattern language — a scope rule nobody can read at a glance is a scope
@@ -93,7 +97,7 @@ function marksFromDm(messages, store, rows) {
 
   messages.forEach(function (m) {
     // Its own details, posted under the digest — not a reply, whatever "3 7" it contains.
-    if (DETAILS_HEADER.test(m.body)) return;
+    if (GENERATED_HEADER.test(m.body)) return;
     var head = m.body.match(DIGEST_HEADER);
     if (head) {                                    // this is a digest, not a reply to one
       dates.push(head[1]);

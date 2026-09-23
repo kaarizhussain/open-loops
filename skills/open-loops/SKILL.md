@@ -280,6 +280,12 @@ slack_send_message(channel_id=<selfDm>, thread_ts=<the ts that call returned>,
                    message="```\n<details verbatim>\n```")
 ```
 
+Anything else you post under the digest — something that looked wrong, a source you
+fetched again — goes in the same thread, as one message whose first line is exactly
+`OPEN LOOPS NOTES — for <YYYY-MM-DD>`. The next run reads that thread for the reader's
+corrections, and skips only messages with that header or the details' header; without
+it, a note line like "3 items aged out" is read as rejecting item 3.
+
 Post it even when the list is short or empty. A day with nothing outstanding is useful
 information, and a digest that only appears when there is bad news trains the reader to
 dread opening it.

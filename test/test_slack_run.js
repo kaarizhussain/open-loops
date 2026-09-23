@@ -263,6 +263,26 @@ assert.ok(/Chase Dana — "Dana will review the board deck by tomorrow\."/.test(
 assert.ok(/→ Hi Dana — checking in on this/.test(dana) && !/still owe you/.test(dana),
   'and the draft chases Dana: ' + (dana.match(/→[^\n]*/) || ['(no draft)'])[0]);
 
+/* A run's own notes, posted under its digest as the reader, are not replies (2026-09-23:
+   the next brief opened with three NOT READ lines quoting them). "3 items aged out" leads
+   with a number — read as a reply, it rejects item 3. A reply that only starts
+   "OPEN LOOPS" is still the reader's, and still reported. */
+var notesLedger = path.join(dir, 'notes.json');
+var nDay1 = main([write(fresh('2026-09-01')), '--ledger', notesLedger]);
+var nDay2 = fresh('2026-09-02');
+nDay2.dmThread = [digestThread(at(2026, 9, 1, 18), nDay1, [
+  [at(2026, 9, 1, 18).replace(/\.0+$/, '.000200'),
+   'OPEN LOOPS NOTES — for 2026-09-01\n3 items aged out of the window.\nLooks wrong: item 2 label.'],
+  [at(2026, 9, 1, 19), 'OPEN LOOPS marked item 3 incorrectly']
+])];
+var nNext = main([write(nDay2), '--ledger', notesLedger, '--dry']);
+assert.ok(!/Took your last reply/.test(nNext) && !/hidden as wrong/.test(nNext),
+  'a run\'s notes reject nothing: ' + (nNext.match(/Took your last reply[^\n]*/) || [''])[0]);
+assert.ok(nNext.indexOf(itemAt(nDay1, 3)) !== -1, 'item 3 is still listed');
+assert.ok(!/NOT READ AS A CORRECTION — "(?:3 items|Looks wrong)/.test(nNext), 'and are not quoted back as replies');
+assert.ok(/NOT READ AS A CORRECTION — "OPEN LOOPS marked item 3 incorrectly"/.test(nNext),
+  'but a reply that only starts "OPEN LOOPS" is the reader\'s, and is reported');
+
 /* The same reply must not be re-read. It stays in the DM forever, and re-applying it
    against a now-shorter list would mark a different item every single run. */
 var fourth = main([on('2026-09-04'), '--ledger', ledger]);
