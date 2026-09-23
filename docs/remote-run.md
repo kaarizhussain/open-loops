@@ -30,6 +30,16 @@ detector, delivered on schedule with the computer off.
   can be sent again without re-running detection.
 - **`storeText:false`** keeps keys and verdicts but drops the quoted text.
 
+What these don't cover:
+- The same-day re-run guarantee only holds when runs happen one after another. It
+  doesn't stop two simultaneous requests, a duplicate Slack post, or not knowing whether
+  a remote write finished before a timeout.
+- The saved digest can be re-posted, but only from the machine that ran it. Remotely, it
+  has to be retrievable by run without re-running detection.
+
+So the remote version needs light request identification and one-writer protection on
+the server, not an elaborate new retry system.
+
 ## Step 1, after the demo: feasibility spike
 
 No refactor, and the real ledger stays where it is until this is done.
@@ -62,8 +72,9 @@ Step 1 confirms or overturns that.
 1. Split the reusable engine out of the local runner: input, config and ledger in;
    digest and new ledger out. Local output byte-for-byte unchanged.
 2. Worker and D1 ledger: a revocable credential for the one workspace, request
-   validation (pages and coverage evidence), one transaction per run, and duplicate
-   protection per run date.
+   validation (pages and coverage evidence), one transaction per run, a request ID per
+   run, one writer at a time, and the finished digest stored under its run so it can be
+   fetched and re-posted.
 3. Ledger migration (import, and an export back to local) and the remote task's
    instructions.
 4. Operations docs, privacy checks, and an end-to-end test.
