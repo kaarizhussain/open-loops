@@ -322,6 +322,10 @@ function meta(l, nm, ctx) {
  * Two implementations, and they will drift; fold them together if a third appears. */
 function draft(l) {
   var late = l.status === 'overdue' || l.status === 'due_today';
+  /* The type says who wrote the message; the owner says who owes. "Dana will review the
+   * deck", typed by you, is owed_by_us and Dana's to deliver — so the note is a chase, not
+   * "I still owe you this" addressed to the person who owes it. */
+  var type = l.type === 'owed_by_us' && l.owner === 'them' ? 'owed_to_us' : l.type;
   var body = {
     /* Kept short enough to fit one line of the digest without wrapping, which is also
      * about the length anyone actually sends. A draft you have to edit down is one you
@@ -335,7 +339,7 @@ function draft(l) {
     agreed_unscheduled: 'shall I put some time in the diary for this?',
     no_followup: 'thanks for the time — recapping what we agreed below.',
     unprepped_meeting: null
-  }[l.type];
+  }[type];
   if (!body) return null;
   var name = firstName(l.who);
   // With no greeting the body has to start a sentence rather than continue one.

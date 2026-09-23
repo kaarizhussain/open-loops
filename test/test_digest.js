@@ -151,6 +151,19 @@ assert.strictEqual(d({ type: 'owed_by_us', status: 'open' }), null,
 assert.ok(/still owe you/.test(d({ type: 'owed_by_us', status: 'overdue' })),
   'but once it is late, a holding note is the move');
 
+/* 2026-09-22: "Dana will review the sandbox board deck by tomorrow", typed by the reader,
+   is owed_by_us — the type follows who wrote it — but Dana's to deliver. The digest said
+   "Chase Dana" and drafted "Hi Dana — I still owe you this". */
+var danas = d({ type: 'owed_by_us', owner: 'them', who: 'Dana', status: 'due_today' });
+assert.ok(/^Hi Dana — checking in on this/.test(danas) && !/still owe/.test(danas),
+  'someone else\'s promise gets a chase, whoever typed it: ' + danas);
+assert.ok(/^Hi Dana — just confirming this is still on track/.test(
+  d({ type: 'owed_by_us', owner: 'them', who: 'Dana', status: 'open' })), 'and a check-in before it is late');
+assert.ok(/still owe you/.test(d({ type: 'owed_by_us', owner: 'you', status: 'overdue' })),
+  'the reader\'s own late promise keeps its holding note');
+assert.ok(/still owe you/.test(d({ type: 'owed_by_us', owner: 'exec', status: 'overdue' })),
+  'and so does one made in a principal\'s name, in their voice');
+
 /* A note that opens with the wrong name is worse than one that opens with none. */
 assert.strictEqual(firstName('paul.oyelaran@meridianhealth.com'), 'Paul');
 assert.strictEqual(firstName('DANA@northstar.io'), 'Dana', 'shouting is not a name');

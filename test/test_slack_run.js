@@ -253,6 +253,16 @@ var d2short = main([write(day2), '--ledger', twoLedger, '--dry']);
 assert.ok(/DM READ — started at today's own digest/.test(d2short),
   'a read that began at today\'s digest says so: ' + (d2short.match(/DM READ[^\n]*/) || ['(nothing said)'])[0]);
 
+/* Someone else's promise, typed by the reader, supporting nobody: chased, and the note
+   under it is a chase too (2026-09-22: it said "Hi Dana — I still owe you this"). */
+var danaIn = fresh('2026-09-02');
+danaIn.conversations = [{ channel: '#launch', text: me(at(2026, 9, 1, 15),
+  'Dana will review the board deck by tomorrow.') }];
+var dana = main([write(danaIn), '--ledger', path.join(dir, 'dana.json'), '--dry']);
+assert.ok(/Chase Dana — "Dana will review the board deck by tomorrow\."/.test(dana), 'precondition: it is Dana\'s to chase');
+assert.ok(/→ Hi Dana — checking in on this/.test(dana) && !/still owe you/.test(dana),
+  'and the draft chases Dana: ' + (dana.match(/→[^\n]*/) || ['(no draft)'])[0]);
+
 /* The same reply must not be re-read. It stays in the DM forever, and re-applying it
    against a now-shorter list would mark a different item every single run. */
 var fourth = main([on('2026-09-04'), '--ledger', ledger]);
