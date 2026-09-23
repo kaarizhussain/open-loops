@@ -21,9 +21,9 @@ detector, delivered on schedule with the computer off.
 
 ## Already in place, and to keep
 
-- **A same-day re-run starts from the ledger as it was before that day's first run.** A
-  retry after a timeout cannot apply anything twice, and replies still match their
-  digest by its `· ref`.
+- **A same-day re-run starts from the ledger as it was before that day's first run.** Running
+  it again the same day, one run after the other, from the same input doesn't apply
+  its ledger changes a second time, and replies still match their digest by its `· ref`.
 - **The ledger is written to a temporary file and then renamed into place**, so a run
   cut off mid-write cannot leave a half-written ledger.
 - **Each run's rendered digest is saved** (`out-YYYY-MM-DD.txt`), so a failed Slack post
@@ -58,7 +58,7 @@ No refactor, and the real ledger stays where it is until this is done.
 | | Protected Worker endpoint + D1 | Private GitHub repository |
 |---|---|---|
 | Credential | API key held by the remote task | GitHub write credential held by the remote task |
-| Privacy | Rows are overwritten in place; deletions really delete | Every past ledger stays in Git history unless the history is rewritten |
+| Privacy | Rows are overwritten in place; a deletion removes the data from the live database, though the provider's backups may keep it for their retention period | Every past ledger stays in Git history unless the history is rewritten |
 | Retries | Duplicate-request protection and transactions on the server | A push can conflict or half-finish; recovery is done by hand in Git |
 | Resuming a post | The server keeps the finished digest for that run | The saved output file has to be committed or kept somewhere |
 | Engineering | Split the engine out of `slack-run.js`; Worker, D1, authentication | Almost none, if a remote task can clone, run Node and push |
