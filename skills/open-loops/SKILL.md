@@ -286,6 +286,10 @@ fetched again — goes in the same thread, as one message whose first line is ex
 corrections, and skips only messages with that header or the details' header; without
 it, a note line like "3 items aged out" is read as rejecting item 3.
 
+In the details, the name before a quoted sentence identifies who wrote that Slack
+message. It does not identify who owes the commitment, so `You:` is correct under CHASE
+THEM when you wrote the source sentence. That is not something to flag.
+
 Post it even when the list is short or empty. A day with nothing outstanding is useful
 information, and a digest that only appears when there is bad news trains the reader to
 dread opening it.
