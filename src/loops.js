@@ -213,7 +213,13 @@ function delivered(text) {
     !/\b(?:not|never|yet|haven['’]?t|hasn['’]?t|isn['’]?t|wasn['’]?t|didn['’]?t|don['’]?t|won['’]?t|cannot|can['’]?t)\b/i.test(text) &&
     !COMMIT.test(text) && !/\b(?:will|going to|plan to|expect to|should|would|could|might|must|need to)\b/i.test(text);
 }
-var ASK = /\b(can you|could you|would you|please|need your|need you to|waiting on|any update|following up|checking in|let me know|confirm)\b/i;
+var ASK = /\b(can you|could you|would you|please|need your|need you to|waiting on|any update|following up|checking in|let me know)\b/i;
+/* "Confirm" on its own is a request only as an imperative — "Confirm the headcount by
+ * Thursday", "Lena — confirm the date". It used to count anywhere, so "I'll confirm with
+ * Dana" was both a promise and a question you were waiting on (2026-09-23). "Can you
+ * confirm" and "please confirm" are requests on their other words. */
+var CONFIRM_ASK = /^\s*(?:[A-Z][a-z]+\s*[,—–:-]\s*)?[Cc]onfirm\b/;
+function asks(s) { return ASK.test(s) || CONFIRM_ASK.test(s); }
 /* An intro is an email, not a meeting — keep those as plain promises. */
 var MEETINGY = /\b(call|meeting|sync|chat|conversation|walk (?:you|them) through)\b/i;
 var SCHEDULEY = /\b(schedule|book|set up|find time|works|available|on the books|next week|this week)\b/i;
@@ -586,7 +592,7 @@ function detectLoops(messages, events, opts) {
         // A channel contains unrelated conversations. Inherit only from a related
         // request on the same day; real threads retain their conversation boundary.
         if (stream && (day(msgs[k].date) !== day(m.date) ||
-            !ASK.test(msgs[k].body) || !answers(s, msgs[k].body))) continue;
+            !sentences(msgs[k].body).some(asks) || !answers(s, msgs[k].body))) continue;
         due = parseDue(msgs[k].body, msgs[k].date);
         // Borrowed from the other side, so the digest has to say whose date it is.
         if (due) dueFrom = { text: msgs[k].body, from: msgs[k].from, same: false };
@@ -671,7 +677,7 @@ function detectLoops(messages, events, opts) {
     var lastOut = -1, lastIn = -1;
     msgs.forEach(function (m, i) { if (m.out) lastOut = i; else lastIn = i; });
     var askIn = function (m) {
-      return sentences(m.body).filter(function (s) { return ASK.test(s) || /\?$/.test(s); })[0];
+      return sentences(m.body).filter(function (s) { return asks(s) || /\?$/.test(s); })[0];
     };
 
     if (stream) {

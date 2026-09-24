@@ -198,4 +198,28 @@ assert.strictEqual(raised(threaded([say(SAM, '17T10:00', 'Are we still on for th
 assert.strictEqual(raised(threaded([say(ME, '17T10:00', 'Can you send the signed copy? I need it by Friday.')]), 'awaiting_reply'), 1,
   'in a thread, outbound');
 
+/* ---------------- "confirm" is a request only as one ----------------
+ * 2026-09-23: "I'll confirm with Dana and get back to you by Thursday" was both a promise
+ * and a question the reader was waiting on, because bare "confirm" was a request cue.
+ * Both directions: written by the reader, and written to them by Lena. */
+var kinds = function (from, body) {
+  var open = run([say(from, '14T10:00', body)]);
+  var promise = open.filter(function (l) { return l.type === 'owed_by_us' || l.type === 'owed_to_us'; }).length;
+  var request = open.filter(function (l) { return l.type === 'awaiting_reply' || l.type === 'unanswered_ask'; }).length;
+  return promise + ' promise, ' + request + ' request';
+};
+[ME, LENA].forEach(function (from) {
+  var dir = from === ME ? 'outbound' : 'inbound';
+  assert.strictEqual(kinds(from, "I'll confirm with Dana and get back to you by Thursday"), '1 promise, 0 request',
+    dir + ': a promise to confirm is a promise, not a question');
+  assert.strictEqual(kinds(from, 'Can you confirm the date?'), '0 promise, 1 request', dir + ': can you confirm');
+  assert.strictEqual(kinds(from, 'Please confirm the date'), '0 promise, 1 request', dir + ': please confirm');
+  assert.strictEqual(kinds(from, 'Confirm the headcount by Thursday'), '0 promise, 1 request',
+    dir + ': an imperative confirm is a request');
+  assert.strictEqual(kinds(from, 'Sam — confirm the headcount by Thursday'), '0 promise, 1 request',
+    dir + ': and so is one addressed to someone');
+  assert.strictEqual(kinds(from, "I'll confirm with Dana. Can you send the pricing sheet?"), '1 promise, 1 request',
+    dir + ': a promise and a separate request in one message are both kept');
+});
+
 console.log('test_channel: ok');
