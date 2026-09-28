@@ -13,6 +13,8 @@ imports this file; keep the rules here, in one place.
 
 ## One writer per ledger
 
+This section is the owner's own deployment; someone running their own copy sets their own.
+
 - Only the scheduled Claude task (`open-loops-daily`) runs the digest for real and posts
   it to the self-DM. Every other agent — Codex included — runs with `--dry` and never
   posts, until the owner changes this line.

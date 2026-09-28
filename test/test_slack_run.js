@@ -804,6 +804,40 @@ assert.strictEqual(under('OPEN LOOPS — for 2026-09-03 · Thu').foreign.length,
 assert.strictEqual(under('```OPEN LOOPS — for 2026-09-03 · Thu · ref ab12').marked, 1, 'a known reference: its own list');
 assert.strictEqual(under('OPEN LOOPS — for 2026-09-03 · Thu · ref cd34').marked, 0, 'an unknown one: nothing');
 
+/* A reply belongs to the digest whose thread it is typed in, whenever it was typed.
+   Placed by time it went to the newest header: a late "1" under yesterday's digest, sent
+   after today's was posted, rejected today's item 1 (review, 2026-09-28). */
+var lateRefs = {
+  aaaa: { date: '2026-09-22', keys: ['old1', 'old2'], asked: [] },
+  bbbb: { date: '2026-09-23', keys: ['new1', 'new2'], asked: [] }
+};
+var lateStore = Object.assign({}, stub, {
+  refsSince: function () { return '2026-09-22'; },
+  recallRef: function (r) { return lateRefs[r] || null; }
+});
+var lateRows = function () {
+  return ['old1', 'old2', 'new1', 'new2'].map(function (k) { return [k, '2026-09-01', '2026-09-23', '', 'owed_by_us', '', '', '']; });
+};
+var verdicts = function (rows) { return rows.map(function (r) { return r[0] + '=' + (r[7] || '-'); }).join(' '); };
+var lateMsgs = function (reply) {
+  return [{ id: '100.1', threadId: '100.1', body: 'OPEN LOOPS — for 2026-09-22 · ref aaaa\nx' },
+          { id: '200.1', threadId: '200.1', body: 'OPEN LOOPS — for 2026-09-23 · ref bbbb\nx' },
+          reply];
+};
+var lateA = lateRows();
+marksFromDm(lateMsgs({ id: '300.1', threadId: '100.1', body: '1' }), lateStore, lateA);
+assert.strictEqual(verdicts(lateA), 'old1=x old2=- new1=- new2=-', 'a late reply under the older digest rejects the older item 1');
+var lateB = lateRows();
+marksFromDm(lateMsgs({ id: '300.1', threadId: '200.1', body: '1' }), lateStore, lateB);
+assert.strictEqual(verdicts(lateB), 'old1=- old2=- new1=x new2=-', 'and one under the newer digest rejects the newer item');
+var lateC = lateRows();
+marksFromDm(lateMsgs({ id: '300.1', threadId: 'DM', body: '1' }), lateStore, lateC);
+assert.strictEqual(verdicts(lateC), 'old1=- old2=- new1=x new2=-', 'a reply with no thread of its own is placed by time, as before');
+var lateD = lateRows();
+marksFromDm([{ id: '200.1', threadId: '200.1', body: 'OPEN LOOPS — for 2026-09-23 · ref bbbb\nx' },
+             { id: '300.1', threadId: '100.1', body: '1' }], lateStore, lateD);
+assert.strictEqual(verdicts(lateD), 'old1=- old2=- new1=- new2=-', 'a reply whose digest was not read cannot be resolved, so it changes nothing');
+
 /* --- malformed input must not take the unattended run down ---
  *
  * A model writes input.json and a person writes the config, and both vary. Each of these

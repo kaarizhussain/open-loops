@@ -410,6 +410,10 @@ function warnings(s) {
       ' did not produce (' + x.date + ', ' + (x.ref ? 'ref ' + x.ref : 'no ref') + ').' +
       ' Another setup may be posting into this DM.');
   });
+  if (read.widenedStore) {
+    out.push('PRIVACY — the run input asked to store message text, but the config says not to.' +
+      ' The config wins; nothing was stored.');
+  }
   if (s.b.dmStartedToday) {
     out.push('DM READ — started at today\'s own digest, so corrections under the previous' +
       ' one were not read. Read from the last digest before today and run again.');

@@ -91,7 +91,7 @@ function inScope(name, scope) {
  * forever, and re-applying it against a later, shorter list marks different items. */
 function marksFromDm(messages, store, rows) {
   var seen = store.seenReplies(), known = {}, marked = 0, wrong = 0, knew = 0, cur = null;
-  var misses = [], checked = 0, ignored = [], counted = {}, foreign = [], dates = [];
+  var misses = [], checked = 0, ignored = [], counted = {}, foreign = [], dates = [], byRoot = {};
   var since = store.refsSince ? store.refsSince() : null;
   seen.forEach(function (id) { known[id] = 1; });
 
@@ -102,18 +102,25 @@ function marksFromDm(messages, store, rows) {
     if (head) {                                    // this is a digest, not a reply to one
       dates.push(head[1]);
       cur = digestMemo(head[1], head[2] || null, store, since);
+      byRoot[m.id] = cur;                          // a digest is the root of its own thread
       return;
     }
-    if (!cur || known[m.id]) return;
-    var forDate = cur.date, keys = cur.keys, asked = cur.asked;
+    /* A reply typed in a digest's thread answers THAT digest, whenever it was typed. Reading
+     * the newest header before it instead sent a late "1" under yesterday's digest to
+     * today's item 1 (found in review, 2026-09-28). Only a reply with no thread of its own
+     * is placed by time. One whose parent digest was not read cannot be resolved at all. */
+    var inThread = /^\d+\.\d+$/.test(String(m.threadId || ''));
+    var memo = inThread ? byRoot[m.threadId] : cur;
+    if (!memo || known[m.id]) return;
+    var forDate = memo.date, keys = memo.keys, asked = memo.asked;
 
     /* Under a digest this ledger did not produce. Its numbers belong to somebody else's
      * list — on 2026-09-22 a "k 4" meant for another setup's #4 marked this one's #4 —
      * so nothing is applied, and the reader is told once. */
-    if (cur.foreign) {
+    if (memo.foreign) {
       known[m.id] = 1;
       seen.push(m.id);
-      foreign.push({ text: m.body.trim().split('\n')[0], date: forDate, ref: cur.ref });
+      foreign.push({ text: m.body.trim().split('\n')[0], date: forDate, ref: memo.ref });
       return;
     }
     if (!keys.length && !asked.length) return;    // no memo for that digest
@@ -152,8 +159,8 @@ function marksFromDm(messages, store, rows) {
      * Once per digest, not once per reply. The sample belongs to the digest, and two
      * messages under one digest are two replies to the same question — counting it
      * twice inflates the denominator and flatters the rate. */
-    if (asked.length && marks.answered && !counted[cur.id]) {
-      counted[cur.id] = 1;
+    if (asked.length && marks.answered && !counted[memo.id]) {
+      counted[memo.id] = 1;
       checked += asked.length;
       marks.missed.forEach(function (letter) {
         var at = letter.charCodeAt(0) - 97;
@@ -283,11 +290,11 @@ function main(argv) {
   var cfg = settings(fs, configPath, {
     you: input.self || input.you,
     supporting: input.principals || input.supporting,
-    channels: input.scope,
     lookbackDays: input.lookbackDays,
     mute: input.mute, unmute: input.unmute,
     spotCheck: input.spotCheck, actionList: input.actionList,
-    storeText: input.storeText, keepLedgerDays: input.keepLedgerDays,
+    // Privacy settings are the config's. The run can only turn text storage off, never on.
+    storeText: input.storeText === false ? false : undefined, keepLedgerDays: input.keepLedgerDays,
     tzOffset: input.tzOffset,
     /* Relationship tiers. This was read from the run's input alone, which nothing in the
      * shipped setup ever writes — so a tier set in the config was accepted, silently
@@ -296,6 +303,11 @@ function main(argv) {
     contacts: input.contacts
   });
 
+  /* The config decides what may be read. The run's own scope can only narrow it — a run
+   * input is assembled from what was fetched, and a channel restriction that fetched text
+   * could lift is not a restriction. */
+  var allowed = function (name) { return inScope(name, cfg.channels) && inScope(name, input.scope); };
+  var widenedStore = input.storeText === true && cfg.storeText === false;
   var self = cfg.you;
   var today = flag('today', input.today || new Date().toISOString().slice(0, 10));
   var store = fileStore(flag('ledger', cfg.ledger));
@@ -325,7 +337,7 @@ function main(argv) {
    * unattended run before it can say anything at all. */
   var convs = [].concat(input.conversations || []), threadsIn = [].concat(input.threads || []);
   convs.forEach(function (c) {
-    if (!inScope(c.channel, cfg.channels)) { skipped++; return; }
+    if (!allowed(c.channel)) { skipped++; return; }
     var got = readConversation(c, {
       channel: c.channel, members: c.members || [], tzOffset: cfg.tzOffset,
       self: cfg.you, selfUid: cfg.selfUid || cfg.selfDm, users: input.users
@@ -355,7 +367,7 @@ function main(argv) {
   threadsIn.forEach(function (t) {
     // A thread inherits its channel's scope — excluding #hr and then reading a thread
     // inside it would be an exclusion that does not exclude.
-    if (!inScope(t.channel, cfg.channels)) { skippedThreads++; return; }
+    if (!allowed(t.channel)) { skippedThreads++; return; }
     var repliesRead = readConversation(t, {
       channel: t.channel, members: t.members || [], threadId: t.root,
       tzOffset: cfg.tzOffset, self: cfg.you, selfUid: cfg.selfUid || cfg.selfDm, users: input.users
@@ -591,7 +603,7 @@ function main(argv) {
     /* Conversations skipped, not threads. One counter served both, and only the
        conversation count was reduced by it — so skipping a thread under-reported how
        much was read, and enough of them printed a negative number of conversations. */
-    read: { threads: convs.length - skipped, confirmedEmpty: confirmedEmpty,
+    read: { widenedStore: widenedStore, threads: convs.length - skipped, confirmedEmpty: confirmedEmpty,
             capped: shortRead.length > 0, shortRead: shortRead, unread: unread,
             calendarError: calendarError,
             windowStart: cut,

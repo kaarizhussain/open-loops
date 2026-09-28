@@ -85,6 +85,25 @@ run({...base,events:{events:[meeting]}});
 var noCalendar=run({...base,today:'2026-09-21',events:'calendar unavailable'});
 assert.ok(noCalendar.includes('NOT VERIFIED'));
 assert.strictEqual(JSON.parse(fs.readFileSync(ledger)).rows.find(r=>r[0]==='unprepped_meeting|event1')[L.COL.gone_on],'');
+// The same when the connector answers with an error object rather than a sentence.
+var errCalendar=run({...base,today:'2026-09-21',events:{error:'ratelimited'}});
+assert.ok(errCalendar.includes('CALENDAR NOT READ'),'an error object says the calendar was not read');
+assert.strictEqual(JSON.parse(fs.readFileSync(ledger)).rows.find(r=>r[0]==='unprepped_meeting|event1')[L.COL.gone_on],'',
+  'and cannot clear a meeting it never saw');
+
+// Privacy settings are the config's: a run input can narrow them, never lift them.
+var pcfg=path.join(dir,'private.config.json'), pledger=path.join(dir,'private-ledger.json');
+fs.writeFileSync(pcfg,JSON.stringify({you:'ea@example.com',storeText:false,channels:{exclude:['#secret']},ledger:pledger}));
+var secretRaw={ts:'1789725600.000002',user:'U123',text:'I will send the merger memo tomorrow.'};
+var pinput={today:'2026-09-20',spotCheck:0,users:{U123:{email:'ea@example.com'}},
+  scope:{include:[],exclude:[]},storeText:true,
+  conversations:[{channel:'#secret',messages:[secretRaw]},{channel:'#work',messages:[{...raw,ts:'1789725700.000001',text:'I will send the budget tomorrow.'}]}]};
+fs.writeFileSync(input,JSON.stringify(pinput));
+var ptext=main([input,'--ledger',pledger,'--config',pcfg]);
+assert.ok(!ptext.includes('merger memo'),'an emptied scope in the input does not lift the exclusion the config sets');
+assert.ok(ptext.includes('budget'),'while an allowed channel is still read');
+assert.ok(ptext.includes('PRIVACY — the run input asked to store message text'),'the attempt is reported');
+assert.ok(!fs.readFileSync(pledger,'utf8').includes('budget'),'and storeText:false from the config still holds');
 
 // Privacy transitions scrub every row, rejected rows, learned text and the rollback
 // snapshot; the output remains live text, but the entire persisted state is text-free.

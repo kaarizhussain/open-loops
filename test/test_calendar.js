@@ -38,6 +38,11 @@ assert.strictEqual(one[0].agenda, false, 'and no description key either');
 
 /* An empty window omits `events` entirely rather than sending []. */
 assert.deepStrictEqual(parseEvents({ accessRole: 'owner', timeZone: 'UTC' }), []);
+// An error envelope is a failed read, not an empty calendar — absent events is the only empty.
+assert.throws(function () { parseEvents({ error: 'ratelimited', message: 'try later' }); }, /calendar responded with an error/);
+assert.throws(function () { parseEvents({ ok: false }); }, /calendar responded with an error/);
+assert.throws(function () { parseEvents({ events: 'none' }); }, /not a list/);
+assert.deepStrictEqual(parseEvents({}), [], 'while a window with no events still reads as empty');
 assert.deepStrictEqual(parseEvents('{}'), [], 'and it takes the raw string too');
 assert.deepStrictEqual(parseEvents(null), []);
 

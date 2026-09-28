@@ -55,6 +55,15 @@ function guests(e) {
  * is empty, which is the same absent-not-empty habit as everything else here. */
 function parseEvents(response) {
   var data = typeof response === 'string' ? JSON.parse(response || '{}') : (response || {});
+  /* An error envelope is not an empty calendar. `events` is absent when the window is empty,
+   * so absence proves nothing — but an error marker, or events that are not a list, is a
+   * failed read, and treating it as empty let prior meeting items be marked cleared. */
+  if (data && (data.error || data.ok === false)) {
+    throw new Error('The calendar responded with an error: ' + String(data.error || data.message || 'ok:false').slice(0, 80));
+  }
+  if (data && data.events != null && !Array.isArray(data.events)) {
+    throw new Error('The calendar response had events that were not a list');
+  }
   return (data.events || []).filter(function (e) {
     /* A cancelled meeting cannot be unprepped, and a declined one is not yours to
      * prepare for. Both still come back from the API.

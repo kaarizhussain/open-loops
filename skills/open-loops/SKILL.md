@@ -41,15 +41,20 @@ a missing one surfaces as a sentence instead of a run that dies halfway through.
 
 ## Where their data goes
 
-Nowhere. The detector is local code with no network calls in it — the only things that
-reach a network are the Slack and calendar connectors they already have, and the digest
-you post back to their own DM. Say this plainly if they ask, because someone reading
-their employer's Slack is right to ask.
+Not off their machine by the detector: it is local code with no network calls in it. But
+the messages are read through the Slack and calendar connectors they already have, and
+those responses pass through you, the host assistant, and stay in this conversation's
+history. The digest is posted to their own DM. Say this plainly if they ask, because
+someone reading their employer's Slack is right to ask — and do not tell them nothing
+leaves their machine.
 
-What lands on disk is `ledger.json`, in their working directory. By default it keeps the
+What lands on disk is `ledger.json`, in their working directory, and each run's input
+and output files, which hold the fetched message text. By default the ledger keeps the
 sentence each commitment was found in, so the digest can say what cleared. Setting
-`"storeText": false` keeps the tracking — keys, dates, verdicts, accuracy — and writes no
-message text at all.
+`"storeText": false` keeps the tracking — keys, dates, verdicts, accuracy — and scrubs
+message text from the ledger and its rollback snapshot. It does not scrub the input and
+output files, backups, the assistant's conversation history, or what is posted to Slack.
+The run's input can turn text storage off but never on; only the config decides that.
 
 **It costs less than it sounds like.** Every open item in the digest is re-detected from
 live messages on each run, so the list still quotes every sentence in full. The single
@@ -82,9 +87,10 @@ as something they are waiting on.
 slack_list_user_channels(types="public_channel,private_channel")
 ```
 
-List the channels back and ask which to leave out. Suggest excluding anything social,
-random or off-topic — every channel read costs privacy and most of them contain no
-commitments. **Do not include `im` in the types.** Direct messages are the most
+List the channels back and ask which ones to **include** — a channel is read only if
+they chose it. Suggest the work channels where commitments are made, and leave out
+anything social, random or off-topic: every channel read costs privacy and most of them
+contain no commitments. **Do not include `im` in the types.** Direct messages are the most
 sensitive thing in a workspace and the least likely to hold a tracked commitment; add
 them only if the user asks for them by name.
 
@@ -100,7 +106,7 @@ support one or more executives, take names, and addresses if they have them.
   "you": "<from step 1>",
   "selfDm": "<their user id>",
   "supporting": [],
-  "channels": { "exclude": ["#social", "#random"] },
+  "channels": { "include": ["<the channels they chose>"] },
   "ledger": "<working dir>/ledger.json"
 }
 ```
