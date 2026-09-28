@@ -280,6 +280,16 @@ slack_send_message(channel_id=<selfDm>, thread_ts=<the ts that call returned>,
                    message="```\n<details verbatim>\n```")
 ```
 
+**Read the brief back.** Fetch the message you just posted by the timestamp the first
+call returned — not simply the newest message, which may be your notes or something
+newer. It must open with exactly one code fence, and the first line inside that fence
+must equal the first line of the runner's output character for character. The runner's
+output is the authority; don't check it against a remembered format. If it differs — a
+dropped header, a doubled fence — post the brief and its details again from the saved
+runner output, unchanged, and say in the notes that the first post was wrong. Never edit
+the posted text to fix it. The header is how the next run finds this digest and matches
+replies to it (2026-09-28: a post that lost it was invisible to the next run).
+
 Anything else you post under the digest — something that looked wrong, a source you
 fetched again — goes in the same thread, as one message whose first line is exactly
 `OPEN LOOPS NOTES — for <YYYY-MM-DD>`. The next run reads that thread for the reader's

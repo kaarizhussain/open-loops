@@ -168,6 +168,9 @@ then the second verbatim in its returned Slack thread. Wrap each part in triple
 backticks. Never post the separator or an output marked TOO LONG. Only post when
 the user's setup/run request authorizes Slack delivery. If posting fails, retain the
 rendered digest and report failure; do not claim it was delivered or retry blindly.
+After posting, read the brief back by its returned timestamp and apply SKILL.md's "Read
+the brief back" check: exactly one opening fence, and the first line inside it equal to
+the runner output's first line.
 
 Numbered corrections and accuracy reports use the same ledger as Claude:
 `3 7` rejects items, `k 1 4` marks already-known items, and `miss b` answers the spot check.
