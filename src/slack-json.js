@@ -52,16 +52,20 @@ function readConversation(conversation, opts) {
     if (!Array.isArray(conversation.pages) || 'text' in conversation || 'messages' in conversation) {
       throw new Error('Supply pages, messages or text for a Slack conversation, not a mixture');
     }
-    var byId = {};
+    var byId = {}, suspect = false;
     conversation.pages.forEach(function (page) {
       if (!page || typeof page !== 'object' || 'pages' in page ||
           (!('text' in page) && !('messages' in page))) {
         throw new Error('Each Slack page needs text or messages');
       }
-      readConversation(page, opts).forEach(function (m) { byId[m.id] = m; });
+      var got = readConversation(page, opts);
+      if (got.suspect) suspect = true;
+      got.forEach(function (m) { byId[m.id] = m; });
     });
-    return Object.keys(byId).map(function (id) { return byId[id]; })
+    var merged = Object.keys(byId).map(function (id) { return byId[id]; })
       .sort(function (a, b) { return Number(a.id) - Number(b.id); });
+    Object.defineProperty(merged, "suspect", { value: suspect });
+    return merged;
   }
   if (Object.prototype.hasOwnProperty.call(conversation, 'messages')) {
     if (Object.prototype.hasOwnProperty.call(conversation, 'text')) {

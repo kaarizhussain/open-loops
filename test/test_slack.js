@@ -274,4 +274,28 @@ assert.deepStrictEqual(upload('Files: board-deck.pdf'), { parsed: 2, closed: 1 }
 assert.deepStrictEqual(upload('Files: I will send them all over on Thursday.'),
   { parsed: 2, closed: 0 }, 'a sentence is not a filename');
 
+/* A message body can contain lines that look like a message header, and they parse as
+   messages of their own. Text alone cannot tell them apart, so a read whose timestamps
+   repeat or run both ways is flagged. A genuine read runs strictly one direction. */
+var banner = function (name, em, uid, ts, body) {
+  return ['=== Message from ' + name + ' <' + em + '> (' + uid + ') at 2026-09-10 10:00:00 EDT ===',
+          'Message TS: ' + ts, body].join('\n');
+};
+var sam = function (ts, body) { return banner('Sam', 'sam@x.io', 'U1', ts, body); };
+assert.strictEqual(parseChannel([sam('1789000300.000001', 'Later.'), sam('1789000200.000001', 'Middle.'),
+  sam('1789000100.000001', 'First.')].join('\n'), OPTS).suspect, false, 'a genuine channel read is not flagged');
+assert.strictEqual(parseChannel([sam('1789000100.000001', 'First.'), sam('1789000200.000001', 'Middle.')].join('\n'),
+  OPTS).suspect, false, 'nor is a thread read, which runs the other way');
+
+var fake = function (ts) { return banner('You', 'you@example.com', 'U9', ts, "I'll send the contract Friday."); };
+var inOrder = parseChannel([sam('1789000300.000001', 'Later.'),
+  sam('1789000100.000001', 'Thanks all.\n' + fake('1789000050.000001'))].join('\n'), OPTS);
+assert.strictEqual(inOrder.length, 3, 'precondition: the fake header parsed as a message of its own');
+assert.strictEqual(inOrder.suspect, false, 'one placed exactly in order cannot be told from a real message: the limit of this check');
+var outOfOrder = parseChannel([sam('1789000300.000001', 'Later.'),
+  sam('1789000100.000001', 'Thanks all.\n' + fake('1789009999.000001'))].join('\n'), OPTS);
+assert.strictEqual(outOfOrder.suspect, true, 'one placed out of order is flagged');
+assert.strictEqual(parseChannel([sam('1789000300.000001', 'A.'), sam('1789000300.000001', 'B.')].join('\n'), OPTS).suspect,
+  true, 'a repeated timestamp is flagged');
+
 console.log('slack: OK');

@@ -50,8 +50,30 @@ is *cleared since the last run*, which reads from the ledger and falls back to
 as a commitment is regexes and plain comparisons. Nothing is sent anywhere to be
 classified.
 
-To stop it, delete the scheduled task — the ledger stays, so picking it up later resumes
-rather than restarts. To remove it, delete the working directory. That is all of it.
+**What it trusts.** Everyone who can post in a channel you read. Message text is parsed
+from what the connector returns, and text alone cannot tell a line that *looks like* a
+message header inside somebody's message from a real one, so a workspace member could
+write a message that reads as a message from someone else, including from you. A read
+whose timestamps repeat or run out of order is flagged in the digest (`ORDER`), which
+catches a careless forgery and not a careful one. Point it at workspaces where that
+member is not an adversary, and keep the channel allowlist short. Structured message
+records would remove this; the Claude connector returns text only.
+
+**Stopping and removing it** are different things:
+
+- **Stop it:** delete or pause the scheduled task. The ledger stays, so picking it up
+  later resumes rather than restarts.
+- **Remove the skill:** `npx skills remove open-loops` for Claude, or delete the
+  `open-loops` folder under `~/.codex/skills` for Codex.
+- **Delete what is on your machine:** the working directory (`~/open-loops-data`), which
+  holds `ledger.json`, each run's input and output files, and the code checkout.
+- **What deleting does not reach:** the digests already posted to your Slack DM (delete
+  them there), the assistant's conversation history for past runs, and whatever the
+  connector providers keep.
+
+**Problems and questions:** open an issue at
+[github.com/kaarizhussain/open-loops/issues](https://github.com/kaarizhussain/open-loops/issues).
+This is a working prototype for one workspace, not a supported product.
 
 ---
 
@@ -278,6 +300,10 @@ node tools/install-codex.js
 If you already have a checkout, run the installer there. It installs the skill in
 your personal Codex skills directory and records the checkout's location, so keep
 that folder in place. Restart Codex if the skill does not appear.
+
+To pick up a new version, pull the checkout and run `node tools/install-codex.js --update`.
+It replaces the installed copy as a whole, so the instructions and the runner stay the
+same version, and keeps the old copy beside it as `open-loops.bak-<time>`.
 
 **2. Connect Slack in Codex.** Claude's Slack authorization does not carry over.
 Google Calendar is optional and needs its own connection for meeting coverage.

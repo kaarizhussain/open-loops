@@ -6,7 +6,7 @@ This setup targets the desktop Codex app with local Node.js and persistent files
 
 ## Install
 
-From this checkout, run `node tools/install-codex.js`. It installs `open-loops` under
+From this checkout, run `node tools/install-codex.js` (`--update` after pulling a new version). It installs `open-loops` under
 `$CODEX_HOME/skills` (default `~/.codex/skills`) and records the checkout's absolute
 path in the installed skill's `local.json`. It will not overwrite an existing skill.
 For another supported skill directory, use `--dest /absolute/path/to/open-loops`.

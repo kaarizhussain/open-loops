@@ -61,5 +61,10 @@ assert.strictEqual(JSON.parse(fs.readFileSync(path.join(target,'local.json'),'ut
 assert.ok(fs.existsSync(path.join(target,'references','codex.md')),'installed skill includes host workflow');
 fs.writeFileSync(path.join(target,'keep.txt'),'user customization');
 assert.throws(function () { install(target); },/already exists/);
-assert.strictEqual(fs.readFileSync(path.join(target,'keep.txt'),'utf8'),'user customization');
+// Updating replaces the installed copy as a whole and keeps the old one beside it.
+var updated = install(target, { update: true });
+assert.strictEqual(updated, target);
+assert.ok(!fs.existsSync(path.join(target, 'keep.txt')), 'the new copy is a fresh one, never merged into the old');
+assert.ok(fs.readdirSync(path.dirname(target)).some(function (n) { return /^installed.bak-/.test(n); }), 'and the old copy is kept');
+assert.strictEqual(JSON.parse(fs.readFileSync(path.join(target, 'local.json'), 'utf8')).checkout, path.resolve(__dirname, '..'));
 console.log('slack-json and Codex installation: OK');

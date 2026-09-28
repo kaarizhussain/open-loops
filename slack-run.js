@@ -316,7 +316,7 @@ function main(argv) {
 
   /* Every conversation becomes messages in the shape loops.js already takes. The
    * channel name stands in for a subject line, which Slack does not have. */
-  var byId = {}, roots = {}, skipped = 0, skippedThreads = 0, unread = [];
+  var byId = {}, roots = {}, skipped = 0, skippedThreads = 0, unread = [], orderSuspect = [];
   var window = cfg.lookbackDays;
   var cut = window ? new Date(new Date(today + 'T00:00:00Z') - window * 864e5).toISOString().slice(0, 10) : null;
   var sourceCoverage = {}, coverageParent = {}, coverageLabel = {};
@@ -346,6 +346,7 @@ function main(argv) {
      * posted in look identical from here, so this does not claim which — but the two
      * are worth different reactions and only one of them is fine, and saying nothing
      * lets the bad one pass as the good one. */
+    if (got.suspect) orderSuspect.push(c.channel);
     var read = recordCoverage(c, c.channel, got, null, c.channel);
     if (!got.length) {
       if (read.state === 'complete' && emptyResponse(c)) confirmedEmpty++;
@@ -373,6 +374,7 @@ function main(argv) {
       tzOffset: cfg.tzOffset, self: cfg.you, selfUid: cfg.selfUid || cfg.selfDm, users: input.users
     });
     repliesRead.forEach(function (m) { byId[m.id] = m; });
+    if (repliesRead.suspect) orderSuspect.push(t.channel + ' thread ' + t.root);
     var read = recordCoverage(t, t.root, repliesRead, t.channel,
       t.channel + ' thread ' + t.root);
     if (repliesRead.length) delete roots[t.root];
@@ -603,7 +605,7 @@ function main(argv) {
     /* Conversations skipped, not threads. One counter served both, and only the
        conversation count was reduced by it — so skipping a thread under-reported how
        much was read, and enough of them printed a negative number of conversations. */
-    read: { widenedStore: widenedStore, threads: convs.length - skipped, confirmedEmpty: confirmedEmpty,
+    read: { orderSuspect: orderSuspect, widenedStore: widenedStore, threads: convs.length - skipped, confirmedEmpty: confirmedEmpty,
             capped: shortRead.length > 0, shortRead: shortRead, unread: unread,
             calendarError: calendarError,
             windowStart: cut,

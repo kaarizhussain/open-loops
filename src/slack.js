@@ -191,8 +191,21 @@ function parseChannel(text, opts) {
    * newest first, and chat puts many messages inside one minute — sorting on the
    * truncated date leaves them scrambled, and a promise that lands after its own
    * delivery can never be closed by it. */
-  return out.filter(function (m) { return m.id; })
+  var order = out.map(function (m) { return parseFloat(m.id); });
+  var result = out.filter(function (m) { return m.id; })
             .sort(function (a, b) { return parseFloat(a.id) - parseFloat(b.id); });
+  /* A real read is strictly newest-first (a channel) or oldest-first (a thread). Message
+   * text can contain lines that look like a message header, and those parse as messages
+   * of their own; text alone cannot tell them from real ones, but a forged one seldom
+   * lands in exactly the right place. So a read that repeats a timestamp or runs both
+   * ways is flagged rather than trusted. Detection, not prevention. */
+  var down = 0, up = 0, same = 0;
+  for (var i = 1; i < order.length; i++) {
+    if (order[i] < order[i - 1]) down++; else if (order[i] > order[i - 1]) up++; else same++;
+  }
+  // Not enumerable: the result stays a plain list of messages to anything comparing it.
+  Object.defineProperty(result, "suspect", { value: same > 0 || (down > 0 && up > 0) });
+  return result;
 }
 
 if (typeof module !== 'undefined') {

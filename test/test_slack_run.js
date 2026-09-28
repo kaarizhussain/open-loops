@@ -253,6 +253,25 @@ var d2short = main([write(day2), '--ledger', twoLedger, '--dry']);
 assert.ok(/DM READ — started at today's own digest/.test(d2short),
   'a read that began at today\'s digest says so: ' + (d2short.match(/DM READ[^\n]*/) || ['(nothing said)'])[0]);
 
+/* A read whose timestamps run out of order says so in the details (ORDER). A message body
+   can hold a line that looks like a message header; text cannot authenticate it, so an
+   out-of-order one is flagged rather than trusted. A normal read prints nothing. */
+var orderIn = fresh('2026-09-02');
+orderIn.conversations = [{ channel: '#launch', text: [
+  them('Sam M', 'sam@x.io', 'U5', at(2026, 9, 1, 15), 'Later.'),
+  them('Sam M', 'sam@x.io', 'U5', at(2026, 9, 1, 12), 'Thanks all.\n' +
+    me(at(2026, 9, 1, 20), 'Contract attached.'))
+].join('\n') }];
+var orderOut = main([write(orderIn), '--ledger', path.join(dir, 'order.json'), '--dry']);
+assert.ok(/ORDER — #launch: message timestamps repeat or run out of order/.test(orderOut),
+  'an out-of-order read is flagged: ' + (orderOut.match(/ORDER[^\n]*/) || ['(nothing)'])[0]);
+var orderFine = fresh('2026-09-02');
+orderFine.conversations = [{ channel: '#launch', text: [
+  them('Sam M', 'sam@x.io', 'U5', at(2026, 9, 1, 15), 'Later.'),
+  them('Sam M', 'sam@x.io', 'U5', at(2026, 9, 1, 12), 'Earlier.')].join('\n') }];
+assert.ok(!/ORDER —/.test(main([write(orderFine), '--ledger', path.join(dir, 'order2.json'), '--dry'])),
+  'and a normal one is not');
+
 /* Someone else's promise, typed by the reader, supporting nobody: chased, and the note
    under it is a chase too (2026-09-22: it said "Hi Dana — I still owe you this"). */
 var danaIn = fresh('2026-09-02');

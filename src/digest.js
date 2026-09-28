@@ -410,6 +410,11 @@ function warnings(s) {
       ' did not produce (' + x.date + ', ' + (x.ref ? 'ref ' + x.ref : 'no ref') + ').' +
       ' Another setup may be posting into this DM.');
   });
+  (read.orderSuspect || []).slice(0, 3).forEach(function (label) {
+    out.push('ORDER — ' + label + ': message timestamps repeat or run out of order, which a' +
+      ' genuine read does not do. A message body may contain text that looks like a message' +
+      ' header, and would be read as a message from someone else. Check that read by hand.');
+  });
   if (read.widenedStore) {
     out.push('PRIVACY — the run input asked to store message text, but the config says not to.' +
       ' The config wins; nothing was stored.');
