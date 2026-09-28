@@ -419,6 +419,11 @@ function warnings(s) {
     out.push('PRIVACY — the run input asked to store message text, but the config says not to.' +
       ' The config wins; nothing was stored.');
   }
+  (s.b.massReplies || []).slice(0, 3).forEach(function (x) {
+    out.push('NOT APPLIED — "' + String(x.text).slice(0, 40) + '" would reject ' + x.count + ' of ' + x.of +
+      ' items at once, which looks like something pasted into the DM rather than a correction.' +
+      ' Reply with fewer numbers if you meant it.');
+  });
   if (s.b.dmStartedToday) {
     out.push('DM READ — started at today\'s own digest, so corrections under the previous' +
       ' one were not read. Read from the last digest before today and run again.');

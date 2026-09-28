@@ -857,6 +857,57 @@ marksFromDm([{ id: '200.1', threadId: '200.1', body: 'OPEN LOOPS — for 2026-09
              { id: '300.1', threadId: '100.1', body: '1' }], lateStore, lateD);
 assert.strictEqual(verdicts(lateD), 'old1=- old2=- new1=- new2=-', 'a reply whose digest was not read cannot be resolved, so it changes nothing');
 
+/* Two ways one bad message in the DM rejected most of a list (2026-09-28). A digest posted
+   without its header is not recognised as one, and its numbered lines — " 1  11d late …" —
+   read as a reply rejecting those items. Recognised by what it says, not by what it opens
+   with. And a single reply rejecting most of the list is something pasted, not a
+   correction, whatever it looks like: nothing applied, said once. */
+var bigRefs = { cccc: { date: '2026-09-23', keys: ['k1', 'k2', 'k3', 'k4', 'k5', 'k6', 'k7', 'k8'], asked: [] } };
+var bigStore = Object.assign({}, stub, {
+  refsSince: function () { return '2026-09-22'; },
+  recallRef: function (r) { return bigRefs[r] || null; }
+});
+var bigRows = function () {
+  return ['k1', 'k2', 'k3', 'k4', 'k5', 'k6', 'k7', 'k8'].map(function (k) { return [k, '2026-09-01', '2026-09-23', '', 'owed_by_us', '', '', '']; });
+};
+var rejected = function (rows) { return rows.filter(function (r) { return r[7] === 'x'; }).length; };
+var bigHead = { id: '100.1', threadId: '100.1', body: 'OPEN LOOPS — for 2026-09-23 · ref cccc\nx' };
+var lostHeader = [' 9 overdue · 11 open', '', 'TODAY — highest priority',
+  ' 1  11d late   Answer Sam — "Can you review the Q4 headcount plan?"', '               12d on the list',
+  ' 2  14d late   Answer Sam — "Are we still on for the vendor kickoff?"', ' 3  3d late    You promised — "I\'ll book the venue."',
+  '', 'Reply  3 7 not real · k 1 4 already knew'].join('\n');
+var g1 = bigRows();
+var gr1 = marksFromDm([bigHead, { id: '200.1', threadId: 'DM', body: lostHeader }], bigStore, g1);
+assert.strictEqual(rejected(g1), 0, 'a digest that lost its header rejects nothing');
+assert.strictEqual(gr1.marked, 0);
+var g2 = bigRows();
+var gr2 = marksFromDm([bigHead, { id: '200.1', threadId: 'DM', body: '1 2 3 4 5' }], bigStore, g2);
+assert.strictEqual(rejected(g2), 0, 'a reply rejecting 5 of 8 is not applied');
+assert.strictEqual(gr2.mass.length, 1, 'and is reported');
+assert.ok(gr2.seen.indexOf('200.1') > -1, 'once: it is marked read');
+var g3 = bigRows();
+marksFromDm([bigHead, { id: '200.1', threadId: 'DM', body: '1 2 3' }], bigStore, g3);
+assert.strictEqual(rejected(g3), 3, 'a few numbers is a correction, as ever');
+var g4 = bigRows();
+marksFromDm([bigHead, { id: '200.1', threadId: 'DM', body: '1 2 3 4' }], bigStore, g4);
+assert.strictEqual(rejected(g4), 4, 'even four of eight, which is not more than half');
+
+var massLedger = path.join(dir, 'mass.json');
+var bigDay = function (today) {
+  var o = fresh(today);
+  o.conversations = [{ channel: '#big', text: ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot'].map(function (w, i) {
+    return me(at(2026, 8, 25, 9 + i), "I'll send the " + w + " report Friday.");
+  }).join('\n') }];
+  return o;
+};
+var massDay1 = main([write(bigDay('2026-09-01')), '--ledger', massLedger]);
+var massIn = bigDay('2026-09-02');
+massIn.dmThread = [digestThread(at(2026, 9, 1, 18), massDay1, [[at(2026, 9, 1, 19), '1 2 3 4 5 6']])];
+var massOut = main([write(massIn), '--ledger', massLedger, '--dry']);
+assert.ok(/NOT APPLIED — "1 2 3 4 5 6" would reject 6 of \d+ items at once/.test(massOut),
+  'the reader is told: ' + (massOut.match(/NOT APPLIED[^\n]*/) || ['(nothing)'])[0]);
+assert.ok(!/Took your last reply/.test(massOut), 'and nothing was rejected');
+
 /* --- malformed input must not take the unattended run down ---
  *
  * A model writes input.json and a person writes the config, and both vary. Each of these

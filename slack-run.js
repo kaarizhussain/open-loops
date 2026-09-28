@@ -48,6 +48,10 @@ var DIGEST_HEADER = /^\s*(?:```)?\s*OPEN LOOPS — for (\d{4}-\d{2}-\d{2})(?:[^\
  * a number, which is a rejection (2026-09-23). Exact headers only: a reply that merely
  * starts "OPEN LOOPS …" is the reader's, and is read like any other. */
 var GENERATED_HEADER = /^\s*(?:```)?\s*OPEN LOOPS (?:DETAILS|NOTES) — /;
+/* A digest's own lines, wherever they turn up. A digest posted without its header (2026-09-28)
+ * is not recognised as one, and its numbered lines — " 1  11d late …" — read as a reply
+ * rejecting those items. Recognised by what it says rather than by what it opens with. */
+var DIGEST_BODY = /^TODAY — highest priority\s*$|^Reply {2}3 7 not real/m;
 
 /* Names match exactly, or by prefix with a trailing star: "deals-*". Deliberately not
  * a general pattern language — a scope rule nobody can read at a glance is a scope
@@ -91,7 +95,7 @@ function inScope(name, scope) {
  * forever, and re-applying it against a later, shorter list marks different items. */
 function marksFromDm(messages, store, rows) {
   var seen = store.seenReplies(), known = {}, marked = 0, wrong = 0, knew = 0, cur = null;
-  var misses = [], checked = 0, ignored = [], counted = {}, foreign = [], dates = [], byRoot = {};
+  var misses = [], checked = 0, ignored = [], counted = {}, foreign = [], dates = [], byRoot = {}, mass = [];
   var since = store.refsSince ? store.refsSince() : null;
   seen.forEach(function (id) { known[id] = 1; });
 
@@ -105,6 +109,8 @@ function marksFromDm(messages, store, rows) {
       byRoot[m.id] = cur;                          // a digest is the root of its own thread
       return;
     }
+    if (DIGEST_BODY.test(m.body)) return;          // a digest that lost its header, not a reply
+
     /* A reply typed in a digest's thread answers THAT digest, whenever it was typed. Reading
      * the newest header before it instead sent a late "1" under yesterday's digest to
      * today's item 1 (found in review, 2026-09-28). Only a reply with no thread of its own
@@ -129,6 +135,13 @@ function marksFromDm(messages, store, rows) {
     seen.push(m.id);
 
     var marks = L.parseMarks(m.body, keys.length);
+    /* One reply rejecting most of the list is almost certainly something pasted into the DM,
+     * not a correction: a real one is a handful of numbers, and a wrong rejection hides the
+     * item from every later digest. Nothing is applied, and the reader is told once. */
+    if (marks.wrong.length >= 4 && marks.wrong.length * 2 > keys.length) {
+      mass.push({ text: m.body.trim().split('\n')[0], count: marks.wrong.length, of: keys.length, date: forDate });
+      return;
+    }
     [].concat(marks.wrong || [], marks.knew || []).forEach(function (i) {
       var key = keys[i - 1];
       if (key && !rows.some(function (r) { return L.cell(r[L.COL.key]) === key; })) {
@@ -170,7 +183,7 @@ function marksFromDm(messages, store, rows) {
   });
 
   return { marked: marked, wrong: wrong, knew: knew, seen: seen, misses: misses, checked: checked,
-           ignored: ignored, foreign: foreign, dates: dates };
+           ignored: ignored, foreign: foreign, dates: dates, mass: mass };
 }
 
 /* Which numbered list a digest header refers to.
@@ -596,7 +609,7 @@ function main(argv) {
      * read them the night before. Built and unused until there was a calendar. */
     briefs: loops.meetingBriefs(messages, events, result.open, opts),
     ledger: ledger, marked: replies.marked, markedWrong: replies.wrong, markedKnew: replies.knew,
-    ref: ref, foreignReplies: replies.foreign, dmStartedToday: startedToday,
+    ref: ref, foreignReplies: replies.foreign, massReplies: replies.mass, dmStartedToday: startedToday,
     principals: cfg.supporting,
     muted: muted, mutes: L.suggestMutes(rows).filter(function (s) { return !already[s.phrase]; }),
     learnedNow: fresh, learnedAll: learned,
