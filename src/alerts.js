@@ -36,16 +36,29 @@ var DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /* On is a record written by `alerts.js --consent --yes`, never a flag someone can flip back.
  * Anything unrecognised is off: a config typo must not start reading channels. */
+/* Why an alerts setting that is there cannot be used, or null. Null for "not set" and "off" as well as for a valid one: those are not
+ * problems to explain, only a setting that claims to be on and is not. */
+function consentProblem(cfg) {
+  var a = cfg && cfg.alerts;
+  if (!a || a === false || (typeof a === 'object' && a.delivery === 'off')) return null;
+  if (typeof a !== 'object') return 'the "alerts" setting is ' + JSON.stringify(a) + ', not the record `tools/alerts.js --consent --yes` writes';
+  if (a.delivery !== 'dm') return '"delivery" is ' + JSON.stringify(a.delivery === undefined ? null : a.delivery) + ', and only "dm" is supported';
+  if (!/^\d{4}-\d{2}-\d{2}T/.test(String(a.consentedAt || ''))) return 'there is no valid consent record ("consentedAt")';
+  var times = a.times || DEFAULT_TIMES;
+  if (!Array.isArray(times) || !times.length || times.length > 3) return '"times" must be a list of one to three HH:MM times';
+  for (var i = 0; i < times.length; i++) {
+    var t = times[i];
+    if (typeof t !== 'string' || !HHMM.test(t)) return JSON.stringify(t) + ' in "times" is not a valid HH:MM time';
+    if (toMin(t) < CHECK_FROM || toMin(t) >= CHECKS_END) return '"' + t + '" in "times" is outside the allowed window (' + pad(CHECK_FROM / 60) + ':00 up to, not including, ' + pad(CHECKS_END / 60) + ':00)';
+  }
+  if (times.slice().sort().join() !== times.join()) return '"times" must be in ascending order (got ' + times.join(', ') + ')';
+  return null;
+}
+
 function consent(cfg) {
   var a = cfg && cfg.alerts;
-  if (!a || typeof a !== 'object' || a.delivery !== 'dm') return null;
-  if (!/^\d{4}-\d{2}-\d{2}T/.test(String(a.consentedAt || ''))) return null;
-  var times = a.times || DEFAULT_TIMES;
-  if (!Array.isArray(times) || !times.length || times.length > 3 ||
-      !times.every(function (t) { return HHMM.test(t) && toMin(t) >= CHECK_FROM && toMin(t) < CHECKS_END; })) return null;
-  var sorted = times.slice().sort();
-  if (sorted.join() !== times.join()) return null;
-  return { delivery: 'dm', consentedAt: a.consentedAt, times: times };
+  if (!a || typeof a !== 'object' || a.delivery !== 'dm' || consentProblem(cfg)) return null;
+  return { delivery: 'dm', consentedAt: a.consentedAt, times: a.times || DEFAULT_TIMES };
 }
 
 function toMin(hhmm) { return parseInt(hhmm.slice(0, 2), 10) * 60 + parseInt(hhmm.slice(3), 10); }
@@ -204,7 +217,11 @@ function evaluate(open, state, today, verdictOf) {
 function decide(cfg, now, dir) {
   var c = consent(cfg);
   var t = localParts(now);
-  if (!c) return { run: 'OFF', reason: 'alerts are off, so this task has nothing to do' };
+  if (!c) {
+    var why = consentProblem(cfg);
+    return { run: 'OFF', reason: why ? 'alerts are off: the "alerts" setting in your config cannot be used — ' + why + '; this task has nothing to do until it is fixed'
+                                   : 'alerts are off, so this task has nothing to do' };
+  }
   if (t.dow === 0 || t.dow === 6) return { run: 'SKIP', reason: 'weekend: checks run on weekdays' };
   if (t.min < CHECK_FROM) return { run: 'SKIP', reason: 'before ' + pad(CHECK_FROM / 60) + ':00' };
   var slot = null;
@@ -313,7 +330,7 @@ function confirm(dir, stamp, want) {
 module.exports = {
   DEFAULT_TIMES: DEFAULT_TIMES, LATE_MINUTES: LATE_MINUTES, MAX_ITEMS: MAX_ITEMS,
   consent: consent, level: level, evaluate: evaluate, decide: decide, render: render,
-  check: check, confirm: confirm, writeBaseline: writeBaseline, stageBaseline: stageBaseline,
+  consentProblem: consentProblem, check: check, confirm: confirm, writeBaseline: writeBaseline, stageBaseline: stageBaseline,
   promoteBaseline: promoteBaseline, baselineOf: baselineOf, stagedFile: stagedFile,
   load: load, save: save, file: file, baselineFile: baselineFile, parseNow: parseNow, localParts: localParts, addDays: addDays
 };

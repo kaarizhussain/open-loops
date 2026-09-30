@@ -65,6 +65,7 @@ function main(argv) {
     var c = A.consent(cfg), s = A.load(dir);
     return c ? 'Alerts on at ' + c.times.join(', ') + ' (since ' + c.consentedAt.slice(0, 10) + '). Baseline: ' +
       (s.baseline ? 'digest of ' + s.baseline.date : 'none yet') + '.'
+      : A.consentProblem(cfg) ? 'Alerts are off: the "alerts" setting in your config cannot be used — ' + A.consentProblem(cfg) + '.'
       : 'Alerts off' + (cfg.alerts && cfg.alerts.offAt ? ' (turned off ' + cfg.alerts.offAt.slice(0, 10) + ').'
         : cfg.alerts && cfg.alerts.offeredAt ? ' (offered ' + cfg.alerts.offeredAt.slice(0, 10) + ', declined).' : '.');
   }
