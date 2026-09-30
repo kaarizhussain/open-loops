@@ -117,4 +117,28 @@ main([write(base('2026-09-02')), '--ledger', okLedger]);
 fs.writeFileSync(path.join(dir, 'shape-old.json'), JSON.stringify({ rows: [] }));
 main([write(base('2026-09-01')), '--ledger', path.join(dir, 'shape-old.json')]);
 
+/* ---- 5. A same-day re-run that does not re-read the DM does not silently undo corrections ---- */
+(function () {
+  var NL = String.fromCharCode(10), fence = function (t) { return '```' + NL + t + NL + '```'; };
+  var led = path.join(dir, 'rollback.json');
+  var day1 = main([write(base('2026-09-01')), '--ledger', led]);
+  var brief = day1.split('-- thread --')[0].trim(), details = day1.split('-- thread --')[1].trim();
+  var ts = at(2026, 9, 1, 18);
+  var d2 = function () {
+    var i = base('2026-09-02');
+    i.dm = { channel: 'D0', text: me(ts, fence(brief)) };
+    i.dmThread = { root: ts, text: threadRead(ts, fence(brief), [
+      [ts.replace(/[.]0+$/, '.000100'), fence(details)],
+      [at(2026, 9, 1, 19).replace(/[.]0+$/, '.000200'), '1']]) };
+    return i;
+  };
+  var run1 = main([write(d2()), '--ledger', led]);
+  assert.ok(/marked not real/.test(run1) && /x/.test(verdicts(led)), 'precondition: the reply was applied on the first run today');
+  var run2 = main([write(base('2026-09-02')), '--ledger', led]);      // the DM was not read this time
+  assert.ok(!/x/.test(verdicts(led)), 'precondition: the re-run started from before the first, as designed');
+  assert.ok(/NOT RE-APPLIED/.test(run2), 'and it says the earlier correction was not carried over: ' + run2.split(NL).slice(0, 12).join(' | '));
+  var run3 = main([write(d2()), '--ledger', led]);      // read again: nothing was lost, nothing to warn about
+  assert.ok(!/NOT RE-APPLIED/.test(run3), 'no warning when the reply was read again');
+})();
+
 console.log('hardening: OK');

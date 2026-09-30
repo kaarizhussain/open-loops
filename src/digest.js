@@ -428,6 +428,11 @@ function warnings(s) {
       ' items at once, which looks like something pasted into the DM rather than a correction.' +
       ' Reply with fewer numbers if you meant it.');
   });
+  if (s.b.notReapplied) {
+    out.push('NOT RE-APPLIED — ' + s.b.notReapplied + (s.b.notReapplied === 1 ? ' correction' : ' corrections') +
+      ' from the earlier run today ' + (s.b.notReapplied === 1 ? 'was' : 'were') + ' not read again, so ' +
+      (s.b.notReapplied === 1 ? 'that item is' : 'those items are') + ' listed again. Run again with the digest thread read.');
+  }
   if (s.b.dmStartedToday) {
     out.push('DM READ — started at today\'s own digest, so corrections under the previous' +
       ' one were not read. Read from the last digest before today and run again.');

@@ -58,7 +58,7 @@ function load(file) {
 }
 
 function fileStore(file) {
-  var state = load(file);
+  var state = load(file), discarded = [];
 
   var flush = function () {
     var dir = path.dirname(file);
@@ -98,6 +98,9 @@ function fileStore(file) {
      * again under the digest that replaced it. */
     beginRun: function (date) {
       if (state.before && state.before.date === date) {
+        // What the earlier run today had recorded, so a run that does not re-read it can say so.
+        discarded = state.rows.filter(function (r) { return L.cell(r[L.COL.verdict]); })
+          .map(function (r) { return L.cell(r[L.COL.key]); });
         var keep = state.before, refs = state.refs, since = state.refsSince;
         state = JSON.parse(JSON.stringify(keep.state));
         state.before = keep;
@@ -111,6 +114,9 @@ function fileStore(file) {
         state.before = { date: date, state: snap };
       }
     },
+
+    // Keys that carried a verdict before a same-day re-run rolled the ledger back.
+    discardedVerdicts: function () { return discarded.slice(); },
 
     readLedger: function () {
       return state.rows.map(function (r) { return r.map(L.cell); })

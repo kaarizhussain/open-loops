@@ -452,6 +452,11 @@ function main(argv) {
   });
   dmMessages.sort(function (a, b) { return parseFloat(a.id) - parseFloat(b.id); });
   var replies = marksFromDm(dmMessages, store, rows);
+  /* A same-day re-run starts from before the first run, so a correction applied by the first
+   * run is gone unless this run reads that reply again. Say so instead of relisting the item. */
+  var carried = {};
+  rows.forEach(function (r) { if (L.cell(r[L.COL.verdict])) carried[L.cell(r[L.COL.key])] = 1; });
+  var notReapplied = store.discardedVerdicts().filter(function (k) { return !carried[k]; }).length;
   /* The read began at today's own digest although there was an earlier one to begin at.
    * Corrections typed under that earlier digest were never handed over, and a re-run
    * starts from before today's first run — so they would silently stop applying. */
@@ -631,7 +636,7 @@ function main(argv) {
      * read them the night before. Built and unused until there was a calendar. */
     briefs: loops.meetingBriefs(messages, events, result.open, opts),
     ledger: ledger, marked: replies.marked, markedWrong: replies.wrong, markedKnew: replies.knew,
-    ref: ref, foreignReplies: replies.foreign, massReplies: replies.mass, dmStartedToday: startedToday,
+    ref: ref, notReapplied: notReapplied, foreignReplies: replies.foreign, massReplies: replies.mass, dmStartedToday: startedToday,
     principals: cfg.supporting,
     muted: muted, mutes: L.suggestMutes(rows).filter(function (s) { return !already[s.phrase]; }),
     learnedNow: fresh, learnedAll: learned,
