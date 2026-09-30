@@ -380,10 +380,21 @@ function main(argv) {
   var convs = [].concat(input.conversations || []), threadsIn = [].concat(input.threads || []);
   convs.forEach(function (c) {
     if (!allowed(c.channel)) { skipped++; return; }
-    var got = readConversation(c, {
-      channel: c.channel, members: c.members || [], tzOffset: cfg.tzOffset,
-      self: cfg.you, selfUid: cfg.selfUid || cfg.selfDm, users: input.users
-    });
+    var got;
+    try {
+      got = readConversation(c, {
+        channel: c.channel, members: c.members || [], tzOffset: cfg.tzOffset,
+        self: cfg.you, selfUid: cfg.selfUid || cfg.selfDm, users: input.users
+      });
+    } catch (e) {
+      /* One conversation the parser refuses is that conversation's problem. It used to throw out of the
+       * whole run, so every other channel went unread too and nothing was posted. It is reported as
+       * unread, with no coverage recorded, so what it held stays not-verified instead of reading as
+       * cleared. The reason goes to stderr: it names a field and a timestamp, never message text. */
+      unread.push(c.channel);
+      process.stderr.write('open-loops: ' + c.channel + ' was not read: ' + e.message + String.fromCharCode(10));
+      return;
+    }
     /* Handed over and nothing came out. A fetch that failed and a channel nobody has
      * posted in look identical from here, so this does not claim which — but the two
      * are worth different reactions and only one of them is fine, and saying nothing
@@ -411,10 +422,17 @@ function main(argv) {
     // A thread inherits its channel's scope — excluding #hr and then reading a thread
     // inside it would be an exclusion that does not exclude.
     if (!allowed(t.channel)) { skippedThreads++; return; }
-    var repliesRead = readConversation(t, {
-      channel: t.channel, members: t.members || [], threadId: t.root,
-      tzOffset: cfg.tzOffset, self: cfg.you, selfUid: cfg.selfUid || cfg.selfDm, users: input.users
-    });
+    var repliesRead;
+    try {
+      repliesRead = readConversation(t, {
+        channel: t.channel, members: t.members || [], threadId: t.root,
+        tzOffset: cfg.tzOffset, self: cfg.you, selfUid: cfg.selfUid || cfg.selfDm, users: input.users
+      });
+    } catch (e) {
+      unread.push(t.channel + ' thread ' + t.root);
+      process.stderr.write('open-loops: ' + t.channel + ' thread ' + t.root + ' was not read: ' + e.message + String.fromCharCode(10));
+      return;
+    }
     repliesRead.forEach(function (m) { byId[slot(t.channel, m.id)] = m; });
     if (repliesRead.suspect) orderSuspect.push(t.channel + ' thread ' + t.root);
     var read = recordCoverage(t, t.root, repliesRead, t.channel,

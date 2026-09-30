@@ -42,8 +42,17 @@ assert.strictEqual(run(data,true),run(original,true),'both hosts produce the sam
 assert.ok(!fs.existsSync(ledger),'preview does not write the ledger');
 var posted = run(data);   // the digest as posted, reference and all
 var before = fs.readFileSync(ledger,'utf8');
-assert.throws(function () { run({...data,conversations:[{channel:'#deals',messages:[{...raw,ts:'broken'}]}]}); });
-assert.strictEqual(fs.readFileSync(ledger,'utf8'),before,'malformed structured input never changes saved state');
+/* A conversation the parser refuses no longer aborts the run (it used to throw, so nothing was posted and every
+ * other channel went unread too). It is reported as read-nothing, and what the ledger tracked is kept, not cleared. */
+var keysOf = function (f) { return JSON.parse(fs.readFileSync(f,'utf8')).rows.map(function (r) { return r[0]; }).sort().join(); };
+var keysBefore = keysOf(ledger), stderrWrite = process.stderr.write;
+process.stderr.write = function () { return true; };
+var brokenRun;
+// The next day: a same-day re-run would start from before the first run, which says nothing about clearing.
+try { brokenRun = run({...data,today:'2026-09-22',conversations:[{channel:'#deals',messages:[{...raw,ts:'broken'}]}]}); } finally { process.stderr.write = stderrWrite; }
+assert.ok(/READ NOTHING/.test(brokenRun) && !/Genuinely/.test(brokenRun), 'malformed structured input is reported as unread, not as a quiet day');
+assert.strictEqual(keysOf(ledger),keysBefore,'and every tracked item stays tracked: unread is not cleared');
+assert.ok(before.length > 0);
 var excluded = {...data,conversations:data.conversations.concat({channel:'#private',messages:[{...raw,ts:'broken'}]})};
 assert.doesNotThrow(function () { run(excluded,true); }, 'scope checked before parsing excluded channels');
 var digest = {ts:'1790020000.000001',user:'U123',text:posted.split('\n')[0]};

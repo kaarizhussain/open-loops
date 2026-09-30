@@ -269,4 +269,51 @@ main([write(base('2026-09-01')), '--ledger', path.join(dir, 'shape-old.json')]);
   assert.ok(out2.indexOf('alpha plan') > -1 && out2.indexOf('beta plan') > -1, 'a thread read in one channel does not replace the other channel message');
 })();
 
+/* ---- 11. One odd message never aborts the whole run ---- */
+(function () {
+  var J = require('../src/slack-json.js');
+  var NL = String.fromCharCode(10);
+  var fine = { ts: '1788000400.000100', user: 'U0AAA', text: "I'll send the odd-channel deck Friday." };
+  var withOdd = function (oddMsgs, led) {
+    var i = base('2026-09-01');
+    i.conversations.push({ channel: '#odd', members: [], messages: oddMsgs.concat([fine]) });
+    return main([write(i), '--ledger', led || path.join(dir, 'odd' + (n++) + '.json'), '--dry']);
+  };
+  // Shapes Slack really sends, and that carry no promise: tolerated, and the rest of the channel is read.
+  [['a bot message with bot_id and no user', { ts: '1788000100.000100', bot_id: 'B0BOT', text: 'Deploy finished' }],
+   ['a bot message with no text at all', { ts: '1788000200.000100', user: 'U0BBB', bot_id: 'B0BOT', subtype: 'bot_message' }],
+   ['a message whose only file was deleted', { ts: '1788000300.000100', user: 'U0CCC', text: '', files: [{ id: 'F0X', mode: 'tombstone' }] }]
+  ].forEach(function (c) {
+    var out = withOdd([c[1]]);
+    assert.ok(out.indexOf('odd-channel deck') > -1 && out.indexOf('scope doc') > -1, c[0] + ': the run goes on and the channel is still read');
+    assert.ok(out.indexOf('NOTHING READ IN #odd') === -1, c[0] + ': and nothing is reported broken');
+  });
+  // At the library, a user message with no text is still refused: that is a truncated read, not a bot.
+  assert.throws(function () { J.parseMessages([{ ts: '1788000100.000100', user: 'U0AAA' }]); }, /Invalid Slack message/);
+  assert.throws(function () { J.parseMessages([{ ts: '1788000100.000100', user: 'U0AAA', text: 'x', files: [{ id: 'F1' }] }]); }, /filenames/, 'and a nameless file that was not deleted');
+
+  // A conversation that really is malformed fails alone: named, with the reason, and the others are read.
+  var led = path.join(dir, 'oddled.json');
+  var i1 = base('2026-09-01');
+  i1.conversations.push({ channel: '#odd', members: [], messages: [fine] });
+  main([write(i1), '--ledger', led]);
+  assert.ok(rowsOf(led).length >= 3, 'precondition: the odd channel contributed a tracked item');
+  var stderrOf = [], realErr = process.stderr.write;
+  process.stderr.write = function (t) { stderrOf.push(String(t)); return true; };
+  var broken;
+  try { broken = withOdd([{ ts: 'broken', user: 'U0AAA', text: 'x' }], led); } finally { process.stderr.write = realErr; }
+  assert.ok(broken.indexOf('scope doc') > -1, 'the other conversations are still in the digest');
+  assert.ok(broken.indexOf('NOTHING READ IN #odd') > -1, 'the failed one is named in the existing unread warning');
+  assert.ok(/#odd was not read: Invalid Slack message/.test(stderrOf.join('')), 'and its reason goes to stderr: ' + stderrOf.join(''));
+  assert.ok(broken.indexOf('CLEARED SINCE THE LAST RUN') === -1 || broken.split('CLEARED SINCE THE LAST RUN')[1].indexOf('odd-channel deck') === -1,
+    'and what it held is not reported cleared just because it could not be read');
+  assert.ok(rowsOf(led).length >= 3, 'nor dropped from the ledger');
+
+  // A thread read that cannot be parsed is the same: it does not take the run down.
+  var t = base('2026-09-01');
+  t.threads = [{ channel: '#halcyon', root: '1788000500.000100', messages: [{ ts: 'nope', user: 'U0AAA', text: 'x' }] }];
+  var tout = main([write(t), '--ledger', path.join(dir, 'oddthread.json'), '--dry']);
+  assert.ok(tout.indexOf('scope doc') > -1 && tout.indexOf('NOTHING READ IN #halcyon thread') > -1, 'a bad thread read is named and skipped');
+})();
+
 console.log('hardening: OK');
