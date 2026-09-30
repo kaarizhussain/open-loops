@@ -63,8 +63,8 @@ Never message text, names or paths. Setup step 5 has the exact wording; use it.
 
 With midday alerts on, each check reads the same channels and calendar again, through the same
 connectors, so the host assistant sees that text at every check, and an alert is posted to their
-own DM. `alerts.json` beside the config holds item keys and urgency levels from the last digest —
-no message text.
+own DM. Two small files beside the config, `alerts-baseline.json` (written by the digest) and
+`alerts.json` (written by the checks), hold item keys and urgency levels — no message text.
 
 **It costs less than it sounds like.** Every open item in the digest is re-detected from
 live messages on each run, so the list still quotes every sentence in full. The single
@@ -476,11 +476,11 @@ which is why this text lives here. Ask in these words:
 > needs attention: a new commitment that is overdue, due today, or, for a priority contact,
 > due tomorrow, or an existing one that has just become due or overdue.
 >
-> At 09:00, 12:00 and 15:00 **your local time** on weekdays, a scheduled check re-reads the
+> At 12:00 and 15:00 **your local time** on weekdays, a scheduled check re-reads the
 > same Slack channels and calendar as your daily digest and compares them with your last
 > digest. Only if something matches, it posts one short alert message to your own Slack DM.
 > Each alert lists up to five items. Nothing is posted when nothing matches, so that's at most
-> three alerts a day. Items with no due date stay in your evening digest only. A priority
+> two alerts a day. Items with no due date stay in your evening digest only. A priority
 > contact is someone you've marked in your config as a key account, investor or executive.
 >
 > **Slack may not notify you.** The alert is posted from your own account to your own DM, and
@@ -500,13 +500,13 @@ which is why this text lives here. Ask in these words:
 > **What it needs.** The Claude app open and your computer awake at check times. If it was
 > closed or asleep, Claude runs at most one catch-up check when it next opens, for the most
 > recent check time it missed, and only if that time was less than two hours ago. Earlier
-> missed checks that day are not run, and a check more than two hours late is skipped. A check
-> is also skipped if another scheduled task is running at that moment. Your evening digest is
-> a separate task and is not affected.
+> missed checks that day are not run, and a check more than two hours late is skipped. Your
+> evening digest is a separate task and is not affected.
 >
-> To stop, set alerts to off in your config, or tell your assistant. The "Open Loops checks"
-> task then pauses itself at its next run, or you can delete it, and your daily digest carries
-> on. Turning alerts back on means answering this question again.
+> To stop, tell your assistant, and it turns alerts off and pauses the "Open Loops checks" task
+> straight away. If you set alerts to off in your config yourself, that task still starts one
+> final, empty session at its next run and pauses itself then; you can also delete it. Your
+> daily digest carries on either way. Turning alerts back on means answering this question again.
 >
 > **Turn on midday alerts?** yes / **no**
 
@@ -517,12 +517,14 @@ node <checkout>/tools/alerts.js --consent --yes --config <working dir>/openloops
 ```
 
 (`--consent` without `--yes` prints this question and records nothing.) Then create a **new**
-scheduled task named "Open Loops checks", running `0 9,12,15 * * 1-5` local, with the prompt
-below. Do not edit the daily digest task: one cron expression cannot mean "weekdays at 09:00,
-12:00 and 15:00, and every day at 18:00", so a second task is the only way to have no empty
-weekend runs and an untouched evening digest. The digest task stays the only ledger writer; this
-one writes only `alerts.json`, and never at the digest's hour. Like the digest prompt, it points
-back here instead of copying the procedure:
+scheduled task named "Open Loops checks", running `0 12,15 * * 1-5` local, with the prompt
+below. Do not edit the daily digest task: one cron expression cannot mean "weekdays at 12:00
+and 15:00, and every day at 18:00", so a second task is the only way to have no empty
+weekend runs and an untouched evening digest. The two tasks have separate schedules but can still
+overlap (a catch-up run after the app was closed, a long digest), so they share no file they both
+write: the digest task stays the only writer of the ledger and of `alerts-baseline.json`; this
+one writes only `alerts.json`. Like the digest prompt, it points back here instead of copying
+the procedure:
 
 ```
 Run the Open Loops midday check for the user's own Slack DM.
@@ -542,7 +544,8 @@ for alerts later, which is a request rather than an offer.
 
 **Turning alerts off** when they ask: run `node <checkout>/tools/alerts.js --off --config …`,
 then pause or delete the "Open Loops checks" task (a paused task starts nothing). If they only
-edit the config, the task pauses itself at its next run (`OFF`, above). Either way the daily digest
+edit the config, the task still starts one final, empty session and pauses itself at its next run
+(`OFF`, above). Either way the daily digest
 task is never touched.
 
 ## Changing it, or stopping it
@@ -554,8 +557,10 @@ To change what it reads or who it tracks, edit `openloops.config.json` and run a
 Adding a channel to `exclude`, adding a name to `supporting`, moving `lookbackDays` —
 all of it takes effect on the next run, and nothing needs rebuilding.
 
-To stop midday alerts, set `"alerts": false` in the config, or ask: the "Open Loops checks" task
-pauses itself at its next run (or delete it), and the evening digest task carries on untouched.
+To stop midday alerts, ask, and the "Open Loops checks" task is paused straight away. Setting
+`"alerts": false` in the config yourself works too, but the task then starts one final, empty
+session at its next run before it pauses itself (or delete it). The evening digest task carries on
+untouched.
 Alerts turn on again only by answering the question again.
 
 To stop the daily message, delete the scheduled task. The ledger stays where it is, so

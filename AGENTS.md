@@ -8,7 +8,7 @@ imports this file; keep the rules here, in one place.
 - Never `git push` without a fresh, explicit "push" from the owner, every time. An
   earlier approval, or advice like "I'd push it", is not one.
 - Every scheduled run pulls `main` from GitHub before it runs: the digest at 18:00, and —
-  once the owner has opted in to midday alerts — the checks at 09:00, 12:00 and 15:00 on
+  once the owner has opted in to midday alerts — the checks at 12:00 and 15:00 on
   weekdays. Whatever is pushed goes live at the next of these.
 - Commit locally when work is done and tested; leave the push to the owner.
 
@@ -21,9 +21,18 @@ This section is the owner's own deployment; someone running their own copy sets 
     ledger.
   - `open-loops-checks`, which exists only after the owner opts in to midday alerts, runs
     `slack-run.js --check` and posts the short, unnumbered `OPEN LOOPS ALERT` message, at
-    most once per check. It never writes the ledger and never posts a digest; it writes only
-    `alerts.json`, which the digest also writes (the baseline). The two tasks never run at
-    the same time.
+    most once per check. It never writes the ledger and never posts a digest.
+  - The tasks have separate schedules but can overlap: a catch-up run after the app was
+    closed, a long digest, a run started by hand. So each state file has one writer, and
+    neither task reads the other's file in order to write its own:
+    - `alerts-baseline.json`, written by the digest only, holds what the digest showed,
+      under a new version at every digest.
+    - `alerts.json`, written by the checks only, holds what they alerted and which slots
+      ran, tagged with the baseline version they compared against. When that version is no
+      longer the baseline's, the record is void and starts again.
+    - A check that overlaps a digest may compare against the older baseline once, and its
+      record is void at the next check. It can repeat or miss an alert that day; it cannot
+      corrupt a file or the ledger (writes are renamed into place).
 - Every other agent — Codex included — runs the digest with `--dry`, does not run `--check`
   or `tools/alerts.js --confirm`, and never posts, until the owner changes this line.
 - Two setups posting from two ledgers put two numbered lists in one DM, and a reply

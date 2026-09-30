@@ -1,21 +1,28 @@
 /* Midday alerts — deciding what changed since the last digest, and what to say about it.
  *
  * The evening digest lists everything outstanding. This answers a narrower question, asked
- * at 09:00, 12:00 and 15:00: has anything become urgent since the reader last looked? It
+ * at 12:00 and 15:00: has anything become urgent since the reader last looked? It
  * uses the detector's own fields (status, workDue, earlyForThem, tier weight) and adds no
  * judgement of its own — the rules below are comparisons, not inference.
  *
- * State lives in alerts.json beside the config, written by the scheduled task only: the
- * digest writes the baseline, a check writes what it alerted. The ledger is never written
- * by a check. No network here; posting is the caller's job, like the digest's.
+ * State is two files beside the config, one writer each, because the digest task and the checks
+ * task can overlap (a catch-up run after the app was closed, a long digest, a run by hand):
+ *   alerts-baseline.json  written by the digest only: what it showed, under a new version each time
+ *   alerts.json           written by the checks task only: what it alerted and which slots ran,
+ *                         tagged with the baseline version it was compared against
+ * Neither reads the other's file to write its own, so neither can lose the other's update. Check
+ * state whose version is not the current baseline's is void: the digest has since shown the reader
+ * everything, so nothing is left to dedupe. The ledger is never written by a check. No network
+ * here; posting is the caller's job, like the digest's.
  */
 var fs = require('fs');
 var path = require('path');
+var crypto = require('crypto');
 var loops = require('./loops.js');
 
 var keyOf = loops.loopKey;
 
-var DEFAULT_TIMES = ['09:00', '12:00', '15:00'];
+var DEFAULT_TIMES = ['12:00', '15:00'];
 var LATE_MINUTES = 120;          // a check this much later than its slot is skipped
 var CHECKS_END = 17 * 60;        // no configured check time may be at or after 17:00
 var CHECK_FROM = 8 * 60;         // and no check runs before 08:00
@@ -64,25 +71,55 @@ function addDays(date, n) {
 
 /* ------------------------------------------------------------------ state file */
 
-function file(dir) { return path.join(dir, 'alerts.json'); }
+function file(dir) { return path.join(dir, 'alerts.json'); }                  // the checks task's
+function baselineFile(dir) { return path.join(dir, 'alerts-baseline.json'); }  // the digest's
 
-function load(dir) {
-  var s;
-  try { s = JSON.parse(fs.readFileSync(file(dir), 'utf8')); } catch (e) { s = null; }
-  if (!s || typeof s !== 'object') s = {};
-  return { baseline: s.baseline && s.baseline.items ? s.baseline : null,
-           alerted: s.alerted && typeof s.alerted === 'object' ? s.alerted : {},
-           slots: s.slots && typeof s.slots === 'object' ? s.slots : {},
-           pending: s.pending || null };
+/* The other task may have this file open or be renaming over it at this moment. On Windows that
+ * fails with EPERM/EBUSY/EACCES instead of waiting, so those are retried briefly. */
+var BUSY = { EPERM: 1, EBUSY: 1, EACCES: 1 };
+function retry(fn) {
+  for (var i = 0; ; i++) {
+    try { return fn(); } catch (e) {
+      if (!BUSY[e.code] || i >= 40) throw e;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5 + i);
+    }
+  }
 }
 
+// A missing or torn file reads as "nothing there", never as half a record.
+function readJson(f) {
+  try { var s = JSON.parse(retry(function () { return fs.readFileSync(f, 'utf8'); })); return s && typeof s === 'object' ? s : {}; }
+  catch (e) { return {}; }
+}
+
+// Renamed into place, so a reader sees the old file or the new one, whole.
+function writeJson(f, o) {
+  var tmp = f + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(o, null, 1));
+  retry(function () { fs.renameSync(tmp, f); });
+}
+
+function loadBaseline(dir) {
+  var b = readJson(baselineFile(dir));
+  return b.version && typeof b.version === 'string' && b.items && typeof b.items === 'object' ? b : null;
+}
+
+/* Both files, as one view. Check state from another baseline version reads as empty. */
+function load(dir) {
+  var baseline = loadBaseline(dir), s = readJson(file(dir));
+  var same = !!baseline && s.baselineVersion === baseline.version;
+  return { baseline: baseline,
+           alerted: same && s.alerted && typeof s.alerted === 'object' ? s.alerted : {},
+           slots: same && s.slots && typeof s.slots === 'object' ? s.slots : {},
+           pending: same && s.pending ? s.pending : null };
+}
+
+/* The checks task's file only. It names the baseline version its contents were compared against;
+ * the baseline itself is never written here. */
 function save(dir, s) {
   var keep = {}, cutoff = addDays(localParts(new Date()).date, -KEEP_DAYS);
   Object.keys(s.slots).forEach(function (d) { if (d >= cutoff) keep[d] = s.slots[d]; });
-  s.slots = keep;
-  var tmp = file(dir) + '.tmp';       // renamed into place: a torn write reads as "no baseline"
-  fs.writeFileSync(tmp, JSON.stringify(s, null, 1));
-  fs.renameSync(tmp, file(dir));
+  writeJson(file(dir), { baselineVersion: s.baseline.version, alerted: s.alerted, slots: keep, pending: s.pending });
 }
 
 /* ------------------------------------------------------------------ the rules */
@@ -108,14 +145,13 @@ function baselineOf(open, today) {
   return { date: today, items: items };
 }
 
-/* Called by the digest run, after it has posted: what it showed becomes the baseline, and
- * anything alerted since is now part of it, so the alerted record starts again. */
+/* Called by the digest run, after it has posted: what it showed becomes the baseline, under a new
+ * version. Anything alerted since is now part of it, and the checks task sees the new version and
+ * starts its own record again. This is the only writer of the baseline file, and it touches nothing else. */
 function writeBaseline(dir, open, today) {
-  var s = load(dir);
-  s.baseline = baselineOf(open, today);
-  s.alerted = {};
-  s.pending = null;
-  save(dir, s);
+  var b = baselineOf(open, today);
+  b.version = crypto.randomBytes(8).toString('hex');
+  writeJson(baselineFile(dir), b);
 }
 
 /* Items that changed since the baseline and have not been alerted at this level.
@@ -245,5 +281,5 @@ module.exports = {
   DEFAULT_TIMES: DEFAULT_TIMES, LATE_MINUTES: LATE_MINUTES, MAX_ITEMS: MAX_ITEMS,
   consent: consent, level: level, evaluate: evaluate, decide: decide, render: render,
   check: check, confirm: confirm, writeBaseline: writeBaseline, baselineOf: baselineOf,
-  load: load, file: file, parseNow: parseNow, localParts: localParts, addDays: addDays
+  load: load, save: save, file: file, baselineFile: baselineFile, parseNow: parseNow, localParts: localParts, addDays: addDays
 };

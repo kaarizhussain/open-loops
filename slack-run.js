@@ -651,9 +651,10 @@ function main(argv) {
     store.rememberDigest(today, keys);
     store.rememberRef(ref, today, keys, sample.map(function (m) { return m.id; }));
     store.rememberReplies(replies.seen);
-    /* What this digest showed, for the next midday check to compare against. Written for
-     * everyone: it is a small file of keys and levels, inert until the reader opts in, and
-     * it is what lets a check run the same day they say yes. It must never cost the digest. */
+    /* What this digest showed, for the next midday check to compare against, in its own file
+     * that only the digest writes. Written for everyone: it is a small file of keys and levels,
+     * inert until the reader opts in, and it is what lets a check run the same day they say
+     * yes. It must never cost the digest. */
     // Beside a config only: a run with none has nowhere to keep it, and must not litter the working directory.
     if (fs.existsSync(configPath)) {
       try { alerts.writeBaseline(reportDir, result.open, today); } catch (e) { /* the next digest writes it */ }

@@ -15,11 +15,14 @@ var { main } = require('../slack-run.js');
 var cli = require('../tools/alerts.js');
 
 var tmp = function () { return fs.mkdtempSync(path.join(os.tmpdir(), 'ol-alerts-')); };
-var ON = { alerts: { delivery: 'dm', consentedAt: '2026-09-29T20:00:00Z', times: ['09:00', '12:00', '15:00'] } };
+// ON is what saying yes records: the shipped times. ON3 is a config with a third, custom check time.
+var ON = { alerts: { delivery: 'dm', consentedAt: '2026-09-29T20:00:00Z', times: ['12:00', '15:00'] } };
+var ON3 = { alerts: { delivery: 'dm', consentedAt: '2026-09-29T20:00:00Z', times: ['09:00', '12:00', '15:00'] } };
+assert.deepStrictEqual(A.DEFAULT_TIMES, ['12:00', '15:00'], 'the shipped checks are at 12:00 and 15:00');
 var now = function (s) { return A.parseNow(s); };
 
 /* ------------------------------ consent is a record, and anything else is off ------------------------------ */
-assert.ok(A.consent(ON), 'a consent record is on');
+assert.ok(A.consent(ON) && A.consent(ON3), 'a consent record is on');
 [undefined, {}, { alerts: false }, { alerts: true }, { alerts: { delivery: 'off', offeredAt: '2026-09-29T20:00:00Z' } },
  { alerts: { delivery: 'desktop', consentedAt: '2026-09-29T20:00:00Z' } },       // the ping that was never verified
  { alerts: { delivery: 'dm' } },                                                // no consent record
@@ -96,46 +99,50 @@ assert.deepStrictEqual(keys(ev([lo, hi], state({}))), [key(hi), key(lo)]);
 
 /* ------------------------------ what does a run of the checks task do? ------------------------------ */
 var dir = tmp();
-var base = { baseline: { date: '2026-09-30', items: {} }, alerted: {}, slots: {}, pending: null };
-fs.writeFileSync(A.file(dir), JSON.stringify(base));
+A.writeBaseline(dir, [], '2026-09-30');
 var d = function (cfg, t) { return A.decide(cfg, now(t), dir); };
 
-assert.deepStrictEqual([d(ON, '2026-10-01T09:03').run, d(ON, '2026-10-01T09:03').slot, d(ON, '2026-10-01T09:03').date], ['CHECK', '09:00', '2026-10-01']);
-assert.strictEqual(d(ON, '2026-10-01T12:04').slot, '12:00');
+assert.deepStrictEqual([d(ON, '2026-10-01T12:03').run, d(ON, '2026-10-01T12:03').slot, d(ON, '2026-10-01T12:03').date], ['CHECK', '12:00', '2026-10-01']);
 assert.strictEqual(d(ON, '2026-10-01T15:00').slot, '15:00');
 assert.strictEqual(d(ON, '2026-10-01T16:59').slot, '15:00', 'a 15:00 check still runs at 16:59');
-assert.strictEqual(d(ON, '2026-10-01T10:59').run, 'CHECK', 'a minute short of two hours late still runs');
-assert.strictEqual(d(ON, '2026-10-01T11:00').run, 'SKIP', 'two hours late is skipped: consent says "less than two hours ago"');
-assert.ok(/120 minutes late/.test(d(ON, '2026-10-01T11:00').reason), d(ON, '2026-10-01T11:00').reason);
+assert.strictEqual(d(ON, '2026-10-01T13:59').run, 'CHECK', 'a minute short of two hours late still runs');
+assert.strictEqual(d(ON, '2026-10-01T14:00').run, 'SKIP', 'two hours late is skipped: consent says "less than two hours ago"');
+assert.ok(/120 minutes late/.test(d(ON, '2026-10-01T14:00').reason), d(ON, '2026-10-01T14:00').reason);
 assert.strictEqual(d(ON, '2026-10-01T17:30').run, 'SKIP', 'the evening is not a check, and the digest is another task');
-assert.strictEqual(d(ON, '2026-10-01T08:30').run, 'SKIP');
+assert.strictEqual(d(ON, '2026-10-01T09:03').run, 'SKIP', 'there is no 09:00 check any more');
+assert.ok(/before the first check \(12:00\)/.test(d(ON, '2026-10-01T09:03').reason), d(ON, '2026-10-01T09:03').reason);
+assert.strictEqual(d(ON, '2026-10-01T07:30').run, 'SKIP');
+assert.strictEqual(d(ON3, '2026-10-01T09:03').slot, '09:00', 'a config that names a third time still gets it');
 assert.strictEqual(d(ON, '2026-10-03T12:00').run, 'SKIP', 'no checks on Saturday, even if someone runs the task by hand');
 assert.ok(/weekend/.test(d(ON, '2026-10-04T12:00').reason));
-assert.strictEqual(d(ON, '2026-10-05T09:02').run, 'CHECK', 'Monday');
+assert.strictEqual(d(ON, '2026-10-05T12:02').run, 'CHECK', 'Monday');
 
 // Alerts off: OFF, so the task pauses itself instead of starting empty sessions. It is never a digest.
-['2026-10-01T09:03', '2026-10-01T18:00', '2026-10-03T12:00'].forEach(function (t) {
+['2026-10-01T12:03', '2026-10-01T18:00', '2026-10-03T12:00'].forEach(function (t) {
   assert.strictEqual(d({}, t).run, 'OFF', 'no alerts entry: ' + t);
   assert.strictEqual(d({ alerts: false }, t).run, 'OFF', 'alerts false: ' + t);
   assert.strictEqual(d({ alerts: { delivery: 'off', offAt: '2026-10-02T10:00:00Z' } }, t).run, 'OFF');
 });
-assert.ok(/nothing to do/.test(d({}, '2026-10-01T09:03').reason));
+assert.ok(/nothing to do/.test(d({}, '2026-10-01T12:03').reason));
 
 // A slot that has run is done; no baseline means nothing to compare with.
-fs.writeFileSync(A.file(dir), JSON.stringify(Object.assign({}, base, { slots: { '2026-10-01': { '09:00': 'x' } } })));
-assert.strictEqual(d(ON, '2026-10-01T09:30').run, 'SKIP', 'a rerun of a done slot does nothing');
-assert.ok(/already ran/.test(d(ON, '2026-10-01T09:30').reason));
-assert.strictEqual(d(ON, '2026-10-01T12:00').run, 'CHECK');
-fs.writeFileSync(A.file(dir), '{}');
-assert.ok(/no digest baseline/.test(d(ON, '2026-10-01T09:03').reason), 'no baseline yet');
-fs.writeFileSync(A.file(dir), '{ torn');
-assert.strictEqual(d(ON, '2026-10-01T09:03').run, 'SKIP', 'a torn state file reads as no baseline, not as a crash');
+var ran = A.load(dir); ran.slots['2026-10-01'] = { '12:00': 'x' }; A.save(dir, ran);
+assert.strictEqual(d(ON, '2026-10-01T12:30').run, 'SKIP', 'a rerun of a done slot does nothing');
+assert.ok(/already ran/.test(d(ON, '2026-10-01T12:30').reason));
+assert.strictEqual(d(ON, '2026-10-01T15:00').run, 'CHECK');
+fs.writeFileSync(A.baselineFile(dir), '{}');
+assert.ok(/no digest baseline/.test(d(ON, '2026-10-01T12:03').reason), 'no baseline yet');
+fs.writeFileSync(A.baselineFile(dir), '{ torn');
+assert.strictEqual(d(ON, '2026-10-01T12:03').run, 'SKIP', 'a torn baseline file reads as no baseline, not as a crash');
+fs.writeFileSync(A.baselineFile(dir), JSON.stringify({ date: '2026-09-30', items: {} }));
+assert.ok(/no digest baseline/.test(d(ON, '2026-10-01T12:03').reason), 'a baseline with no version is not one');
 
 /* ------------------------------ a check, a post, a confirm ------------------------------ */
 var cdir = tmp();
-var save = function (o) { fs.writeFileSync(A.file(cdir), JSON.stringify(o)); };
-save(state({}));
-var text = A.check(cdir, ON, { slot: '09:00', date: TODAY, today: TODAY, open: [overdue, dueToday], verdictOf: null,
+// A fresh digest baseline (no items) and no check record.
+var fresh0 = function () { A.writeBaseline(cdir, [], '2026-09-30'); fs.rmSync(A.file(cdir), { force: true }); };
+fresh0();
+var text = A.check(cdir, ON3, { slot: '09:00', date: TODAY, today: TODAY, open: [overdue, dueToday], verdictOf: null,
   nameOf: function (w) { return 'Sam'; }, labels: { owed_to_us: 'They promised' } });
 assert.ok(text.indexOf('OPEN LOOPS ALERT — 2026-10-01 09:00\n2 things changed since your last digest.') === 0, text);
 assert.ok(/Next check 12:00\. Tonight's digest will number these; reply there to correct them\.$/.test(text), text);
@@ -144,26 +151,107 @@ assert.ok(!/ref [0-9a-f]{4}/.test(text), 'no reference: nothing here is answered
 assert.ok(A.load(cdir).pending && Object.keys(A.load(cdir).pending.alerts).length === 2, 'recorded as pending, not yet as alerted');
 assert.deepStrictEqual(A.load(cdir).alerted, {});
 // Not posted: the next check finds the same two, and the slot is still open.
-assert.ok(A.check(cdir, ON, { slot: '12:00', date: TODAY, today: TODAY, open: [overdue, dueToday] }), 'an alert that was never confirmed is offered again');
+assert.ok(A.check(cdir, ON3, { slot: '12:00', date: TODAY, today: TODAY, open: [overdue, dueToday] }), 'an alert that was never confirmed is offered again');
 assert.strictEqual(A.confirm(cdir), true);
 assert.strictEqual(Object.keys(A.load(cdir).alerted).length, 2);
 assert.ok(A.load(cdir).slots[TODAY]['12:00'], 'confirming completes its slot');
 assert.strictEqual(A.confirm(cdir), false, 'nothing left to confirm');
-assert.strictEqual(A.check(cdir, ON, { slot: '15:00', date: TODAY, today: TODAY, open: [overdue, dueToday] }), null,
+assert.strictEqual(A.check(cdir, ON3, { slot: '15:00', date: TODAY, today: TODAY, open: [overdue, dueToday] }), null,
   'confirmed, so no later check says it again');
 assert.ok(A.load(cdir).slots[TODAY]['15:00'], 'a check that finds nothing is complete at once');
 assert.throws(function () { A.check(cdir, {}, { slot: '09:00', date: TODAY, today: TODAY, open: [] }); }, /alerts are off/);
-assert.throws(function () { A.check(cdir, ON, { slot: '10:00', date: TODAY, today: TODAY, open: [] }); }, /not one of the configured/);
+assert.throws(function () { A.check(cdir, ON3, { slot: '10:00', date: TODAY, today: TODAY, open: [] }); }, /not one of the configured/);
 
 // At most five in a message, most urgent first, and the rest said out loud.
 var many = [], i;
 for (i = 0; i < 7; i++) many.push(mk({ status: 'overdue', due: '2026-09-29', workDue: '2026-09-29', overdueDays: 2, risk: 100 + i }));
-save(state({}));
-var big = A.check(cdir, ON, { slot: '09:00', date: TODAY, today: TODAY, open: many, labels: { owed_to_us: 'They promised' } });
+fresh0();
+var big = A.check(cdir, ON3, { slot: '09:00', date: TODAY, today: TODAY, open: many, labels: { owed_to_us: 'They promised' } });
 assert.strictEqual((big.match(/^• /gm) || []).length, 5, 'five items');
 assert.ok(/^7 things changed/m.test(big) && /and 2 more in tonight's digest\./.test(big), big);
 assert.ok(big.indexOf(many[6].what) < big.indexOf(many[2].what), 'highest risk first');
 assert.strictEqual(Object.keys(A.load(cdir).pending.alerts).length, 5, 'only what was shown is recorded');
+
+/* ------------------------------ a new digest baseline voids the check record ------------------------------ */
+var vdir = tmp();
+var bytes = function (f) { return fs.existsSync(f) ? fs.readFileSync(f) : null; };
+A.writeBaseline(vdir, [], '2026-09-30');
+var v1 = A.load(vdir).baseline.version;
+A.writeBaseline(vdir, [], '2026-09-30');
+assert.notStrictEqual(A.load(vdir).baseline.version, v1, 'every digest writes a new version, even on the same day');
+A.writeBaseline(vdir, [], '2026-09-30');
+var vFirst = A.load(vdir).baseline.version;
+assert.ok(A.check(vdir, ON, { slot: '12:00', date: TODAY, today: TODAY, open: [overdue] }));
+assert.ok(A.confirm(vdir));
+assert.strictEqual(Object.keys(A.load(vdir).alerted).length, 1);
+assert.strictEqual(A.decide(ON, now('2026-10-01T12:30'), vdir).run, 'SKIP', 'the 12:00 slot is done');
+assert.strictEqual(A.check(vdir, ON, { slot: '15:00', date: TODAY, today: TODAY, open: [overdue] }), null, 'and it is not alerted again');
+
+A.writeBaseline(vdir, [overdue], TODAY);                                     // the digest that showed it
+var afterDigest = A.load(vdir);
+assert.notStrictEqual(afterDigest.baseline.version, vFirst);
+assert.deepStrictEqual([afterDigest.alerted, afterDigest.slots, afterDigest.pending], [{}, {}, null],
+  'a new baseline version resets the check record: alerts, slots and pending');
+assert.strictEqual(afterDigest.baseline.items[key(overdue)], 3, 'and the new baseline is what the digest showed');
+assert.strictEqual(A.decide(ON, now('2026-10-01T12:30'), vdir).run, 'CHECK', 'the slot is open again, against the new baseline');
+assert.strictEqual(A.check(vdir, ON, { slot: '12:00', date: TODAY, today: TODAY, open: [overdue] }), null,
+  'and what the digest showed is not alerted, because the baseline covers it');
+var again = A.check(vdir, ON, { slot: '15:00', date: TODAY, today: TODAY, open: [overdue, dueToday] });
+assert.ok(again && /due today/.test(again) && !/days late/.test(again), 'only what is new since that digest');
+
+/* ------------------------------ overlapping tasks: one writer per file ------------------------------ */
+var odir = tmp();
+var record = function (s) { return [s.alerted, s.slots, s.pending]; };
+A.writeBaseline(odir, [], '2026-09-30');
+var vA = A.load(odir).baseline.version;
+
+// A check posts, and a digest lands before the check is confirmed.
+assert.ok(A.check(odir, ON, { slot: '12:00', date: TODAY, today: TODAY, open: [overdue] }));
+var checksFile = bytes(A.file(odir));
+A.writeBaseline(odir, [overdue], TODAY);
+assert.deepStrictEqual(bytes(A.file(odir)), checksFile, 'the digest never touches the checks task\'s file');
+var vB = A.load(odir).baseline.version;
+assert.notStrictEqual(vB, vA);
+var baselineFile1 = bytes(A.baselineFile(odir));
+assert.strictEqual(A.confirm(odir), false, 'the pending alert is void: the digest has shown it since');
+assert.deepStrictEqual(bytes(A.baselineFile(odir)), baselineFile1, 'confirming never touches the digest\'s file');
+assert.deepStrictEqual(record(A.load(odir)), [{}, {}, null]);
+
+// A check that read the old baseline saves after the digest has written a new one.
+var slow = A.load(odir);                                                     // reads version vB
+A.writeBaseline(odir, [], '2026-10-01');                                     // the digest again: vC
+var vC = A.load(odir).baseline.version;
+var baselineFile2 = bytes(A.baselineFile(odir));
+slow.alerted[key(dueToday)] = 2; slow.slots[TODAY] = { '12:00': 'x' };
+A.save(odir, slow);                                                          // the slow check's write lands late
+assert.deepStrictEqual(bytes(A.baselineFile(odir)), baselineFile2, 'a late check write cannot disturb the baseline');
+assert.strictEqual(A.load(odir).baseline.version, vC);
+assert.deepStrictEqual(record(A.load(odir)), [{}, {}, null], 'what it saved was about an older baseline, so it is void');
+assert.ok(A.check(odir, ON, { slot: '12:00', date: TODAY, today: TODAY, open: [dueToday] }), 'and the next check starts clean, on the new baseline');
+assert.ok(A.confirm(odir));
+assert.strictEqual(A.load(odir).baseline.version, vC);
+assert.strictEqual(A.load(odir).alerted[key(dueToday)], 2);
+
+// Really at once: a digest rewriting its baseline in one process while checks run in another.
+// Each file has one writer, so every read must find a whole file and no check may find "no baseline".
+var sdir = tmp();
+A.writeBaseline(sdir, [], '2026-09-30');
+var stress = function (body) {
+  return 'var A=require(' + JSON.stringify(path.join(__dirname, '..', 'src', 'alerts.js')) + ');' +
+    'var dir=' + JSON.stringify(sdir) + ',ON=' + JSON.stringify(ON) + ',item=' + JSON.stringify(overdue) + ';' + body;
+};
+var digestLoop = stress('for(var i=0;i<300;i++)A.writeBaseline(dir,i%2?[item]:[],"2026-10-01");');
+var checksLoop = stress('var bad=0;for(var i=0;i<300;i++){try{A.check(dir,ON,{slot:"12:00",date:"2026-10-01",today:"2026-10-01",open:[item]});A.confirm(dir);}' +
+  'catch(e){bad++;console.error(e.message);}}process.exit(bad?1:0);');
+var both = require('child_process').spawnSync(process.execPath, ['-e',
+  'var cp=require("child_process"),n=2,bad=0;' +
+  '[' + JSON.stringify(digestLoop) + ',' + JSON.stringify(checksLoop) + '].forEach(function(c){' +
+  'cp.spawn(process.execPath,["-e",c],{stdio:"inherit"}).on("exit",function(code){bad+=code?1:0;if(!--n)process.exit(bad);});});'],
+  { encoding: 'utf8' });
+assert.strictEqual(both.status, 0, 'overlapping digest and checks writes: ' + both.stderr);
+var fin = A.load(sdir);
+assert.ok(fin.baseline && fin.baseline.version, 'the baseline is whole after the overlap');
+JSON.parse(fs.readFileSync(A.file(sdir), 'utf8'));                          // and so is the checks file
 
 /* ------------------------------ the real runner ------------------------------ */
 var ME = 'you@example.com';
@@ -193,12 +281,11 @@ var input = function (today, extra, dm) {
 var checkArgs = function (today, slot, t, extra, dm) {
   return [input(today, extra, dm), '--config', cfgPath, '--check', '--slot', slot, '--today', today, '--now', t];
 };
-var bytes = function (f) { return fs.existsSync(f) ? fs.readFileSync(f) : null; };
 
-writeCfg(ON);
+writeCfg(ON3);
 // A dry digest writes nothing, so it cannot fake a baseline.
 main([input('2026-09-30'), '--config', cfgPath, '--dry']);
-assert.ok(!fs.existsSync(A.file(rdir)), 'a dry run writes no baseline');
+assert.ok(!fs.existsSync(A.baselineFile(rdir)) && !fs.existsSync(A.file(rdir)), 'a dry run writes no baseline');
 assert.ok(/^SKIP — no digest baseline yet/.test(cli.main(['--which', '--now', '2026-10-01T09:05', '--config', cfgPath])), 'no digest has run yet, so there is nothing to compare with');
 
 // The evening digest writes it.
@@ -207,14 +294,14 @@ var b = A.load(rdir).baseline;
 assert.strictEqual(b.date, '2026-09-30');
 assert.deepStrictEqual(Object.keys(b.items).map(function (k) { return b.items[k]; }).sort(), [0, 1, 2],
   'the deck (undated) 0, Lena\'s due tomorrow 1, the scope doc due that day 2');
-assert.ok(!/scope doc|Lena|contract/.test(fs.readFileSync(A.file(rdir), 'utf8')), 'the baseline holds keys and levels, no message text');
+assert.ok(!/scope doc|Lena|contract/.test(fs.readFileSync(A.baselineFile(rdir), 'utf8')), 'the baseline holds keys and levels, no message text');
 assert.strictEqual(cli.main(['--which', '--now', '2026-10-01T09:05', '--config', cfgPath]), 'CHECK 09:00 2026-10-01 — check 09:00');
 
 // Thursday 09:05. New: Sam promises today; Lena promises another thing for tomorrow (a priority contact); Sam promises tomorrow (not).
 var fresh = [sam(at(10, 1, 12), "We'll send you the signed MSA Thursday Oct 1."),
              lena(at(10, 1, 13), "We'll send the revised SOW Friday Oct 2."),
              sam(at(10, 1, 14), "We'll send the invoice Friday Oct 2.")];
-var ledgerBefore = bytes(ledger), stateBefore = bytes(A.file(rdir));
+var ledgerBefore = bytes(ledger), baselineBefore = bytes(A.baselineFile(rdir));
 var alert1 = main(checkArgs('2026-10-01', '09:00', '2026-10-01T09:05', fresh));
 assert.ok(alert1.indexOf('OPEN LOOPS ALERT — 2026-10-01 09:00\n4 things changed since your last digest.') === 0, alert1);
 var fresh1 = alert1.slice(alert1.indexOf('New and urgent'), alert1.indexOf('Now overdue'));
@@ -227,6 +314,7 @@ assert.ok(/Now due today\n• They promised — Lena: "We'll get the revised con
 assert.ok(!/deck/.test(alert1), 'undated: digest only');
 assert.deepStrictEqual(bytes(ledger), ledgerBefore, 'a check never writes the ledger');
 assert.ok(A.load(rdir).pending, 'pending until confirmed');
+assert.deepStrictEqual(bytes(A.baselineFile(rdir)), baselineBefore, 'a check never writes the digest\'s baseline');
 
 // Posted and confirmed: the 12:00 check has nothing to say about them — and a new one still does.
 assert.ok(/Confirmed/.test(cli.main(['--confirm', '--config', cfgPath])));
@@ -243,15 +331,15 @@ assert.throws(function () { main([input('2026-10-01', fresh), '--config', cfgPat
   /--today 2026-10-01/);
 assert.throws(function () { main([input('2026-10-01', fresh), '--config', cfgPath, '--check', '--now', '2026-10-01T12:05', '--today', '2026-10-01']); }, /--slot/);
 writeCfg({ alerts: false });
-var offBefore = bytes(A.file(rdir));
+var offBefore = [bytes(A.file(rdir)), bytes(A.baselineFile(rdir))];
 assert.ok(/^ALERTS OFF/.test(main(checkArgs('2026-10-01', '12:00', '2026-10-01T12:05', fresh))));
-assert.deepStrictEqual(bytes(A.file(rdir)), offBefore, 'off: nothing written');
-writeCfg(ON);
+assert.deepStrictEqual([bytes(A.file(rdir)), bytes(A.baselineFile(rdir))], offBefore, 'off: nothing written');
+writeCfg(ON3);
 
 // A reply typed in the DM before the check counts: an item the reader rejected does not alert.
 var dmDigest = me(at(9, 30, 22), '```\n' + digest1 + '\n```');
 var rejection = me(at(10, 1, 11), '1');                                      // item 1 was the scope doc
-fs.writeFileSync(A.file(rdir), JSON.stringify(Object.assign(A.load(rdir), { alerted: {}, pending: null, slots: {} })));
+fs.rmSync(A.file(rdir), { force: true });                                    // a clean check record, same baseline
 var afterReply = main(checkArgs('2026-10-01', '09:00', '2026-10-01T09:05', fresh, dmDigest + '\n' + rejection));
 assert.ok(!/scope doc/.test(afterReply) && /^OPEN LOOPS ALERT/.test(afterReply), 'the rejected item does not alert; the rest do');
 assert.deepStrictEqual(bytes(ledger), ledgerBefore, 'and a reply read by a check is not recorded');
@@ -267,13 +355,14 @@ var alertMsg = me(at(10, 1, 13), [
   '• You promised — "x" (#vector-freight) · 1 day late',
   '',
   'Next check 12:00. Tonight\'s digest will number these; reply there to correct them.'].join('\n'));
-fs.rmSync(ledger); fs.rmSync(A.file(rdir));
+fs.rmSync(ledger); fs.rmSync(A.file(rdir), { force: true }); fs.rmSync(A.baselineFile(rdir));
 var d1 = main([input('2026-09-30'), '--config', cfgPath]);
 var refOf = function (t) { return (t.split('\n')[0].match(/· ref ([0-9a-f]{4})$/) || [])[1]; };
 var dm2 = me(at(9, 30, 22), '```\n' + d1 + '\n```') + '\n' + alertMsg;
 // Something alerted before this digest: the digest's baseline already contains it, so the record starts again.
 var st = A.load(rdir); st.alerted = { 'some|key': 3 }; st.pending = { date: '2026-10-01', slot: '09:00', alerts: { 'some|key': 3 } };
-fs.writeFileSync(A.file(rdir), JSON.stringify(st));
+A.save(rdir, st);
+assert.deepStrictEqual(Object.keys(A.load(rdir).alerted), ['some|key'], 'the record is there before the digest');
 var d2 = main([input('2026-10-01', fresh, dm2), '--config', cfgPath]);
 var rows = JSON.parse(fs.readFileSync(ledger, 'utf8')).rows;
 assert.ok(rows.length >= 3 && rows.every(function (r) { return !r[L.COL.verdict]; }), 'an alert in the DM rejects nothing: ' + JSON.stringify(rows.map(function (r) { return r[7]; })));
@@ -289,7 +378,7 @@ loneJson.self = ME; loneJson.tzOffset = 0; loneJson.spotCheck = 0;
 fs.writeFileSync(loneIn, JSON.stringify(loneJson));
 try { main([loneIn, '--ledger', path.join(lone, 'lone-ledger.json')]); } finally { process.chdir(here); }
 assert.ok(fs.existsSync(path.join(lone, 'lone-ledger.json')), 'the digest itself ran and recorded');
-assert.ok(!fs.existsSync(path.join(lone, 'alerts.json')), 'no config, no baseline');
+assert.ok(!fs.existsSync(path.join(lone, 'alerts-baseline.json')) && !fs.existsSync(path.join(lone, 'alerts.json')), 'no config, no baseline');
 
 // A digest is the same digest with or without alerts: same numbering, same reference.
 var plainDir = tmp(), plainCfg = path.join(plainDir, 'openloops.config.json');
@@ -307,14 +396,16 @@ assert.ok(/^\*\*Midday alerts — off unless you say yes\.\*\*/.test(asked) && /
 assert.strictEqual(A.consent(JSON.parse(fs.readFileSync(ccfg, 'utf8'))), null, 'asking records nothing');
 var skill = fs.readFileSync(path.join(__dirname, '..', 'skills', 'open-loops', 'SKILL.md'), 'utf8').split(String.fromCharCode(13)).join('');
 cli.consentText().split('\n').filter(Boolean).forEach(function (l) { assert.ok(skill.indexOf('> ' + l) > -1, 'SKILL.md\'s own words: ' + l); });
-['Slack may not notify you', 'routine notification after every check', 'more than two hours late is skipped', 'for a priority',
- 'Saying yes adds a second scheduled task', 'Your daily digest task is not changed', 'another scheduled task is running',
- 'pauses itself at its next run'].forEach(function (p) { assert.ok(asked.indexOf(p) > -1, 'consent says: ' + p); });
+['At 12:00 and 15:00 **your local time** on weekdays', 'at most\ntwo alerts a day', 'Slack may not notify you', 'routine notification after every check',
+ 'more than two hours late is skipped', 'for a priority', 'Saying yes adds a second scheduled task', 'Your daily digest task is not changed',
+ 'still starts one\nfinal, empty session at its next run and pauses itself then'].forEach(function (p) { assert.ok(asked.indexOf(p) > -1, 'consent says: ' + p); });
+assert.ok(!/another scheduled task/.test(asked), 'no claim that another running task skips a check');
+assert.ok(!/09:00|three alerts/.test(asked), 'no 09:00 check');
 assert.ok(!/desktop notification from the Claude app|count only|count-only/i.test(asked), 'the unverified ping is not promised');
 assert.ok(!/edits your existing/.test(asked), 'the digest task is not edited');
 assert.ok(/Midday alerts on/.test(cli.main(['--consent', '--yes', '--config', ccfg])));
 assert.ok(A.consent(JSON.parse(fs.readFileSync(ccfg, 'utf8'))), '--yes records');
-assert.ok(/Alerts on at 09:00, 12:00, 15:00/.test(cli.main(['--status', '--config', ccfg])));
+assert.ok(/Alerts on at 12:00, 15:00/.test(cli.main(['--status', '--config', ccfg])));
 assert.ok(/Recorded/.test(cli.main(['--decline', '--config', ccfg])));
 assert.strictEqual(A.consent(JSON.parse(fs.readFileSync(ccfg, 'utf8'))), null, 'declining turns it off');
 assert.ok(/declined/.test(cli.main(['--status', '--config', ccfg])));
@@ -339,8 +430,8 @@ assert.ok(/limit=15/.test(skill), 'the DM read is wider when alerts are on');
 
 /* ------------------------------ the schedule ------------------------------ */
 var offer = skill.slice(skill.indexOf('### Offering midday alerts'), skill.indexOf('## Changing it, or stopping it'));
-assert.ok(/`0 9,12,15 \* \* 1-5`/.test(offer), 'the checks task is weekdays only, so no empty weekend sessions');
-assert.ok(!/0 9,12,15,18/.test(skill), 'and never rides on the digest task\'s schedule');
+assert.ok(/`0 12,15 \* \* 1-5`/.test(offer), 'the checks task is 12:00 and 15:00, weekdays only, so no empty weekend sessions');
+assert.ok(!/0 9,12,15|0 12,15,18/.test(skill), 'and never rides on the digest task\'s schedule');
 assert.ok(/Do not edit the daily digest task/.test(offer));
 assert.ok(!/DIGEST, CHECK|On `DIGEST`|On DIGEST/.test(inCheck + offer), 'the checks task is never sent to the digest');
 assert.ok(/`OFF`[^]*update_scheduled_task[^]*enabled: false/.test(inCheck), 'a task that finds alerts off pauses itself');
