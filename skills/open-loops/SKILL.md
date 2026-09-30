@@ -430,8 +430,10 @@ Read it back by the timestamp the call returned: its first line must equal the f
 the runner's output character for character. Only then run
 `node <checkout>/tools/alerts.js --confirm --config <working dir>/openloops.config.json`, which records
 that it was posted so no later check says it again. If the post failed or the read-back differs,
-do not confirm: the next check finds the same items and tries again. Never edit the text to fix
-it, and never write `alerts.json` by hand.
+do not confirm: the next check finds the same items and tries again. That is also why a post that
+really landed but was never confirmed (the run died, or the read-back failed) can be posted a
+second time; the consent text says so. Never edit the text to fix it, and never write
+`alerts.json` by hand.
 
 A check never posts a digest, never touches the ledger, and never asks anything. If something
 fails, post nothing and say what broke. The same closing step as a digest applies:
@@ -479,7 +481,7 @@ which is why this text lives here. Ask in these words:
 > At 12:00 and 15:00 **your local time** on weekdays, a scheduled check re-reads the
 > same Slack channels and calendar as your daily digest and compares them with your last
 > digest. Only if something matches, it posts one short alert message to your own Slack DM.
-> Each alert lists up to five items. Nothing is posted when nothing matches, so that's at most
+> Each alert lists up to five items. Nothing is posted when nothing matches, so that's normally at most
 > two alerts a day. Items with no due date stay in your evening digest only. A priority
 > contact is someone you've marked in your config as a key account, investor or executive.
 >
@@ -491,6 +493,11 @@ which is why this text lives here. Ask in these words:
 > **Claude may show a routine notification after every check.** The Claude app may show a
 > "Scheduled task completed" notification after each check, including checks that found
 > nothing and posted no alert. That notification doesn't say whether there was an alert.
+>
+> **A repeat is possible.** Open Loops records that an alert was posted only after it has read
+> the post back from your DM. If a check is interrupted after posting, or cannot read the post
+> back, the next check can post the same items again, so on a rare day you may see more than two
+> alerts.
 >
 > **What this changes.** Saying yes adds a second scheduled task, "Open Loops checks", that
 > runs at those times on weekdays. Your daily digest task is not changed. Each check reads the

@@ -29,10 +29,15 @@ This section is the owner's own deployment; someone running their own copy sets 
       under a new version at every digest.
     - `alerts.json`, written by the checks only, holds what they alerted and which slots
       ran, tagged with the baseline version they compared against. When that version is no
-      longer the baseline's, the record is void and starts again.
+      longer the baseline's, the alerts it recorded are void and start again. The slots that
+      already ran that day stay done: a new baseline never reopens a completed 12:00 or 15:00.
     - A check that overlaps a digest may compare against the older baseline once, and its
-      record is void at the next check. It can repeat or miss an alert that day; it cannot
+      alerts are void at the next check. It can repeat or miss an alert that day; it cannot
       corrupt a file or the ledger (writes are renamed into place).
+    - An alert is recorded as posted only by `tools/alerts.js --confirm`, after the read-back. A
+      check that posts and then dies, or cannot read the post back, leaves it unrecorded, and
+      the next check can post the same items again. That is accepted, and the consent text
+      says so; do not "fix" it by confirming before the post, which loses alerts instead.
 - Every other agent — Codex included — runs the digest with `--dry`, does not run `--check`
   or `tools/alerts.js --confirm`, and never posts, until the owner changes this line.
 - Two setups posting from two ledgers put two numbered lists in one DM, and a reply

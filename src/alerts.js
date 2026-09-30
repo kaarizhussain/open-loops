@@ -11,8 +11,9 @@
  *   alerts.json           written by the checks task only: what it alerted and which slots ran,
  *                         tagged with the baseline version it was compared against
  * Neither reads the other's file to write its own, so neither can lose the other's update. Check
- * state whose version is not the current baseline's is void: the digest has since shown the reader
- * everything, so nothing is left to dedupe. The ledger is never written by a check. No network
+ * state whose version is not the current baseline's loses its item dedupe (alerted, pending items):
+ * the digest has since shown the reader everything. It keeps which slots ran that calendar day, so a
+ * new baseline never reopens a 12:00 or 15:00 check that already completed. The ledger is never written by a check. No network
  * here; posting is the caller's job, like the digest's.
  */
 var fs = require('fs');
@@ -104,14 +105,16 @@ function loadBaseline(dir) {
   return b.version && typeof b.version === 'string' && b.items && typeof b.items === 'object' ? b : null;
 }
 
-/* Both files, as one view. Check state from another baseline version reads as empty. */
+/* Both files, as one view. Check state from another baseline version loses its item dedupe: alerted
+ * is empty and a pending alert keeps only its slot, so confirming it still completes that slot. Slots
+ * that ran are kept, since the baseline changing does not un-run a check. */
 function load(dir) {
   var baseline = loadBaseline(dir), s = readJson(file(dir));
   var same = !!baseline && s.baselineVersion === baseline.version;
   return { baseline: baseline,
            alerted: same && s.alerted && typeof s.alerted === 'object' ? s.alerted : {},
-           slots: same && s.slots && typeof s.slots === 'object' ? s.slots : {},
-           pending: same && s.pending ? s.pending : null };
+           slots: s.slots && typeof s.slots === 'object' ? s.slots : {},
+           pending: !s.pending ? null : same ? s.pending : { date: s.pending.date, slot: s.pending.slot, alerts: {} } };
 }
 
 /* The checks task's file only. It names the baseline version its contents were compared against;
@@ -267,7 +270,7 @@ function check(dir, cfg, o) {
 /* The alert is in the DM: remember it, so no later check says it again, and the slot is done. */
 function confirm(dir, stamp) {
   var s = load(dir);
-  if (!s.pending) return false;
+  if (!s.baseline || !s.pending) return false;
   Object.keys(s.pending.alerts).forEach(function (k) {
     s.alerted[k] = Math.max(s.alerted[k] || 0, s.pending.alerts[k]);
   });

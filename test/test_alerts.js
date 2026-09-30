@@ -172,7 +172,7 @@ assert.ok(/^7 things changed/m.test(big) && /and 2 more in tonight's digest\./.t
 assert.ok(big.indexOf(many[6].what) < big.indexOf(many[2].what), 'highest risk first');
 assert.strictEqual(Object.keys(A.load(cdir).pending.alerts).length, 5, 'only what was shown is recorded');
 
-/* ------------------------------ a new digest baseline voids the check record ------------------------------ */
+/* ------------------------------ a new digest baseline resets item dedupe, not the day's slots ------------------------------ */
 var vdir = tmp();
 var bytes = function (f) { return fs.existsSync(f) ? fs.readFileSync(f) : null; };
 A.writeBaseline(vdir, [], '2026-09-30');
@@ -184,24 +184,58 @@ var vFirst = A.load(vdir).baseline.version;
 assert.ok(A.check(vdir, ON, { slot: '12:00', date: TODAY, today: TODAY, open: [overdue] }));
 assert.ok(A.confirm(vdir));
 assert.strictEqual(Object.keys(A.load(vdir).alerted).length, 1);
-assert.strictEqual(A.decide(ON, now('2026-10-01T12:30'), vdir).run, 'SKIP', 'the 12:00 slot is done');
+var slot12 = function (dir, cfg) { return A.decide(cfg || ON, now('2026-10-01T12:30'), dir); };
+assert.strictEqual(slot12(vdir).run, 'SKIP', 'the 12:00 slot is done');
 assert.strictEqual(A.check(vdir, ON, { slot: '15:00', date: TODAY, today: TODAY, open: [overdue] }), null, 'and it is not alerted again');
 
 A.writeBaseline(vdir, [overdue], TODAY);                                     // the digest that showed it
 var afterDigest = A.load(vdir);
 assert.notStrictEqual(afterDigest.baseline.version, vFirst);
-assert.deepStrictEqual([afterDigest.alerted, afterDigest.slots, afterDigest.pending], [{}, {}, null],
-  'a new baseline version resets the check record: alerts, slots and pending');
+assert.deepStrictEqual([afterDigest.alerted, afterDigest.pending], [{}, null], 'a new baseline version resets what was alerted');
+assert.ok(afterDigest.slots[TODAY]['12:00'], 'but the 12:00 check that ran that day stays done');
 assert.strictEqual(afterDigest.baseline.items[key(overdue)], 3, 'and the new baseline is what the digest showed');
-assert.strictEqual(A.decide(ON, now('2026-10-01T12:30'), vdir).run, 'CHECK', 'the slot is open again, against the new baseline');
-assert.strictEqual(A.check(vdir, ON, { slot: '12:00', date: TODAY, today: TODAY, open: [overdue] }), null,
-  'and what the digest showed is not alerted, because the baseline covers it');
+assert.strictEqual(slot12(vdir).run, 'SKIP', 'a new baseline does not reopen it');
+assert.strictEqual(A.decide(ON, now('2026-10-01T15:30'), vdir).run, 'SKIP', 'nor the 15:00 that ran too');
 var again = A.check(vdir, ON, { slot: '15:00', date: TODAY, today: TODAY, open: [overdue, dueToday] });
 assert.ok(again && /due today/.test(again) && !/days late/.test(again), 'only what is new since that digest');
 
+// Run 12:00 (posted, confirmed), replace the baseline that day, rerun 12:00: nothing posts. 15:00 remains.
+var sdir0 = tmp();
+A.writeBaseline(sdir0, [], '2026-09-30');
+var first = A.check(sdir0, ON, { slot: '12:00', date: TODAY, today: TODAY, open: [overdue] });
+assert.ok(first && /^OPEN LOOPS ALERT — 2026-10-01 12:00/.test(first));
+assert.ok(A.confirm(sdir0));
+A.writeBaseline(sdir0, [], TODAY);                                           // a digest lands: new version, this baseline lacks the item
+assert.strictEqual(A.decide(ON, now('2026-10-01T12:45'), sdir0).run, 'SKIP', 'the 12:00 rerun is refused');
+assert.ok(/already ran/.test(A.decide(ON, now('2026-10-01T12:45'), sdir0).reason));
+assert.strictEqual(A.decide(ON, now('2026-10-01T15:00'), sdir0).run, 'CHECK', '15:00 remains available');
+assert.strictEqual(A.load(sdir0).alerted[key(overdue)], undefined, 'while item dedupe did reset');
+// A check that found nothing completed its slot too.
+var sdir1 = tmp();
+A.writeBaseline(sdir1, [], '2026-09-30');
+assert.strictEqual(A.check(sdir1, ON, { slot: '12:00', date: TODAY, today: TODAY, open: [] }), null);
+A.writeBaseline(sdir1, [], TODAY);
+assert.strictEqual(A.decide(ON, now('2026-10-01T12:45'), sdir1).run, 'SKIP', 'a quiet 12:00 stays done across a new baseline');
+// The digest lands between the post and the confirm: item dedupe is void, the slot is still completed.
+var sdir2 = tmp();
+A.writeBaseline(sdir2, [], '2026-09-30');
+assert.ok(A.check(sdir2, ON, { slot: '12:00', date: TODAY, today: TODAY, open: [overdue] }));
+A.writeBaseline(sdir2, [], TODAY);
+assert.strictEqual(A.confirm(sdir2), true, 'confirming still records the slot');
+assert.deepStrictEqual([A.load(sdir2).alerted, A.decide(ON, now('2026-10-01T12:45'), sdir2).run], [{}, 'SKIP']);
+// It is a calendar-day record: the next day's 12:00 is a new slot.
+assert.strictEqual(A.decide(ON, now('2026-10-02T12:05'), sdir2).run, 'CHECK');
+
+// A post that lands but is never confirmed (the run died, or the read-back failed) is offered again: the
+// consent text says a repeat is possible, because item dedupe only exists once --confirm has run.
+var cdir3 = tmp();
+A.writeBaseline(cdir3, [], '2026-09-30');
+var posted = A.check(cdir3, ON, { slot: '12:00', date: TODAY, today: TODAY, open: [overdue] });
+var repeated = A.check(cdir3, ON, { slot: '15:00', date: TODAY, today: TODAY, open: [overdue] });
+assert.ok(posted && repeated && repeated.indexOf(overdue.what) > -1 && posted.indexOf(overdue.what) > -1, 'the same item, posted twice');
+
 /* ------------------------------ overlapping tasks: one writer per file ------------------------------ */
 var odir = tmp();
-var record = function (s) { return [s.alerted, s.slots, s.pending]; };
 A.writeBaseline(odir, [], '2026-09-30');
 var vA = A.load(odir).baseline.version;
 
@@ -213,9 +247,11 @@ assert.deepStrictEqual(bytes(A.file(odir)), checksFile, 'the digest never touche
 var vB = A.load(odir).baseline.version;
 assert.notStrictEqual(vB, vA);
 var baselineFile1 = bytes(A.baselineFile(odir));
-assert.strictEqual(A.confirm(odir), false, 'the pending alert is void: the digest has shown it since');
+assert.strictEqual(A.confirm(odir), true, 'confirming still completes the slot');
 assert.deepStrictEqual(bytes(A.baselineFile(odir)), baselineFile1, 'confirming never touches the digest\'s file');
-assert.deepStrictEqual(record(A.load(odir)), [{}, {}, null]);
+var conf = A.load(odir);
+assert.deepStrictEqual([conf.alerted, conf.pending, !!conf.slots[TODAY]['12:00']], [{}, null, true],
+  'but the alert is void — the digest has shown it since — so nothing is remembered as alerted');
 
 // A check that read the old baseline saves after the digest has written a new one.
 var slow = A.load(odir);                                                     // reads version vB
@@ -226,8 +262,10 @@ slow.alerted[key(dueToday)] = 2; slow.slots[TODAY] = { '12:00': 'x' };
 A.save(odir, slow);                                                          // the slow check's write lands late
 assert.deepStrictEqual(bytes(A.baselineFile(odir)), baselineFile2, 'a late check write cannot disturb the baseline');
 assert.strictEqual(A.load(odir).baseline.version, vC);
-assert.deepStrictEqual(record(A.load(odir)), [{}, {}, null], 'what it saved was about an older baseline, so it is void');
-assert.ok(A.check(odir, ON, { slot: '12:00', date: TODAY, today: TODAY, open: [dueToday] }), 'and the next check starts clean, on the new baseline');
+var late = A.load(odir);
+assert.deepStrictEqual([late.alerted, Object.keys(late.slots[TODAY])], [{}, ['12:00']],
+  'what it alerted was about an older baseline, so it is void; that it ran is not');
+assert.ok(A.check(odir, ON, { slot: '15:00', date: TODAY, today: TODAY, open: [dueToday] }), 'and the next check starts clean, on the new baseline');
 assert.ok(A.confirm(odir));
 assert.strictEqual(A.load(odir).baseline.version, vC);
 assert.strictEqual(A.load(odir).alerted[key(dueToday)], 2);
@@ -367,7 +405,8 @@ var d2 = main([input('2026-10-01', fresh, dm2), '--config', cfgPath]);
 var rows = JSON.parse(fs.readFileSync(ledger, 'utf8')).rows;
 assert.ok(rows.length >= 3 && rows.every(function (r) { return !r[L.COL.verdict]; }), 'an alert in the DM rejects nothing: ' + JSON.stringify(rows.map(function (r) { return r[7]; })));
 assert.ok(!/Took your last reply|NOT APPLIED/.test(d2), 'and is not read as a reply at all');
-assert.ok(A.load(rdir).baseline.date === '2026-10-01' && Object.keys(A.load(rdir).alerted).length === 0 && A.load(rdir).pending === null,
+assert.ok(A.load(rdir).baseline.date === '2026-10-01' && Object.keys(A.load(rdir).alerted).length === 0 &&
+  Object.keys((A.load(rdir).pending || { alerts: {} }).alerts).length === 0,
   'the next digest rewrites the baseline and starts the alerted record again');
 
 // A digest run with no config file has nowhere to keep a baseline, and writes none into the working directory.
@@ -396,7 +435,7 @@ assert.ok(/^\*\*Midday alerts — off unless you say yes\.\*\*/.test(asked) && /
 assert.strictEqual(A.consent(JSON.parse(fs.readFileSync(ccfg, 'utf8'))), null, 'asking records nothing');
 var skill = fs.readFileSync(path.join(__dirname, '..', 'skills', 'open-loops', 'SKILL.md'), 'utf8').split(String.fromCharCode(13)).join('');
 cli.consentText().split('\n').filter(Boolean).forEach(function (l) { assert.ok(skill.indexOf('> ' + l) > -1, 'SKILL.md\'s own words: ' + l); });
-['At 12:00 and 15:00 **your local time** on weekdays', 'at most\ntwo alerts a day', 'Slack may not notify you', 'routine notification after every check',
+['At 12:00 and 15:00 **your local time** on weekdays', 'normally at most\ntwo alerts a day', 'A repeat is possible', 'can post the same items again', 'Slack may not notify you', 'routine notification after every check',
  'more than two hours late is skipped', 'for a priority', 'Saying yes adds a second scheduled task', 'Your daily digest task is not changed',
  'still starts one\nfinal, empty session at its next run and pauses itself then'].forEach(function (p) { assert.ok(asked.indexOf(p) > -1, 'consent says: ' + p); });
 assert.ok(!/another scheduled task/.test(asked), 'no claim that another running task skips a check');
