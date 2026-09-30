@@ -679,7 +679,7 @@ function runCheck(o) {
   if (!alerts.consent(cfg)) return 'ALERTS OFF — nothing was compared or written.';
   if (!slot) throw new Error('--check needs --slot HH:MM (the check time tools/alerts.js --which printed)');
   var now = alerts.parseNow(o.flag('now', ''));
-  var want = alerts.decide(cfg, now, o.dir, o.store.digestDates());
+  var want = alerts.decide(cfg, now, o.dir);
   if (want.run !== 'CHECK' || want.slot !== slot) {
     return 'SKIP — ' + (want.run === 'CHECK' ? 'the ' + want.slot + ' check is due, not ' + slot : want.reason) + '.';
   }

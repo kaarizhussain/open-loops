@@ -17,7 +17,7 @@ var keyOf = loops.loopKey;
 
 var DEFAULT_TIMES = ['09:00', '12:00', '15:00'];
 var LATE_MINUTES = 120;          // a check this much later than its slot is skipped
-var DIGEST_FROM = 17 * 60;       // from 17:00 a scheduled run is the evening digest
+var CHECKS_END = 17 * 60;        // no configured check time may be at or after 17:00
 var CHECK_FROM = 8 * 60;         // and no check runs before 08:00
 var MAX_ITEMS = 5;
 var PRIORITY_WEIGHT = 20;        // key_account, investor, exec (TIER_WEIGHT in loops.js)
@@ -34,7 +34,7 @@ function consent(cfg) {
   if (!/^\d{4}-\d{2}-\d{2}T/.test(String(a.consentedAt || ''))) return null;
   var times = a.times || DEFAULT_TIMES;
   if (!Array.isArray(times) || !times.length || times.length > 3 ||
-      !times.every(function (t) { return HHMM.test(t) && toMin(t) >= CHECK_FROM && toMin(t) < DIGEST_FROM; })) return null;
+      !times.every(function (t) { return HHMM.test(t) && toMin(t) >= CHECK_FROM && toMin(t) < CHECKS_END; })) return null;
   var sorted = times.slice().sort();
   if (sorted.join() !== times.join()) return null;
   return { delivery: 'dm', consentedAt: a.consentedAt, times: times };
@@ -137,30 +137,23 @@ function evaluate(open, state, today, verdictOf) {
 
 /* ------------------------------------------------------------------ deciding the run */
 
-/* What a scheduled run should do, from the clock and the files alone — nothing is fetched to
- * find out. `digestDates` are the days a digest has been recorded for. */
-function decide(cfg, now, dir, digestDates) {
+/* What a run of the checks task should do, from the clock and the files alone — nothing is
+ * fetched to find out. `OFF` means alerts are not on: the task has nothing to do and pauses itself.
+ * The evening digest is a different task and never comes through here, so a missed digest is that
+ * task's own catch-up and a check can never replace it. */
+function decide(cfg, now, dir) {
   var c = consent(cfg);
-  var t = localParts(now), yesterday = addDays(t.date, -1);
-  var dates = digestDates || [];
-  if (t.min >= DIGEST_FROM) return { run: 'DIGEST', reason: 'evening digest' };
-  /* The scheduler runs one catch-up, for the most recent missed time, so with checks in the
-   * schedule a missed evening digest would otherwise be replaced by a check. A digest already
-   * recorded for today ends the catch-up — without that, every slot would run it again. This
-   * holds whether or not alerts are on: alerts off must never turn a 09:00 run into a digest. */
-  if (dates.indexOf(yesterday) === -1 && dates.indexOf(t.date) === -1) {
-    return { run: 'DIGEST', reason: 'no digest is recorded for ' + yesterday + ', so this run is its catch-up' };
-  }
-  if (!c) return { run: 'SKIP', reason: 'alerts are off, and the evening digest is not due' };
+  var t = localParts(now);
+  if (!c) return { run: 'OFF', reason: 'alerts are off, so this task has nothing to do' };
   if (t.dow === 0 || t.dow === 6) return { run: 'SKIP', reason: 'weekend: checks run on weekdays' };
   if (t.min < CHECK_FROM) return { run: 'SKIP', reason: 'before ' + pad(CHECK_FROM / 60) + ':00' };
   var slot = null;
   c.times.forEach(function (s) { if (toMin(s) <= t.min) slot = s; });
   if (!slot) return { run: 'SKIP', reason: 'before the first check (' + c.times[0] + ')' };
   var late = t.min - toMin(slot);
-  if (late > LATE_MINUTES) {
-    return { run: 'SKIP', reason: 'the ' + slot + ' check is ' + late + ' minutes late; checks more than ' +
-      LATE_MINUTES + ' minutes late are skipped' };
+  if (late >= LATE_MINUTES) {
+    return { run: 'SKIP', reason: 'the ' + slot + ' check is ' + late + ' minutes late; a check is skipped once it is ' +
+      LATE_MINUTES + ' minutes late' };
   }
   var s = load(dir);
   if (!s.baseline) return { run: 'SKIP', reason: 'no digest baseline yet; the next evening digest writes it' };

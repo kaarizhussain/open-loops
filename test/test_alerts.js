@@ -94,38 +94,32 @@ assert.deepStrictEqual(keys(ev([undated], state({}))), [], 'undated items stay i
 var hi = mk({ status: 'overdue', due: '2026-09-29', workDue: '2026-09-29', overdueDays: 2, risk: 140 }), lo = mk({ risk: 60 });
 assert.deepStrictEqual(keys(ev([lo, hi], state({}))), [key(hi), key(lo)]);
 
-/* ------------------------------ which run is this? ------------------------------ */
+/* ------------------------------ what does a run of the checks task do? ------------------------------ */
 var dir = tmp();
-var yest = function (d) { return [A.addDays(d, -1)]; };
-var seen = ['2026-09-30'];                                    // the last digest: Wednesday evening
 var base = { baseline: { date: '2026-09-30', items: {} }, alerted: {}, slots: {}, pending: null };
 fs.writeFileSync(A.file(dir), JSON.stringify(base));
-var d = function (cfg, t, dates) { return A.decide(cfg, now(t), dir, dates || seen); };
+var d = function (cfg, t) { return A.decide(cfg, now(t), dir); };
 
 assert.deepStrictEqual([d(ON, '2026-10-01T09:03').run, d(ON, '2026-10-01T09:03').slot, d(ON, '2026-10-01T09:03').date], ['CHECK', '09:00', '2026-10-01']);
 assert.strictEqual(d(ON, '2026-10-01T12:04').slot, '12:00');
 assert.strictEqual(d(ON, '2026-10-01T15:00').slot, '15:00');
-assert.strictEqual(d(ON, '2026-10-01T18:02').run, 'DIGEST', 'the evening run is the digest');
-assert.strictEqual(d(ON, '2026-10-01T17:00').run, 'DIGEST');
-assert.strictEqual(d(ON, '2026-10-01T16:59').slot, '15:00', 'a 15:00 check can still run at 16:59, and from 17:00 the run is the digest');
-assert.strictEqual(d(ON, '2026-10-01T11:00').run, 'CHECK', 'exactly two hours late still runs');
-assert.strictEqual(d(ON, '2026-10-01T11:01').run, 'SKIP');
-assert.ok(/late/.test(d(ON, '2026-10-01T11:01').reason), d(ON, '2026-10-01T11:01').reason);
+assert.strictEqual(d(ON, '2026-10-01T16:59').slot, '15:00', 'a 15:00 check still runs at 16:59');
+assert.strictEqual(d(ON, '2026-10-01T10:59').run, 'CHECK', 'a minute short of two hours late still runs');
+assert.strictEqual(d(ON, '2026-10-01T11:00').run, 'SKIP', 'two hours late is skipped: consent says "less than two hours ago"');
+assert.ok(/120 minutes late/.test(d(ON, '2026-10-01T11:00').reason), d(ON, '2026-10-01T11:00').reason);
+assert.strictEqual(d(ON, '2026-10-01T17:30').run, 'SKIP', 'the evening is not a check, and the digest is another task');
 assert.strictEqual(d(ON, '2026-10-01T08:30').run, 'SKIP');
-assert.strictEqual(d(ON, '2026-10-03T12:00', ['2026-10-02']).run, 'SKIP', 'no checks on Saturday');
-assert.ok(/weekend/.test(d(ON, '2026-10-04T12:00', ['2026-10-03']).reason));
-assert.strictEqual(d(ON, '2026-10-05T09:02', ['2026-10-04']).run, 'CHECK', 'Monday, after a Sunday digest');
-assert.strictEqual(d(ON, '2026-10-04T18:00', ['2026-10-03']).run, 'DIGEST', 'the weekend digest still runs');
+assert.strictEqual(d(ON, '2026-10-03T12:00').run, 'SKIP', 'no checks on Saturday, even if someone runs the task by hand');
+assert.ok(/weekend/.test(d(ON, '2026-10-04T12:00').reason));
+assert.strictEqual(d(ON, '2026-10-05T09:02').run, 'CHECK', 'Monday');
 
-// Alerts off: never a check, and never a digest at check time.
-assert.strictEqual(d({}, '2026-10-01T09:03').run, 'SKIP', 'off: a 09:00 run is not a digest');
-assert.strictEqual(d({ alerts: false }, '2026-10-01T12:00').run, 'SKIP');
-assert.strictEqual(d({}, '2026-10-01T18:00').run, 'DIGEST');
-
-// A missed evening digest is caught up by the next run, whatever its time — and only once.
-assert.strictEqual(d(ON, '2026-10-01T09:03', ['2026-09-29']).run, 'DIGEST', 'no digest for yesterday: this run is its catch-up');
-assert.strictEqual(d({}, '2026-10-01T09:03', ['2026-09-29']).run, 'DIGEST', 'also with alerts off');
-assert.strictEqual(d(ON, '2026-10-01T12:00', ['2026-09-29', '2026-10-01']).run, 'CHECK', 'once today has a digest, checks resume');
+// Alerts off: OFF, so the task pauses itself instead of starting empty sessions. It is never a digest.
+['2026-10-01T09:03', '2026-10-01T18:00', '2026-10-03T12:00'].forEach(function (t) {
+  assert.strictEqual(d({}, t).run, 'OFF', 'no alerts entry: ' + t);
+  assert.strictEqual(d({ alerts: false }, t).run, 'OFF', 'alerts false: ' + t);
+  assert.strictEqual(d({ alerts: { delivery: 'off', offAt: '2026-10-02T10:00:00Z' } }, t).run, 'OFF');
+});
+assert.ok(/nothing to do/.test(d({}, '2026-10-01T09:03').reason));
 
 // A slot that has run is done; no baseline means nothing to compare with.
 fs.writeFileSync(A.file(dir), JSON.stringify(Object.assign({}, base, { slots: { '2026-10-01': { '09:00': 'x' } } })));
@@ -205,7 +199,7 @@ writeCfg(ON);
 // A dry digest writes nothing, so it cannot fake a baseline.
 main([input('2026-09-30'), '--config', cfgPath, '--dry']);
 assert.ok(!fs.existsSync(A.file(rdir)), 'a dry run writes no baseline');
-assert.ok(/^DIGEST — .*catch-up/.test(cli.main(['--which', '--now', '2026-10-01T09:05', '--config', cfgPath])), 'no digest has run yet, so the next run is one');
+assert.ok(/^SKIP — no digest baseline yet/.test(cli.main(['--which', '--now', '2026-10-01T09:05', '--config', cfgPath])), 'no digest has run yet, so there is nothing to compare with');
 
 // The evening digest writes it.
 var digest1 = main([input('2026-09-30'), '--config', cfgPath]);
@@ -244,8 +238,7 @@ assert.ok(/^OPEN LOOPS ALERT — 2026-10-01 15:00\n1 thing changed/.test(alert3)
 
 // Refusals: not gated, wrong slot, wrong date, off.
 assert.ok(/^SKIP — the 15:00 check is due, not 09:00/.test(main(checkArgs('2026-10-01', '09:00', '2026-10-01T15:02', fresh))), 'the runner decides again');
-assert.ok(/^SKIP — no digest is recorded for 2026-10-02/.test(main(checkArgs('2026-10-03', '12:00', '2026-10-03T12:05', fresh))),
-  'a check is refused while a digest is owed; the weekend rule itself is in decide()');
+assert.ok(/^SKIP — weekend/.test(main(checkArgs('2026-10-03', '12:00', '2026-10-03T12:05', fresh))), 'the runner refuses a weekend check too');
 assert.throws(function () { main([input('2026-10-01', fresh), '--config', cfgPath, '--check', '--slot', '15:00', '--today', '2026-09-30', '--now', '2026-10-01T15:05']); },
   /--today 2026-10-01/);
 assert.throws(function () { main([input('2026-10-01', fresh), '--config', cfgPath, '--check', '--now', '2026-10-01T12:05', '--today', '2026-10-01']); }, /--slot/);
@@ -315,8 +308,10 @@ assert.strictEqual(A.consent(JSON.parse(fs.readFileSync(ccfg, 'utf8'))), null, '
 var skill = fs.readFileSync(path.join(__dirname, '..', 'skills', 'open-loops', 'SKILL.md'), 'utf8').split(String.fromCharCode(13)).join('');
 cli.consentText().split('\n').filter(Boolean).forEach(function (l) { assert.ok(skill.indexOf('> ' + l) > -1, 'SKILL.md\'s own words: ' + l); });
 ['Slack may not notify you', 'routine notification after every check', 'more than two hours late is skipped', 'for a priority',
- 'Saying yes edits your existing scheduled Open Loops task'].forEach(function (p) { assert.ok(asked.indexOf(p) > -1, 'consent says: ' + p); });
+ 'Saying yes adds a second scheduled task', 'Your daily digest task is not changed', 'another scheduled task is running',
+ 'pauses itself at its next run'].forEach(function (p) { assert.ok(asked.indexOf(p) > -1, 'consent says: ' + p); });
 assert.ok(!/desktop notification from the Claude app|count only|count-only/i.test(asked), 'the unverified ping is not promised');
+assert.ok(!/edits your existing/.test(asked), 'the digest task is not edited');
 assert.ok(/Midday alerts on/.test(cli.main(['--consent', '--yes', '--config', ccfg])));
 assert.ok(A.consent(JSON.parse(fs.readFileSync(ccfg, 'utf8'))), '--yes records');
 assert.ok(/Alerts on at 09:00, 12:00, 15:00/.test(cli.main(['--status', '--config', ccfg])));
@@ -325,11 +320,34 @@ assert.strictEqual(A.consent(JSON.parse(fs.readFileSync(ccfg, 'utf8'))), null, '
 assert.ok(/declined/.test(cli.main(['--status', '--config', ccfg])));
 assert.strictEqual(JSON.parse(fs.readFileSync(ccfg, 'utf8')).you, ME, 'the rest of the config is left as it was');
 
+// Turning alerts off after they were on: recorded, the offer date kept, and the task told to stop.
+cli.main(['--consent', '--yes', '--config', ccfg]);
+var onAt = JSON.parse(fs.readFileSync(ccfg, 'utf8')).alerts.consentedAt;
+assert.ok(/Alerts are off\. Pause or delete the "Open Loops checks" scheduled task; the daily digest task is not affected/.test(cli.main(['--off', '--config', ccfg])));
+var offCfg = JSON.parse(fs.readFileSync(ccfg, 'utf8'));
+assert.strictEqual(A.consent(offCfg), null);
+assert.strictEqual(offCfg.alerts.offeredAt, onAt, 'when it was first offered is kept, not replaced by now');
+assert.ok(offCfg.alerts.offAt && /turned off/.test(cli.main(['--status', '--config', ccfg])));
+assert.ok(/^OFF — /.test(cli.main(['--which', '--now', '2026-10-01T09:05', '--config', ccfg])), 'and the next run of the checks task is told OFF');
+
 /* ------------------------------ the offer is not part of a scheduled run ------------------------------ */
 var inDigest = skill.slice(skill.indexOf('## Running the digest'), skill.indexOf('## Midday check'));
 var inCheck = skill.slice(skill.indexOf('## Midday check'), skill.indexOf('## Scheduling it'));
 assert.ok(!/Midday alerts — off unless/.test(inDigest + inCheck), 'a scheduled run never reads the question');
 assert.ok(skill.indexOf('Midday alerts — off unless') > skill.indexOf('## Scheduling it'));
 assert.ok(/limit=15/.test(skill), 'the DM read is wider when alerts are on');
+
+/* ------------------------------ the schedule ------------------------------ */
+var offer = skill.slice(skill.indexOf('### Offering midday alerts'), skill.indexOf('## Changing it, or stopping it'));
+assert.ok(/`0 9,12,15 \* \* 1-5`/.test(offer), 'the checks task is weekdays only, so no empty weekend sessions');
+assert.ok(!/0 9,12,15,18/.test(skill), 'and never rides on the digest task\'s schedule');
+assert.ok(/Do not edit the daily digest task/.test(offer));
+assert.ok(!/DIGEST, CHECK|On `DIGEST`|On DIGEST/.test(inCheck + offer), 'the checks task is never sent to the digest');
+assert.ok(/`OFF`[^]*update_scheduled_task[^]*enabled: false/.test(inCheck), 'a task that finds alerts off pauses itself');
+assert.ok(/Turning alerts off/.test(offer) && /never touched/.test(offer));
+var agents = fs.readFileSync(path.join(__dirname, '..', 'AGENTS.md'), 'utf8');
+assert.ok(/`open-loops-daily`/.test(agents) && /`open-loops-checks`/.test(agents) && /never writes the ledger/.test(agents),
+  'AGENTS.md names both tasks that may post to the self-DM, and says which writes the ledger');
+assert.ok(/does not run `--check`/.test(agents), 'and that every other agent stays out of checks');
 
 console.log('alerts: OK');

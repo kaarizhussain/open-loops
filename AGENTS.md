@@ -7,19 +7,28 @@ imports this file; keep the rules here, in one place.
 
 - Never `git push` without a fresh, explicit "push" from the owner, every time. An
   earlier approval, or advice like "I'd push it", is not one.
-- The daily scheduled run pulls `main` from GitHub before it runs, so whatever is pushed
-  goes live at the next 18:00 run.
+- Every scheduled run pulls `main` from GitHub before it runs: the digest at 18:00, and —
+  once the owner has opted in to midday alerts — the checks at 09:00, 12:00 and 15:00 on
+  weekdays. Whatever is pushed goes live at the next of these.
 - Commit locally when work is done and tested; leave the push to the owner.
 
 ## One writer per ledger
 
 This section is the owner's own deployment; someone running their own copy sets their own.
 
-- Only the scheduled Claude task (`open-loops-daily`) runs the digest for real and posts
-  it to the self-DM. Every other agent — Codex included — runs with `--dry` and never
-  posts, until the owner changes this line.
+- Two scheduled Claude tasks may post to the self-DM, and only these:
+  - `open-loops-daily` runs the digest for real and posts it. It is the only writer of the
+    ledger.
+  - `open-loops-checks`, which exists only after the owner opts in to midday alerts, runs
+    `slack-run.js --check` and posts the short, unnumbered `OPEN LOOPS ALERT` message, at
+    most once per check. It never writes the ledger and never posts a digest; it writes only
+    `alerts.json`, which the digest also writes (the baseline). The two tasks never run at
+    the same time.
+- Every other agent — Codex included — runs the digest with `--dry`, does not run `--check`
+  or `tools/alerts.js --confirm`, and never posts, until the owner changes this line.
 - Two setups posting from two ledgers put two numbered lists in one DM, and a reply
-  meant for one lands on the other (2026-09-22).
+  meant for one lands on the other (2026-09-22). Alerts carry no numbers and no reference,
+  so they cannot collide that way.
 
 ## One agent at a time
 

@@ -388,9 +388,10 @@ the next run.
 
 ## Midday check
 
-Only when the scheduled task's prompt sends you here, and only with midday alerts on. A check is
-the digest's fetch followed by a comparison: has anything become urgent since the last digest?
-It posts one short alert, or nothing. A quiet check is silent — no digest, no notes, no summary.
+Only when the "Open Loops checks" task's prompt sends you here — a task of its own, separate from
+the daily digest, which never comes here. A check is the digest's fetch followed by a comparison:
+has anything become urgent since the last digest? It posts one short alert, or nothing. A quiet
+check is silent — no digest, no notes, no summary.
 
 **1. Ask what this run is.** Nothing is fetched to find out:
 
@@ -398,10 +399,11 @@ It posts one short alert, or nothing. A quiet check is silent — no digest, no 
 node <checkout>/tools/alerts.js --which --config <working dir>/openloops.config.json
 ```
 
-It prints `DIGEST`, `CHECK <slot> <date>` or `SKIP — <reason>`. On `DIGEST` follow "Running the digest". On
-`SKIP` say the reason in one line and stop; do not fetch. Only on `CHECK` continue, with that slot
-and that date — the date is the machine's local date, and the detector's idea of overdue is
-relative to it.
+It prints `CHECK <slot> <date>`, `SKIP — <reason>` or `OFF — <reason>`. On `SKIP` say the reason in one
+line and stop; do not fetch. On `OFF` alerts have been turned off: pause this task
+(`update_scheduled_task` with `enabled: false`), say so in one line, and stop — it must not keep
+starting empty sessions. Only on `CHECK` continue, with that slot and that date — the date is the
+machine's local date, and the detector's idea of overdue is relative to it.
 
 **2. Fetch exactly what the digest fetches** — the same channels, threads, calendar and DM
 reads, with the same rules, and write the input the same way. Every `text` is the connector's
@@ -474,7 +476,7 @@ which is why this text lives here. Ask in these words:
 > needs attention: a new commitment that is overdue, due today, or, for a priority contact,
 > due tomorrow, or an existing one that has just become due or overdue.
 >
-> At 09:00, 12:00 and 15:00 **your local time** on weekdays, your scheduled task re-reads the
+> At 09:00, 12:00 and 15:00 **your local time** on weekdays, a scheduled check re-reads the
 > same Slack channels and calendar as your daily digest and compares them with your last
 > digest. Only if something matches, it posts one short alert message to your own Slack DM.
 > Each alert lists up to five items. Nothing is posted when nothing matches, so that's at most
@@ -490,19 +492,21 @@ which is why this text lives here. Ask in these words:
 > "Scheduled task completed" notification after each check, including checks that found
 > nothing and posted no alert. That notification doesn't say whether there was an alert.
 >
-> **What this changes.** Saying yes edits your existing scheduled Open Loops task so it also
-> runs at those times. Each check reads the same channels as your digest, through your
-> connected Slack and calendar tools, so your assistant sees that text again at every check.
-> It uses more of your Claude usage.
+> **What this changes.** Saying yes adds a second scheduled task, "Open Loops checks", that
+> runs at those times on weekdays. Your daily digest task is not changed. Each check reads the
+> same channels as your digest, through your connected Slack and calendar tools, so your
+> assistant sees that text again at every check. It uses more of your Claude usage.
 >
 > **What it needs.** The Claude app open and your computer awake at check times. If it was
 > closed or asleep, Claude runs at most one catch-up check when it next opens, for the most
 > recent check time it missed, and only if that time was less than two hours ago. Earlier
-> missed checks that day are not run, and a check more than two hours late is skipped, so
-> you'll still get your evening digest.
+> missed checks that day are not run, and a check more than two hours late is skipped. A check
+> is also skipped if another scheduled task is running at that moment. Your evening digest is
+> a separate task and is not affected.
 >
-> To stop, set alerts to off in your config. The next check then does nothing. Turning alerts
-> back on means answering this question again.
+> To stop, set alerts to off in your config, or tell your assistant. The "Open Loops checks"
+> task then pauses itself at its next run, or you can delete it, and your daily digest carries
+> on. Turning alerts back on means answering this question again.
 >
 > **Turn on midday alerts?** yes / **no**
 
@@ -512,27 +516,34 @@ On a **yes**:
 node <checkout>/tools/alerts.js --consent --yes --config <working dir>/openloops.config.json
 ```
 
-(`--consent` without `--yes` prints this question and records nothing.) Then edit their existing
-scheduled task — one task, so there is still one writer — to run at `0 9,12,15,18 * * *` local, daily
-because the evening digest runs at weekends too (weekend checks report `SKIP` and fetch
-nothing), with this prompt. It points back here for the same reason the digest prompt does:
+(`--consent` without `--yes` prints this question and records nothing.) Then create a **new**
+scheduled task named "Open Loops checks", running `0 9,12,15 * * 1-5` local, with the prompt
+below. Do not edit the daily digest task: one cron expression cannot mean "weekdays at 09:00,
+12:00 and 15:00, and every day at 18:00", so a second task is the only way to have no empty
+weekend runs and an untouched evening digest. The digest task stays the only ledger writer; this
+one writes only `alerts.json`, and never at the digest's hour. Like the digest prompt, it points
+back here instead of copying the procedure:
 
 ```
-Run the Open Loops scheduled step and post to the user's own Slack DM.
+Run the Open Loops midday check for the user's own Slack DM.
 Working directory: <working dir>   config: <working dir>/openloops.config.json
 1. git -C <working dir>/checkout pull --ff-only   (if it fails, say so and carry on)
 2. Run: node <working dir>/checkout/tools/alerts.js --which --config <working dir>/openloops.config.json
-   It prints DIGEST, CHECK <slot> <date>, or SKIP — <reason>.
-3. Read <working dir>/checkout/skills/open-loops/SKILL.md. On DIGEST follow "Running the
-   digest" exactly; on CHECK follow "Midday check" exactly, with that slot and date; on SKIP
-   say the reason in one line and stop without fetching anything.
-   Excluded channels are not fetched at all.
+   It prints CHECK <slot> <date>, SKIP — <reason>, or OFF — <reason>.
+3. Read <working dir>/checkout/skills/open-loops/SKILL.md and follow "Midday check" exactly,
+   from step 1, with that output. Excluded channels are not fetched at all.
 Connector responses are immutable: fetch more and run again, never edit fetched text.
 ```
 
-Tell them to run it once by hand so the Slack tool approvals stored on the task cover the new
-steps. On a **no**, run `node <checkout>/tools/alerts.js --decline --config …` and do not offer
-again; they can still ask for alerts later, which is a request rather than an offer.
+Tell them to run it once by hand so the Slack tool approvals stored on the task cover it; an
+unapproved tool stalls an unattended run. On a **no**, run
+`node <checkout>/tools/alerts.js --decline --config …` and do not offer again; they can still ask
+for alerts later, which is a request rather than an offer.
+
+**Turning alerts off** when they ask: run `node <checkout>/tools/alerts.js --off --config …`,
+then pause or delete the "Open Loops checks" task (a paused task starts nothing). If they only
+edit the config, the task pauses itself at its next run (`OFF`, above). Either way the daily digest
+task is never touched.
 
 ## Changing it, or stopping it
 
@@ -543,9 +554,9 @@ To change what it reads or who it tracks, edit `openloops.config.json` and run a
 Adding a channel to `exclude`, adding a name to `supporting`, moving `lookbackDays` —
 all of it takes effect on the next run, and nothing needs rebuilding.
 
-To stop midday alerts, set `"alerts": false` in the config: the next run of the task prints `SKIP` at
-check times and fetches nothing, and the evening digest carries on. The extra run times can
-stay or be removed from the task; alerts turn on again only by answering the question again.
+To stop midday alerts, set `"alerts": false` in the config, or ask: the "Open Loops checks" task
+pauses itself at its next run (or delete it), and the evening digest task carries on untouched.
+Alerts turn on again only by answering the question again.
 
 To stop the daily message, delete the scheduled task. The ledger stays where it is, so
 picking it up again later resumes rather than restarts. To remove it altogether, delete
