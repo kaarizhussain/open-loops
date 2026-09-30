@@ -88,7 +88,7 @@ function readJson(f) {
 
 // Renamed into place, so a reader sees the old file or the new one, whole.
 function writeJson(f, o) {
-  var tmp = f + '.tmp';
+  var tmp = f + '.' + process.pid + '.' + crypto.randomBytes(3).toString('hex') + '.tmp';   // one name per write: two sessions never share one
   fs.writeFileSync(tmp, JSON.stringify(o, null, 1));
   retry(function () { fs.renameSync(tmp, f); });
 }

@@ -24,7 +24,7 @@ function file(dir) { return path.join(dir, 'status.json'); }
 function stagedFile(dir) { return path.join(dir, 'status.staged.json'); }
 
 function writeJson(f, o) {
-  var tmp = f + '.tmp';
+  var tmp = f + '.' + process.pid + '.' + crypto.randomBytes(3).toString('hex') + '.tmp';   // one name per write: two sessions never share one
   fs.writeFileSync(tmp, JSON.stringify(o, null, 1));
   retry(function () { fs.renameSync(tmp, f); });
 }
