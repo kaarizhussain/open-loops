@@ -56,6 +56,7 @@ message text from the ledger and its rollback snapshot. It does not scrub the in
 output files, backups, the assistant's conversation history, or what is posted to Slack.
 The run's input can turn text storage off but never on; only the config decides that.
 With `storeText: false` the ledger also keeps a salted one-way identifier of who said each item, only so that two people's identical sentences stay apart.
+`alerts.json` may also hold a random salt, used only to tell two people's identical commitments apart.
 
 **Diagnostic reports** are separate and off unless they said yes in Setup. When on,
 `tools/report.js` — the one file with a network call — sends the developer a fixed set of

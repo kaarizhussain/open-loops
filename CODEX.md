@@ -49,6 +49,7 @@ With `storeText:false`, the ledger still keeps a salted one-way identifier of wh
 said each item so identical commitments from different people remain separate.
 The salt stays in the ledger. These identifiers are pseudonymous, not anonymous;
 someone holding the file and candidate addresses can test guesses.
+`alerts.json` may also hold a random salt, used only to tell two people's identical commitments apart.
 
 In this repository owner's deployment, Claude owns the live digest and ledger.
 Codex previews only and does not post or create a second schedule for that setup.

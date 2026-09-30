@@ -69,7 +69,8 @@ and data directory. Omit the calendar sentence when it is disabled or unavailabl
 > You can turn off sentence storage in the ledger; run files and conversation history
 > can still contain fetched text. With `storeText: false` the ledger also keeps a
 > salted one-way identifier of who said each item, only so that two people's identical
-> sentences stay apart. Running your first digest now.
+> sentences stay apart. `alerts.json` may also hold a random salt, used only to tell
+> two people's identical commitments apart. Running your first digest now.
 
 Do not add another confirmation after the channel choice and notice. Follow the
 repository's owner deployment restriction below: a preview must be described as a

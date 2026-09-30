@@ -42,4 +42,8 @@ assert.ok(consent.indexOf('random installation and report IDs') > -1);
 assert.ok(consent.indexOf('whether Claude or Codex ran it') > -1);
 assert.ok(consent.indexOf('a generic error class such as TypeError (never its message)') > -1);
 assert.ok(consent.indexOf('spot-check sample and miss counts') > -1);
+['../CODEX.md', '../skills/open-loops/SKILL.md', '../skills/open-loops/references/codex.md'].forEach(function (file) {
+  var notice = fs.readFileSync(path.join(__dirname, file), 'utf8').replace(/^> ?/gm, '').replace(/\s+/g, ' ');
+  assert.ok(notice.indexOf("`alerts.json` may also hold a random salt, used only to tell two people's identical commitments apart.") > -1, file + ' discloses the checks salt');
+});
 console.log('Codex status and diagnostic disclosure: OK');
