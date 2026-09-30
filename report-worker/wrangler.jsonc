@@ -14,7 +14,7 @@
   },
   "triggers": { "crons": ["17 13 * * *"] },
   "d1_databases": [
-    { "binding": "DB", "database_name": "open-loops-reports", "database_id": "SET-AT-DEPLOY" }
+    { "binding": "DB", "database_name": "open-loops-reports", "database_id": "bf60ac8b-c948-4345-8447-c35c5708382c" }
   ]
   // Secret, set with `npx wrangler secret put GITHUB_TOKEN`: a fine-grained token with
   // Contents: read and write on kaarizhussain/open-loops-reports only (to send a dispatch).

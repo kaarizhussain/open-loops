@@ -24,6 +24,12 @@ the owner's own token notifies nobody — GitHub does not tell you about your ow
 
 ## Deploying (owner only; nothing here is automatic)
 
+**Deployed 2026-09-30:** `https://open-loops-reports.kaarizh.workers.dev`, D1
+`open-loops-reports` (bf60ac8b-…), `alert.yml` in the alerts repo at 83ab17a. The token
+expires **2027-09-29** — alerts fail with 401 after that; regenerate and store it again.
+
+The steps, for a redeploy or a new account:
+
 1. **Alerts repo.** `kaarizhussain/open-loops-reports` (private) exists. Add
    `report-worker/alerts/alert.yml` to it as `.github/workflows/alert.yml`.
 2. **Token.** A fine-grained token: that one repo, **Contents: read and write** (needed to
@@ -31,8 +37,11 @@ the owner's own token notifies nobody — GitHub does not tell you about your ow
 3. **Database.** `npx wrangler d1 create open-loops-reports`, put its id in
    `report-worker/wrangler.jsonc`, then
    `npx wrangler d1 execute open-loops-reports --remote --file report-worker/schema.sql`.
-4. **Worker.** From `report-worker/`: `npx wrangler secret put GITHUB_TOKEN`, then
-   `npx wrangler deploy`. Put the `https://open-loops-reports.<subdomain>.workers.dev`
+4. **Worker.** From `report-worker/`: `npx wrangler deploy`, then store the token. On
+   Windows PowerShell use `npx.cmd` (script policy blocks `npx`), and pipe the token rather
+   than pasting into the hidden prompt, which stored a single stray keystroke on 2026-09-30:
+   copy the token last, then `Get-Clipboard | npx.cmd wrangler secret put GITHUB_TOKEN`,
+   then `Set-Clipboard -Value $null`. Put the `https://open-loops-reports.<subdomain>.workers.dev`
    address in `ENDPOINT` in `src/diagnostics.js`.
 5. **Logging check — before any push.** The consent wording says the server keeps no
    request logs. That is true only once this passes:
@@ -48,7 +57,21 @@ the owner's own token notifies nobody — GitHub does not tell you about your ow
 7. Only then push: the push is what delivers the setup question and the send step to
    every scheduled installation.
 
-Logging check: *not yet run.*
+Logging check, **2026-09-30, passed.** Dashboard → Observability: "Workers Observability
+is Disabled"; Settings → Observability: Logs off, Traces off, Exports none. API: logpush
+false, no tail consumers, preview URLs off. Three test reports sent 02:51–03:05 UTC left
+no events.
+
+**When alerts stop.** Logging is off, so a refused alert leaves its trace in D1 instead:
+
+```bash
+npx wrangler d1 execute open-loops-reports --remote --command "SELECT * FROM alert_failures ORDER BY at DESC LIMIT 5"
+```
+
+A 401 whose detail starts "stored GITHUB_TOKEN is not a GitHub token (N characters)"
+means the secret holds something else — N = 56 was the pipe command itself, copied after
+the token. Unalerted reports are retried by the daily cron (13:17 UTC) and by every new
+failure report.
 
 ## Triaging
 

@@ -22,3 +22,5 @@ CREATE TABLE IF NOT EXISTS examples (
 -- Failure signatures and weekly summaries already alerted. Code locations, no install ids.
 CREATE TABLE IF NOT EXISTS signatures (sig TEXT PRIMARY KEY, first_day TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS alerts (day TEXT PRIMARY KEY, n INTEGER NOT NULL);
+-- When GitHub refused an alert, and with what status. Logging is off, so this is the only trace.
+CREATE TABLE IF NOT EXISTS alert_failures (at TEXT NOT NULL, status INTEGER NOT NULL, detail TEXT);

@@ -11,8 +11,8 @@
  * No require() here: this file also runs inside a Cloudflare Worker.
  */
 
-// Filled in when the Worker is deployed. Unset, reports stay queued and nothing is sent.
-var ENDPOINT = null;
+// The report server (report-worker/, deployed 2026-09-30). null would keep reports queued.
+var ENDPOINT = 'https://open-loops-reports.kaarizh.workers.dev';
 
 var KINDS = ['run_failed', 'item_wrong', 'item_missed'];
 var STAGES = ['pull', 'fetch_slack', 'fetch_calendar', 'runner', 'post', 'readback'];

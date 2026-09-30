@@ -175,7 +175,7 @@ var server = http.createServer(function (req, res) {
   assert.strictEqual(bodies.length, 0, 'tried too often: discarded, not sent');
 
   // No server configured yet: nothing sent, nothing lost.
-  delete process.env.OPEN_LOOPS_REPORT_URL;
+  process.env.OPEN_LOOPS_REPORT_URL = '';
   queueCrash(['x.json', '--config', cfgPath], new ReferenceError('CANARYMSG'));
   assert.ok(/no report server set yet/.test(await report.main(['--send', '--config', cfgPath])));
   assert.strictEqual(outbox.read(dir).length, 1, 'kept for when there is one');

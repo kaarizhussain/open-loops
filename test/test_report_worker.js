@@ -138,5 +138,33 @@ assert.ok(!/ip|header|agent/i.test(fs.readFileSync(path.join(W, 'schema.sql'), '
   assert.strictEqual(db.raw.prepare('SELECT COUNT(*) AS n FROM reports').get().n, 0, 'gone after 90 days');
   assert.strictEqual(db.raw.prepare('SELECT COUNT(*) AS n FROM examples').get().n, 0);
 
+  /* ------------------ the real GitHub call, with fetch stubbed ------------------
+   * Everything above replaces it. A secret stored as one stray keystroke (2026-09-30) went
+   * unnoticed because of that: logging is off, so a refused alert must leave its own trace. */
+  var real = global.fetch, calls = [];
+  var ghEnv = function (token, status, text) {
+    global.fetch = async function (url, init) { calls.push({ url: url, init: init }); return new Response(text || null, { status: status }); };
+    return { DB: d1(), GITHUB_TOKEN: token };
+  };
+  var genv = ghEnv('  github_pat_ABC123_def  ' + String.fromCharCode(10), 204);
+  await M.receive(new Request('https://x.workers.dev/report', { method: 'POST', body: JSON.stringify(fail(['src/ledger.js:9'])) }),
+    genv, ctx, NOW);
+  await Promise.all(waits.splice(0));
+  assert.strictEqual(calls[0].url, 'https://api.github.com/repos/kaarizhussain/open-loops-reports/dispatches');
+  assert.strictEqual(calls[0].init.headers.authorization, 'Bearer github_pat_ABC123_def', 'the token is trimmed');
+  assert.strictEqual(JSON.parse(calls[0].init.body).event_type, 'open-loops-alert');
+  assert.strictEqual(genv.DB.raw.prepare('SELECT COUNT(*) AS n FROM alert_failures').get().n, 0, 'a 204 is not a failure');
+  assert.strictEqual(genv.DB.raw.prepare('SELECT alerted FROM reports').get().alerted, 1);
+
+  genv = ghEnv(String.fromCharCode(0x16), 401, '{"message":"Bad credentials"}');
+  await M.receive(new Request('https://x.workers.dev/report', { method: 'POST', body: JSON.stringify(fail(['src/ledger.js:9'])) }),
+    genv, ctx, NOW);
+  await Promise.all(waits.splice(0));
+  var f1 = genv.DB.raw.prepare('SELECT * FROM alert_failures').get();
+  assert.strictEqual(f1.status, 401);
+  assert.strictEqual(f1.detail, 'stored GITHUB_TOKEN is not a GitHub token (1 characters); {"message":"Bad credentials"}');
+  assert.strictEqual(genv.DB.raw.prepare('SELECT alerted FROM reports').get().alerted, 0, 'left for the retry');
+  global.fetch = real;
+
   console.log('report worker: OK');
 })().catch(function (e) { console.error(e); process.exit(1); });

@@ -23,7 +23,10 @@ var L = require('../src/ledger.js');
 
 var TIMEOUT_MS = 5000;
 
-function endpoint() { return process.env.OPEN_LOOPS_REPORT_URL || D.ENDPOINT; }
+// Tests point this at a local server, or set it empty to mean "no server" — never the real one.
+function endpoint() {
+  return 'OPEN_LOOPS_REPORT_URL' in process.env ? process.env.OPEN_LOOPS_REPORT_URL : D.ENDPOINT;
+}
 
 async function post(route, body) {
   var res = await fetch(endpoint().replace(/\/$/, '') + route, {

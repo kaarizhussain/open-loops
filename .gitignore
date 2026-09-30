@@ -11,3 +11,6 @@ ledger.json
 # get it; it must never be committed here.
 maildir/
 enron_mail_*.tar.gz
+
+# Wrangler's local cache names the Cloudflare account. Never commit it.
+.wrangler/

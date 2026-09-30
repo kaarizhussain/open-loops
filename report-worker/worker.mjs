@@ -24,15 +24,29 @@ async function key(s) {
   return 'k-' + [...new Uint8Array(h)].slice(0, 6).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/* With logging off, a failed alert would leave no trace. Its time and GitHub's status go in
+ * alert_failures instead — no report content, nothing about any reader. */
 function github(env) {
   return async (alert) => {
-    const res = await fetch('https://api.github.com/repos/' + REPO + '/dispatches', {
+    let status = 0, detail = '';
+    const token = String(env.GITHUB_TOKEN || '').trim();
+    // A paste into a hidden prompt can store a stray keystroke instead (2026-09-30). Say so.
+    if (!/^(github_pat_|ghp_)[A-Za-z0-9_]+$/.test(token)) detail = 'stored GITHUB_TOKEN is not a GitHub token (' + token.length + ' characters); ';
+    try {
+      const res = await fetch('https://api.github.com/repos/' + REPO + '/dispatches', {
       method: 'POST',
-      headers: { authorization: 'Bearer ' + env.GITHUB_TOKEN, accept: 'application/vnd.github+json',
+      headers: { authorization: 'Bearer ' + token, accept: 'application/vnd.github+json',
                  'user-agent': 'open-loops-reports', 'x-github-api-version': '2022-11-28' },
       body: JSON.stringify({ event_type: 'open-loops-alert', client_payload: alert })
-    });
-    return res.status === 204;
+      });
+      status = res.status;
+      if (status !== 204) detail += (await res.text()).slice(0, 300);
+    } catch (e) { status = 0; detail = String(e && e.name); }
+    if (status === 204) return true;
+    // GitHub's own error text, about our request. An alert holds no reader data to echo.
+    await env.DB.prepare('INSERT INTO alert_failures (at, status, detail) VALUES (?, ?, ?)')
+      .bind(new Date().toISOString(), status, detail).run();
+    return false;
   };
 }
 
@@ -163,6 +177,7 @@ export async function daily(env, now) {
   const cutoff = new Date(now - RETAIN_DAYS * 864e5).toISOString();
   await env.DB.prepare('DELETE FROM reports WHERE received < ?').bind(cutoff).run();
   await env.DB.prepare('DELETE FROM examples WHERE received < ?').bind(cutoff).run();
+  await env.DB.prepare('DELETE FROM alert_failures WHERE at < ?').bind(cutoff).run();
   await alertFailures(env, now);
   await alertExamples(env, now);
   if (new Date(now).getUTCDay() === 1) await weekly(env, now);
