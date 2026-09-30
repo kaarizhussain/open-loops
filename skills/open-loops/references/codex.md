@@ -82,6 +82,13 @@ midday alerts on your own initiative.
 
 ## Fetch and run
 
+For an authorized real digest, before fetching, run
+`node "<checkout>/tools/status.js" --begin --today <local-date> --config "<config>"`.
+Keep the returned `ATTEMPT` id and `STARTED` epoch for recording the outcome. Every
+such attempt must end through the status procedure below, even if fetching fails.
+A preview does not begin or end a real attempt, write status or post failure notices.
+In the owner's deployment Codex remains a preview reader only (AGENTS.md).
+
 Read the config first. Apply its include/exclude rules before fetching. Fetch all pages
 covering `lookbackDays` (21 by default), and all pages of each root's thread replies.
 Use the `pages`, `pagination_info`, and requested `oldest` format and coverage rules in
@@ -206,6 +213,64 @@ that digest contains a spot check. Do not claim measured accuracy on the first r
 For a preview, show the brief but do not claim it was delivered or invite replies
 to a digest that was not posted.
 
+## Record delivery and failures
+
+For an authorized real writer only, record the outcome once after delivery and
+verification, or when a run stops:
+
+```text
+node "<checkout>/tools/status.js" --end --attempt <id> --brief <fact> --details <fact> --verified <yes|no> [--failed <stage>] [--ref <ref>] --config "<config>"
+```
+
+Use only these facts for each post: `posted` when Slack returned a timestamp or the
+message was positively identified; `rejected` when Slack explicitly refused it;
+`not_attempted` when no post was tried; `unknown` otherwise. For the brief,
+`not_attempted` requires `--failed fetch` or `build`. The other failure stages are
+`post` and `verify`. `--verified yes` means only that the brief's read-back passed;
+it does not verify the details. Supply the runner's ref whenever a digest was built.
+
+A timeout or an unsuccessful search is not proof of rejection. To investigate an
+uncertain post, read the DM from `STARTED`, preserving pagination, and look for the
+exact expected first line with its ref. Check details in the identified brief's
+thread. Finding the message establishes that it posted; not finding it, even after
+every page, leaves delivery unknown. Do not retry an uncertain post automatically.
+
+`DELIVERED` or `ALREADY RECORDED` requires no notice. Otherwise stdout contains the
+approved notice and stderr identifies its destination: the self-DM or the brief's
+thread. Post it verbatim once, without a code fence, only under the authorized real
+run's delivery permission. Record the notice's result with:
+
+```text
+node "<checkout>/tools/status.js" --notice-result <posted|rejected|unknown> --attempt <id> --config "<config>"
+```
+
+Apply the same evidence rules to that notice. An unreachable Slack connection means
+the notice cannot reliably reach the user; report this in the Codex chat. Neither
+finishing a Codex run nor generating notice text proves a digest was delivered.
+
+## Is it working?
+
+When asked what Open Loops tracks or whether it ran, show the tool's status in the
+Codex chat, not Slack:
+
+```text
+node "<checkout>/tools/status.js" --show --config "<config>"
+```
+
+The owner's shared Claude setup uses this read-only form: do not pass `--next` or
+`--paused`, update its schedule record, begin an attempt or post anything. Explain
+that Codex cannot verify the Claude scheduler here, so its next run is unknown.
+
+For a setup whose real writer is Codex, inspect the recorded task id (`--task`) and
+the actual Codex automation. Pass `--next <ISO>` only if the scheduler supplies a
+confirmed next-run timestamp, or `--paused` if it confirms the automation is paused.
+Those options also refresh recorded schedule state. Otherwise omit both and leave
+the next run unknown; do not calculate it from the saved recurrence or assume a
+Claude schedule applies. Missing status history means no delivery has been verified
+by status tracking yet, not that no digest has ever arrived.
+
+## Corrections and diagnostics
+
 Numbered corrections and accuracy reports use the same ledger as Claude:
 `3 7` rejects items, `k 1 4` marks already-known items, and `miss b` answers the spot check.
 Run `node "<checkout>/slack-run.js" --report --config "<config>"` for the report.
@@ -234,6 +299,18 @@ permission test: explain that it would post a second digest and ask before doing
 Default to continuing the current task. If the user explicitly wants a standalone
 project schedule, use the saved local project, with an absolute ledger path outside
 worktrees. Keep the computer awake and the app running for local scheduled work.
+
+For a Codex-owned setup, record a confirmed daily or weekday schedule with
+`tools/status.js --schedule <automation-id> "<cron>" --config "<config>"`, using a
+cron equivalent to the actual local schedule (for example `0 18 * * 1-5` for
+18:00 weekdays). This records metadata only; it never creates or changes an automation.
+Do not invent an equivalent for a recurrence that cannot be represented by the
+tool's supported time-and-days cron; leave gap reporting unavailable in that case.
+When the user asks to change timing, update the existing automation and then its
+record, rather than adding another writer. After confirmed pause, resume or deletion,
+record `--schedule-state paused|resumed|deleted`. Never record a change before the
+automation tool confirms it. App-only pause/resume changes between status checks
+may be missed; do not promise complete schedule history.
 
 The saved prompt should name this skill, the checkout, and absolute config/data paths;
 direct each run to read the current Codex workflow, fetch only allowed sources, run

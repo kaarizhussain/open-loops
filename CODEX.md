@@ -44,6 +44,22 @@ raw run files and backups are not scrubbed.
 In this repository owner's deployment, Claude owns the live digest and ledger.
 Codex previews only and does not post or create a second schedule for that setup.
 
+## Check status or change the schedule
+
+Ask **Is Open Loops working?** Codex shows the tracked channels, last attempt and
+last verified delivery separately. It reports the next run only when the scheduler
+provides that information; otherwise it says unknown. New status tracking does not
+verify older digests retroactively.
+
+In a Codex-owned setup, real runs record delivery or failure. If Slack is reachable,
+a failed run posts a short notice; an uncertain post stays unknown and is not
+automatically repeated. Previews record no attempt and send no notice. If the app
+was closed and a run never started, Open Loops cannot send a warning at that time.
+
+To change timing, pause or stop, ask Codex. It updates the existing automation only
+when requested. Stopping keeps the ledger. In the owner's Claude setup, Codex can
+read local status but cannot verify or change the Claude schedule.
+
 ## Connector input
 
 The existing Claude `text` format still works. Codex can instead pass structured
