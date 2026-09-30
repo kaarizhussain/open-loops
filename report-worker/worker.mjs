@@ -14,11 +14,14 @@ import D from '../src/diagnostics.js';
 
 const REPO = 'kaarizhussain/open-loops-reports';
 const MAX_BYTES = 1024, DAILY_CAP = 50, EXAMPLE_CAP = 5, ALERT_CAP = 10, RETAIN_DAYS = 90;
-/* Anyone can mint install ids, so the per-install caps bound an honest sender, not an
- * attacker. This bounds everyone together: a daily total in D1, keyed on nothing about the
- * sender. It answers 503, which report.js keeps and retries, so a flood delays honest
- * reports rather than destroying them. With the alert cap, it bounds what a flood can cost:
- * 2,050 rows and 10 alerts a day.
+/* A storage cap, not rate limiting. Anyone can mint install ids, so the per-install caps
+ * bound an honest sender, not an attacker; this bounds what everyone together can store in
+ * a day, keyed on nothing about the sender. Requests past it still reach and run the
+ * Worker — they are refused before anything is written, not stopped at the edge. It
+ * answers 503, which report.js keeps and retries, so a flood delays honest reports rather
+ * than destroying them. With the alert cap, a flood can cost 2,050 rows and 10 alerts a
+ * day, plus Worker invocations (100,000 a day on the free plan; past that the endpoint
+ * refuses everything until the next day, and senders retry).
  *
  * Not an edge limit. Cloudflare's per-IP rate-limiting rules need a zone this account does
  * not have (workers.dev is not one), and the Workers rate-limiting binding never tripped
@@ -163,22 +166,29 @@ export async function receive(req, env, ctx, now) {
   const example = url.pathname === '/example';
   if (!D.exact(r) || (r.kind === 'example') !== example) return reply(400);
 
+  /* Both caps are conditions of the insert itself, not counts read before it. D1 runs one
+   * statement at a time, so concurrent requests cannot all read "one place left" and all
+   * take it — which is what count-then-insert allowed (20 of 20 got in with 5 left). */
   const table = example ? 'examples' : 'reports';
-  const used = await env.DB.prepare('SELECT COUNT(*) AS n FROM ' + table + ' WHERE install = ? AND day = ?')
-    .bind(r.install, today).first();
-  if (used.n >= (example ? EXAMPLE_CAP : DAILY_CAP)) return reply(429);
-  const all = await env.DB.prepare('SELECT COUNT(*) AS n FROM ' + table + ' WHERE day = ?').bind(today).first();
-  if (all.n >= GLOBAL_DAILY[table]) return reply(503);
-
   const body = JSON.stringify(D.clean(r)), received = new Date(now).toISOString();
-  let res;
-  if (example) {
-    res = await env.DB.prepare('INSERT OR IGNORE INTO examples (install, id, received, day, body) VALUES (?, ?, ?, ?, ?)')
-      .bind(r.install, r.id, received, today, body).run();
-  } else {
-    const sig = r.kind === 'run_failed' ? [r.stage, r.error, r.where[0] || '-'].join('|') : null;
-    res = await env.DB.prepare('INSERT OR IGNORE INTO reports (install, id, kind, received, day, body, sig) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .bind(r.install, r.id, r.kind, received, today, body, sig).run();
+  const cols = example ? ['install', 'id', 'received', 'day', 'body']
+                       : ['install', 'id', 'kind', 'received', 'day', 'body', 'sig'];
+  const vals = example ? [r.install, r.id, received, today, body]
+    : [r.install, r.id, r.kind, received, today, body,
+       r.kind === 'run_failed' ? [r.stage, r.error, r.where[0] || '-'].join('|') : null];
+  const res = await env.DB.prepare(
+    'INSERT OR IGNORE INTO ' + table + ' (' + cols.join(', ') + ') SELECT ' + cols.map(() => '?').join(', ') +
+    ' WHERE (SELECT COUNT(*) FROM ' + table + ' WHERE install = ? AND day = ?) < ?' +
+    ' AND (SELECT COUNT(*) FROM ' + table + ' WHERE day = ?) < ?')
+    .bind(...vals, r.install, today, example ? EXAMPLE_CAP : DAILY_CAP, today, GLOBAL_DAILY[table]).run();
+
+  if (res.meta.changes === 0) {
+    // Not stored: a repeat of one already kept, or a cap. Which one only picks the answer.
+    const kept = await env.DB.prepare('SELECT 1 AS x FROM ' + table + ' WHERE install = ? AND id = ?').bind(r.install, r.id).first();
+    if (!kept) {
+      const used = await env.DB.prepare('SELECT COUNT(*) AS n FROM ' + table + ' WHERE install = ? AND day = ?').bind(r.install, today).first();
+      return reply(used.n >= (example ? EXAMPLE_CAP : DAILY_CAP) ? 429 : 503);
+    }
   }
   if (example) ctx.waitUntil(alertExamples(env, now));
   else if (r.kind === 'run_failed') ctx.waitUntil(alertFailures(env, now));

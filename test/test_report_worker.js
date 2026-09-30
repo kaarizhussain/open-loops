@@ -116,6 +116,30 @@ assert.ok(!/ip|header|agent/i.test(fs.readFileSync(path.join(W, 'schema.sql'), '
     'past the global daily total, even from a new install id — and 503, so it is retried, not dropped');
   db.raw.exec("DELETE FROM reports WHERE day = '" + gd + "'");
 
+  /* Concurrent, which is how a flood arrives. Counting first and inserting after let every
+     request in flight read the same count and all get in; the check is now part of the
+     insert. Five places left, twenty senders at once, twenty install ids: five stored. */
+  for (var h = 0; h < 1995; h++) ins.run('filler-' + h, 'f' + h, new Date(gday).toISOString(), gd);
+  var burst = await Promise.all(Array.from({ length: 20 }, function () {
+    return post('/report', fresh({ kind: 'item_missed', sampled: 5, missed: 0 }), gday);
+  }));
+  assert.strictEqual(burst.filter(function (c) { return c === 200; }).length, 5, 'exactly the places left: ' + burst.join(' '));
+  assert.strictEqual(burst.filter(function (c) { return c === 503; }).length, 15);
+  assert.strictEqual(db.raw.prepare('SELECT COUNT(*) AS n FROM reports WHERE day = ?').get(gd).n, 2000, 'never past the cap');
+  db.raw.exec("DELETE FROM reports WHERE day = '" + gd + "'");
+
+  // The same for one install's own cap: sixty at once from one id, fifty stored.
+  var one = require('crypto').randomUUID();
+  var own = await Promise.all(Array.from({ length: 60 }, function () {
+    return post('/report', Object.assign(rep({ kind: 'item_missed', sampled: 5, missed: 0 }), { install: one }), gday);
+  }));
+  assert.strictEqual(own.filter(function (c) { return c === 200; }).length, 50, own.join(' '));
+  assert.strictEqual(own.filter(function (c) { return c === 429; }).length, 10);
+  // A repeat is still a repeat, not a refusal, when the cap is full.
+  var dupOf = JSON.parse(db.raw.prepare('SELECT body FROM reports WHERE install = ? LIMIT 1').get(one).body);
+  assert.strictEqual(await post('/report', dupOf, gday), 200, 'a duplicate of a stored report is accepted, not capped');
+  db.raw.exec("DELETE FROM reports WHERE day = '" + gd + "'");
+
   /* ------------------------------ examples ------------------------------ */
   var ex = { schema: 1, install: base.install, id: 'e0000000000000e1', kind: 'example', version: '18c3071',
     date: '2026-10-05', signal: 'owed_to_us', first_seen: '2026-10-02', text: 'We will send the MSA Friday.' };
