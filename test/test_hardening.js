@@ -245,4 +245,28 @@ main([write(base('2026-09-01')), '--ledger', path.join(dir, 'shape-old.json')]);
   assert.ok(run(null).indexOf('scope doc') > -1, 'no --config at all is the documented default: nothing to load, nothing to stop');
 })();
 
+/* ---- 10. Slack timestamps are unique per channel, not per workspace: the same one in two channels is two messages ---- */
+(function () {
+  var T = at(2026, 8, 25, 11);
+  var i = base('2026-09-01');
+  i.conversations = [
+    { channel: '#alpha', members: [], text: me(T, "I'll send the alpha proposal Wednesday.") },
+    { channel: '#beta', members: [], text: me(T, "I'll send the beta contract Thursday.") }
+  ];
+  var out = main([write(i), '--ledger', path.join(dir, 'samets.json'), '--dry']);
+  assert.ok(out.indexOf('alpha proposal') > -1 && out.indexOf('beta contract') > -1, 'both promises are listed, one per channel');
+  assert.ok(out.indexOf('Read 2 messages across 2 conversations') > -1, 'and both count as read');
+
+  // A thread read still replaces its own root, and only its own: channel #beta's message with the same ts stays.
+  var ts = at(2026, 8, 26, 9);
+  var j = base('2026-09-01');
+  j.conversations = [
+    { channel: '#alpha', members: [], text: me(ts, "I'll send the alpha plan Friday.") },
+    { channel: '#beta', members: [], text: me(ts, "I'll send the beta plan Friday.") }
+  ];
+  j.threads = [{ channel: '#alpha', root: ts, text: threadRead(ts, me(ts, "I'll send the alpha plan Friday.").split(String.fromCharCode(10)).slice(2).join(String.fromCharCode(10)), []) }];
+  var out2 = main([write(j), '--ledger', path.join(dir, 'samets2.json'), '--dry']);
+  assert.ok(out2.indexOf('alpha plan') > -1 && out2.indexOf('beta plan') > -1, 'a thread read in one channel does not replace the other channel message');
+})();
+
 console.log('hardening: OK');

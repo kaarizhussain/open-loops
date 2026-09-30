@@ -354,6 +354,10 @@ function main(argv) {
 
   /* Every conversation becomes messages in the shape loops.js already takes. The
    * channel name stands in for a subject line, which Slack does not have. */
+  /* A Slack timestamp is unique within a channel, not across the workspace, so two channels can hold different
+   * messages with the same one. Keyed by timestamp alone the second silently replaced the first. A thread read
+   * still replaces its own root, because it shares that root's channel. */
+  var slot = function (channel, ts) { return channel + String.fromCharCode(0) + ts; };
   var byId = {}, roots = {}, skipped = 0, skippedThreads = 0, unread = [], orderSuspect = [];
   var window = cfg.lookbackDays;
   var cut = window ? new Date(new Date(today + 'T00:00:00Z') - window * 864e5).toISOString().slice(0, 10) : null;
@@ -391,8 +395,8 @@ function main(argv) {
       else unread.push(c.channel);
     }
     got.forEach(function (m) {
-      byId[m.id] = m;
-      if (m.hasThread) roots[m.id] = c.channel;   // has replies a channel read omits
+      byId[slot(c.channel, m.id)] = m;
+      if (m.hasThread) roots[slot(c.channel, m.id)] = c.channel;   // has replies a channel read omits
     });
   });
 
@@ -411,11 +415,11 @@ function main(argv) {
       channel: t.channel, members: t.members || [], threadId: t.root,
       tzOffset: cfg.tzOffset, self: cfg.you, selfUid: cfg.selfUid || cfg.selfDm, users: input.users
     });
-    repliesRead.forEach(function (m) { byId[m.id] = m; });
+    repliesRead.forEach(function (m) { byId[slot(t.channel, m.id)] = m; });
     if (repliesRead.suspect) orderSuspect.push(t.channel + ' thread ' + t.root);
     var read = recordCoverage(t, t.root, repliesRead, t.channel,
       t.channel + ' thread ' + t.root);
-    if (repliesRead.length) delete roots[t.root];
+    if (repliesRead.length) delete roots[slot(t.channel, t.root)];
     if (!repliesRead.length) unread.push(t.channel + ' thread ' + t.root);
   });
 
