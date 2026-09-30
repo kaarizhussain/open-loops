@@ -35,6 +35,10 @@ items, then offers a daily schedule at your preferred local time. The optional
 diagnostic reports question comes last, after your first digest, whether or not
 you schedule it. Midday alerts are available when you ask; setup does not offer them.
 
+Before reading message history, Codex validates the saved config. Channel patterns
+must be exact names or end in a single `*`; malformed patterns stop the run rather
+than risk reading an excluded channel.
+
 Google Calendar is optional; connecting it is not required for the first Slack
 digest. Local files and conversation history can contain fetched text. Deleting
 your data directory removes local files only, not Slack messages, conversation

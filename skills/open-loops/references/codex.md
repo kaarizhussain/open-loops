@@ -50,6 +50,11 @@ used to recognize their messages even when email is unavailable. A legacy config
 with a user ID in `selfDm` still works. Do not assume that a user ID is a DM channel ID.
 Write a nonempty allowlist: an empty include list currently means all supplied channels.
 Other DMs are opt-in by name. On Windows use forward slashes or JSON-escaped backslashes.
+Immediately after writing the config, run
+`node "<checkout>/slack-run.js" --check-config --config "<config>"`.
+It must print `Config OK.` before fetching message history. Channel patterns support
+exact names or one trailing `*` only; do not trim, reinterpret or broaden a rejected
+pattern silently. Explain the config error and resolve it with the user's intended scope.
 
 Before fetching message history, show this notice, substituting the actual lookback
 and data directory. Omit the calendar sentence when it is disabled or unavailable:
@@ -81,6 +86,10 @@ and consented to; do not reset an existing configuration's choices. Do not offer
 midday alerts on your own initiative.
 
 ## Fetch and run
+
+Validate the config with `slack-run.js --check-config --config "<config>"` before
+each run's history fetch, including previews. Stop on an error; do not fetch first
+and rely on the runner to reject the data afterward.
 
 For an authorized real digest, before fetching, run
 `node "<checkout>/tools/status.js" --begin --today <local-date> --config "<config>"`.
@@ -179,6 +188,9 @@ timestamp as `root` and the full parent/replies as `messages`. The two correctio
 keep the unpaged input form; the separate lookup follows pages as described above. Use the original
 digest header, including its `· ref` reference, so numbered corrections resolve
 against the list they answered.
+Never omit `root` or infer a reply's digest from its time or the newest list. Include
+the actual parent digest in the thread read. If its identity or parent cannot be
+retrieved, report the limitation instead of guessing which numbered item it corrects.
 
 Calendar input uses the existing `{ "events": [...] }` response shape described in
 `src/calendar.js`: id, summary, start.dateTime or start.date, attendees, organizer,
