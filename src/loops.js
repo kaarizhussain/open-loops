@@ -256,8 +256,24 @@ var REFUSED = /\b(?:i|we)(?:['’]ll|\s+will)\s+(?:not\s+be\s+able|be\s+unable)\
  * Friday, not sure about the deck though" is a firm promise with a caveat attached to
  * something else, and blocking that would lose a real commitment to a word about a
  * different one. Same earliest-position rule the owner split uses. */
+/* A hedge clause that is about something else, set aside before the hedge test. Two reproduced shapes only, each named by what it says:
+ *   about the addressee: "I don't think you need to chase, I'll send it Friday"
+ *   about importance:     "I doubt that's urgent, but I'll send it Friday"
+ * Uncertainty about the promise itself ("not sure, I'll send it Friday", "no promises on timing, I'll send it Friday", "I don't think I'll be
+ * able to") matches neither, and stays a hedge. Any other hedge left in front of the promise still counts. */
+var HEDGE_ADDRESSEE = /\b(?:don['’]?t think|do not think|not sure|unsure|doubt)\s+(?:that\s+)?you(?:\s+(?:really|even))?\s+(?:need|have to|should|must|want)\b/i;
+var HEDGE_IMPORTANCE = /\b(?:don['’]?t think|do not think|not sure|doubt)\s+(?:that|this|it)(?:['’]s|\s+is|\s+was)\s+(?:urgent|important|critical|a problem|an issue|a big deal|necessary|needed|pressing)\b/i;
+function setAsideHedges(s) {
+  var seps = s.match(new RegExp(CLAUSE_SPLIT.source, 'gi'));
+  if (!seps) return s;
+  var parts = s.split(CLAUSE_SPLIT), out = '';
+  parts.forEach(function (p, i) { if (!(HEDGE_ADDRESSEE.test(p) || HEDGE_IMPORTANCE.test(p))) out += p + (seps[i] || ' '); });
+  return out.trim() || s;
+}
+
 function hedged(s) {
   if (REFUSED.test(s)) return true;
+  s = setAsideHedges(s);
   var h = s.search(HEDGE);
   if (h < 0) return false;
   var c = s.search(COMMIT);
