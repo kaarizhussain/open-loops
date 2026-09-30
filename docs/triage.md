@@ -62,6 +62,15 @@ is Disabled"; Settings → Observability: Logs off, Traces off, Exports none. AP
 false, no tail consumers, preview URLs off. Three test reports sent 02:51–03:05 UTC left
 no events.
 
+**Limits** (live-tested 2026-09-30). Per install: 50 reports and 5 examples a day (429,
+dropped by the sender). Everyone together: 2,000 reports and 50 examples a day (503, kept
+and retried by the sender) — the one that holds against rotating install ids; the 2,001st
+from a fresh id got 503. Alerts: 10 a day. There is **no per-IP edge limit**: WAF
+rate-limiting rules need a zone this account does not have, and the Workers rate-limiting
+binding never tripped (440 requests in three minutes against 60/min). Getting one means
+serving the Worker from a custom domain on a Cloudflare zone and adding the free plan's
+one rule (10 s, by IP) — Cloudflare counts the IP, the Worker still never reads it.
+
 **When alerts stop.** Logging is off, so a refused alert leaves its trace in D1 instead:
 
 ```bash

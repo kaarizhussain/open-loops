@@ -177,7 +177,9 @@ Numbered corrections and accuracy reports use the same ledger as Claude:
 Run `node "<checkout>/slack-run.js" --report --config "<config>"` for the report.
 
 Diagnostic reports follow SKILL.md: ask Setup step 5's question in its exact words, and
-on a yes run `node "<checkout>/tools/report.js" --consent --host codex --config "<config>"`.
+on a yes run `node "<checkout>/tools/report.js" --consent --yes --host codex --config "<config>"`.
+Someone set up earlier opts in the same way, only when they ask: `--consent` alone prints the
+question and records nothing.
 End every run, pass or fail, with `tools/report.js --send` (plus `--failed <stage>` on a
 failure), and share an example only through "When a report needs more detail".
 

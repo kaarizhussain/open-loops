@@ -106,6 +106,16 @@ assert.ok(!/ip|header|agent/i.test(fs.readFileSync(path.join(W, 'schema.sql'), '
   for (var j = 0; j < 51; j++) codes.push(await post('/report', rep({ kind: 'item_missed', sampled: 5, missed: 0 }), capDay));
   assert.strictEqual(codes.filter(function (c) { return c === 429; }).length, 1, 'the 51st is refused');
 
+  /* ------------------ limits that hold against rotating install ids ------------------ */
+  var fresh = function (fields) { return Object.assign(rep(fields), { install: require('crypto').randomUUID() }); };
+  var gday = NOW - 30 * 864e5, gd = new Date(gday).toISOString().slice(0, 10);
+  var ins = db.raw.prepare("INSERT INTO reports (install, id, kind, received, day, body) VALUES (?, ?, 'item_missed', ?, ?, '{}')");
+  for (var g = 0; g < 1999; g++) ins.run('filler-' + g, 'f' + g, new Date(gday).toISOString(), gd);
+  assert.strictEqual(await post('/report', fresh({ kind: 'item_missed', sampled: 5, missed: 0 }), gday), 200, 'the 2000th of the day is taken');
+  assert.strictEqual(await post('/report', fresh({ kind: 'item_missed', sampled: 5, missed: 0 }), gday), 503,
+    'past the global daily total, even from a new install id — and 503, so it is retried, not dropped');
+  db.raw.exec("DELETE FROM reports WHERE day = '" + gd + "'");
+
   /* ------------------------------ examples ------------------------------ */
   var ex = { schema: 1, install: base.install, id: 'e0000000000000e1', kind: 'example', version: '18c3071',
     date: '2026-10-05', signal: 'owed_to_us', first_seen: '2026-10-02', text: 'We will send the MSA Friday.' };

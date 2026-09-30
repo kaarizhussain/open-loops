@@ -79,6 +79,16 @@ queueCrash(['x.json', '--config', cfgPath], new Error('CANARYMSG'));
 assert.strictEqual(queued().length, 0, 'no consent: nothing is queued');
 assert.ok(!fs.existsSync(outbox.files(dir).outbox), 'not even an empty outbox');
 
+/* ------------------------- asking is not agreeing ------------------------- */
+var S = fs.readFileSync(path.join(__dirname, '..', 'skills', 'open-loops', 'SKILL.md'), 'utf8').split(String.fromCharCode(13)).join('');
+var asked = report.consentText();
+assert.strictEqual(asked.split(String.fromCharCode(10))[0], '**Diagnostic reports — off unless you say yes.**');
+assert.strictEqual(asked.split(String.fromCharCode(10)).pop(), '**Send diagnostic reports?** yes / **no**', 'the whole question, to its last line');
+assert.ok(/Cloudflare, which runs the report server/.test(asked) && /with a new ID/.test(asked));
+asked.split(String.fromCharCode(10)).filter(Boolean).forEach(function (l) {
+  assert.ok(S.indexOf('> ' + l) > -1, 'every line is SKILL.md' + String.fromCharCode(39) + 's own: ' + l);
+});
+
 /* ------------------------- consent, then the canary run ------------------------- */
 fs.rmSync(ledger);
 writeCfg();
@@ -229,6 +239,14 @@ var server = http.createServer(function (req, res) {
   assert.deepStrictEqual(JSON.parse(bodies[0].body), draft, 'what is sent is the draft as the reader left it');
   assert.strictEqual(bodies[0].url, '/example');
   assert.strictEqual(report.scrub('mail a.b@c.co or <@U0ABCDEFGH>, U0C1JCK7B6X, CONTRACTS'), 'mail person@example.com or @someone, SLACK_ID, CONTRACTS');
+
+  // --consent alone asks; only --yes records.
+  writeCfg();
+  var shownQ = await report.main(['--consent', '--config', cfgPath]);
+  assert.ok(/Send diagnostic reports?/.test(shownQ) && /Nothing recorded/.test(shownQ));
+  assert.strictEqual(D.consent(JSON.parse(fs.readFileSync(cfgPath, 'utf8'))), null, 'asking records nothing');
+  assert.ok(/Diagnostic reports on/.test(await report.main(['--consent', '--yes', '--config', cfgPath])));
+  assert.ok(D.consent(JSON.parse(fs.readFileSync(cfgPath, 'utf8'))), '--yes records');
 
   server.close();
   console.log('diagnostics: OK');

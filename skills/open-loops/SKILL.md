@@ -1,6 +1,6 @@
 ---
 name: open-loops
-description: Track commitments made and received in Slack, and send a daily digest of what is about to slip. Use when someone wants to set up Open Loops, run today's digest, schedule it daily, or see how accurate it has been. Also use when they ask what they have promised, what someone owes them, or what has gone quiet.
+description: Track commitments made and received in Slack, and send a daily digest of what is about to slip. Use when someone wants to set up Open Loops, run today's digest, schedule it daily, see how accurate it has been, or turn diagnostic reports on or off. Also use when they ask what they have promised, what someone owes them, or what has gone quiet.
 ---
 
 # Open Loops
@@ -168,10 +168,10 @@ nothing is sent until they say yes:
 Only on a yes:
 
 ```bash
-node <checkout>/tools/report.js --consent --config <working dir>/openloops.config.json
+node <checkout>/tools/report.js --consent --yes --config <working dir>/openloops.config.json
 ```
 
-On a no, write nothing — no `diagnostics` key is the same as off. Never write the
+(`--consent` without `--yes` prints this question and records nothing.) On a no, write nothing — no `diagnostics` key is the same as off. Never write the
 `diagnostics` record by hand; only `--consent` makes one.
 
 **6. Run it once** (below) so they see output immediately, then offer to schedule it.
@@ -415,6 +415,11 @@ all of it takes effect on the next run, and nothing needs rebuilding.
 To stop the daily message, delete the scheduled task. The ledger stays where it is, so
 picking it up again later resumes rather than restarts. To remove it altogether, delete
 the working directory. That is all of it.
+
+**Turning diagnostic reports on later** — someone set up before reports existed was never
+asked, and nothing in the daily run asks them. Only when they ask for it, run
+`node <checkout>/tools/report.js --consent --config <working dir>/openloops.config.json`,
+show them its output unchanged, and only on a yes run it again with `--yes`.
 
 To stop diagnostic reports, set `"diagnostics": false` in the config. The next run
 discards anything not yet sent, and turning them on again means asking the question in

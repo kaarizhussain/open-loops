@@ -14,6 +14,16 @@ import D from '../src/diagnostics.js';
 
 const REPO = 'kaarizhussain/open-loops-reports';
 const MAX_BYTES = 1024, DAILY_CAP = 50, EXAMPLE_CAP = 5, ALERT_CAP = 10, RETAIN_DAYS = 90;
+/* Anyone can mint install ids, so the per-install caps bound an honest sender, not an
+ * attacker. This bounds everyone together: a daily total in D1, keyed on nothing about the
+ * sender. It answers 503, which report.js keeps and retries, so a flood delays honest
+ * reports rather than destroying them. With the alert cap, it bounds what a flood can cost:
+ * 2,050 rows and 10 alerts a day.
+ *
+ * Not an edge limit. Cloudflare's per-IP rate-limiting rules need a zone this account does
+ * not have (workers.dev is not one), and the Workers rate-limiting binding never tripped
+ * here: 440 requests in three minutes against 60 a minute, all allowed (2026-09-30). */
+const GLOBAL_DAILY = { reports: 2000, examples: 50 };
 
 const day = (t) => new Date(t).toISOString().slice(0, 10);
 const reply = (status, body) => new Response(JSON.stringify(body || {}), {
@@ -157,6 +167,8 @@ export async function receive(req, env, ctx, now) {
   const used = await env.DB.prepare('SELECT COUNT(*) AS n FROM ' + table + ' WHERE install = ? AND day = ?')
     .bind(r.install, today).first();
   if (used.n >= (example ? EXAMPLE_CAP : DAILY_CAP)) return reply(429);
+  const all = await env.DB.prepare('SELECT COUNT(*) AS n FROM ' + table + ' WHERE day = ?').bind(today).first();
+  if (all.n >= GLOBAL_DAILY[table]) return reply(503);
 
   const body = JSON.stringify(D.clean(r)), received = new Date(now).toISOString();
   let res;

@@ -19,6 +19,9 @@ CREATE TABLE IF NOT EXISTS examples (
   alerted  INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (install, id)
 );
+-- The daily totals are counted on every report; without these each count scans the table.
+CREATE INDEX IF NOT EXISTS reports_day ON reports (day);
+CREATE INDEX IF NOT EXISTS examples_day ON examples (day);
 -- Failure signatures and weekly summaries already alerted. Code locations, no install ids.
 CREATE TABLE IF NOT EXISTS signatures (sig TEXT PRIMARY KEY, first_day TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS alerts (day TEXT PRIMARY KEY, n INTEGER NOT NULL);

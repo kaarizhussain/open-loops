@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /* Diagnostic reports: consent, queue, send.
  *
- *   node tools/report.js --consent [--host codex] --config <config>   turn reports on (new id)
+ *   node tools/report.js --consent --config <config>                  show the consent question
+ *   node tools/report.js --consent --yes [--host codex] --config <c>   they said yes: reports on (new id)
  *   node tools/report.js --send [--failed <stage>] --config <config>  send what is queued
  *   node tools/report.js --show --config <config>                     what is queued, what went
  *   node tools/report.js --example <n> --config <config>              draft an example to review
@@ -37,8 +38,9 @@ async function post(route, body) {
 }
 
 /* One attempt per queued report. Delivered: logged and removed. Refused as invalid or
- * over the cap: dropped, since sending it again cannot help. Anything else — no network,
- * timeout, server error — stays for the next run until it ages out. */
+ * over this install's cap: dropped, since sending it again cannot help. Anything else — no
+ * network, timeout, the server busy (503, its global limits) — stays for the next run
+ * until it ages out. */
 async function send(dir, cfg) {
   var entries = outbox.prune(dir, cfg);
   if (!entries.length) return { sent: 0, kept: 0, dropped: 0 };
@@ -54,6 +56,19 @@ async function send(dir, cfg) {
   }
   outbox.write(dir, kept);
   return { sent: sent, kept: kept.length, dropped: dropped };
+}
+
+/* The question, exactly as SKILL.md words it — one copy, so this cannot drift from it. */
+function consentText() {
+  var md = fs.readFileSync(path.join(__dirname, '..', 'skills', 'open-loops', 'SKILL.md'), 'utf8');
+  var out = [], on = false;
+  for (var l of md.split(String.fromCharCode(10))) {
+    l = l.replace(String.fromCharCode(13), '');
+    if (l.indexOf('> **Diagnostic reports') === 0) on = true;
+    if (on) out.push(l === '>' ? '' : l.slice(2));
+    if (on && l.indexOf('**Send diagnostic reports?**') > -1) break;
+  }
+  return out.join(String.fromCharCode(10));
 }
 
 function consent(configPath, host) {
@@ -114,6 +129,8 @@ async function main(argv) {
   var configPath = flag('config') || 'openloops.config.json';
   var dir = path.dirname(path.resolve(configPath));
   if (argv.indexOf('--consent') > -1) {
+    // Asking and recording are separate steps, so nothing is turned on by the command alone.
+    if (argv.indexOf('--yes') < 0) return consentText() + '\n\n(Nothing recorded. On a yes: add --yes.)';
     return 'Diagnostic reports on. Install id ' + consent(configPath, flag('host')) + '.';
   }
   var cfg = loadConfig(fs, configPath);
@@ -150,4 +167,4 @@ if (require.main === module) {
     function (e) { console.error('report: ' + e.message); });
 }
 
-module.exports = { main: main, send: send, consent: consent, scrub: scrub, draftExample: draftExample };
+module.exports = { consentText: consentText, main: main, send: send, consent: consent, scrub: scrub, draftExample: draftExample };
