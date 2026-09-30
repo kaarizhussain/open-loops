@@ -63,26 +63,45 @@ function github(env) {
   };
 }
 
-async function alertsLeft(env, today) {
-  const row = await env.DB.prepare('SELECT n FROM alerts WHERE day = ?').bind(today).first();
-  return ALERT_CAP - (row ? row.n : 0);
+/* The day's alert cap is taken before the send, as one statement: the count is only raised while it
+ * is under the cap. Reading "how many are left", awaiting the send, and then spending let every
+ * request in flight read the same number, and 30 at once sent 39 alerts against a cap of 10. A send
+ * that fails gives its place back. */
+async function reserveAlert(env, today) {
+  const r = await env.DB.prepare(
+    'INSERT INTO alerts (day, n) VALUES (?, 1) ON CONFLICT(day) DO UPDATE SET n = n + 1 WHERE n < ?')
+    .bind(today, ALERT_CAP).run();
+  return r.meta.changes > 0;
 }
-async function spendAlert(env, today) {
-  await env.DB.prepare('INSERT INTO alerts (day, n) VALUES (?, 1) ON CONFLICT(day) DO UPDATE SET n = n + 1')
-    .bind(today).run();
+async function releaseAlert(env, today) {
+  await env.DB.prepare('UPDATE alerts SET n = n - 1 WHERE day = ? AND n > 0').bind(today).run();
 }
+/* Rows are claimed under a token of this run's own before they are alerted, so two runs that find
+ * the same unalerted rows cannot both send them: only the one whose UPDATE matched them does.
+ * 0 means unalerted, 1 alerted, anything else is somebody's claim; the daily cron clears claims
+ * left by a run that died, at the price of a repeated alert, never a lost one. */
+const claimToken = () => crypto.getRandomValues(new Uint32Array(1))[0] + 2;
 
-/* Unalerted failures, one alert per signature. A failing send leaves them unalerted for
- * the daily cron; past the day's cap they wait for tomorrow. */
+/* Unalerted failures, one alert per signature, newest signature first. Oldest first let a backlog
+ * of forged signatures (anyone can mint them) sit in front of a real failure for as long as it took
+ * to send them ten a day, and the window of 200 rows meant it never reached the real one at all.
+ * A failing send leaves them unalerted for the daily cron; past the day's cap they wait for tomorrow.
+ * ponytail: a sender minting fresh installs and code locations can still spend the day's ten. The
+ * cap bounds the noise; telling forged from real would need a secret in every install. */
 export async function alertFailures(env, now) {
   const today = day(now), send = env.send || github(env);
-  const { results } = await env.DB.prepare(
-    "SELECT id, sig, body FROM reports WHERE kind = 'run_failed' AND alerted = 0 ORDER BY received LIMIT 200").all();
-  const bySig = {};
-  for (const r of results) (bySig[r.sig] = bySig[r.sig] || []).push(r);
-  for (const sig of Object.keys(bySig)) {
-    if (await alertsLeft(env, today) <= 0) return;
-    const rows = bySig[sig], reps = rows.map((r) => JSON.parse(r.body));
+  const { results: sigs } = await env.DB.prepare(
+    "SELECT sig, MAX(received) AS latest FROM reports WHERE kind = 'run_failed' AND alerted = 0 " +
+    'GROUP BY sig ORDER BY latest DESC, sig LIMIT 50').all();
+  for (const { sig } of sigs) {
+    if (!(await reserveAlert(env, today))) return;
+    const token = claimToken();
+    const claimed = await env.DB.prepare(
+      "UPDATE reports SET alerted = ? WHERE kind = 'run_failed' AND alerted = 0 AND sig = ?").bind(token, sig).run();
+    if (!claimed.meta.changes) { await releaseAlert(env, today); continue; }      // another run has them
+    const rows = (await env.DB.prepare(
+      "SELECT id, body FROM reports WHERE kind = 'run_failed' AND alerted = ? AND sig = ? ORDER BY received").bind(token, sig).all()).results;
+    const reps = rows.map((r) => JSON.parse(r.body));
     const known = await env.DB.prepare('SELECT first_day FROM signatures WHERE sig = ?').bind(sig).first();
     const total = await env.DB.prepare(
       "SELECT COUNT(*) AS n, COUNT(DISTINCT install) AS i FROM reports WHERE kind = 'run_failed' AND sig = ?").bind(sig).first();
@@ -105,18 +124,25 @@ export async function alertFailures(env, now) {
         '', 'Follow docs/triage.md in the open-loops checkout.'
       ].join('\n')
     });
-    if (!ok) return;
-    await spendAlert(env, today);
+    if (!ok) {
+      await env.DB.prepare('UPDATE reports SET alerted = 0 WHERE alerted = ? AND sig = ?').bind(token, sig).run();
+      await releaseAlert(env, today);
+      return;
+    }
     await env.DB.prepare('INSERT OR IGNORE INTO signatures (sig, first_day) VALUES (?, ?)').bind(sig, today).run();
-    for (const r of rows) await env.DB.prepare('UPDATE reports SET alerted = 1 WHERE id = ? AND sig = ?').bind(r.id, sig).run();
+    await env.DB.prepare('UPDATE reports SET alerted = 1 WHERE alerted = ? AND sig = ?').bind(token, sig).run();
   }
 }
 
 export async function alertExamples(env, now) {
   const today = day(now), send = env.send || github(env);
-  const { results } = await env.DB.prepare('SELECT id, body FROM examples WHERE alerted = 0 LIMIT 20').all();
+  const { results } = await env.DB.prepare('SELECT install, id, body FROM examples WHERE alerted = 0 LIMIT 20').all();
   for (const r of results) {
-    if (await alertsLeft(env, today) <= 0) return;
+    if (!(await reserveAlert(env, today))) return;
+    const token = claimToken();
+    const claimed = await env.DB.prepare('UPDATE examples SET alerted = ? WHERE install = ? AND id = ? AND alerted = 0')
+      .bind(token, r.install, r.id).run();
+    if (!claimed.meta.changes) { await releaseAlert(env, today); continue; }
     const ex = JSON.parse(r.body);
     const ok = await send({
       key: await key('example|' + r.id), title: 'Example shared · ' + ex.signal, labels: 'example,new',
@@ -124,9 +150,12 @@ export async function alertExamples(env, now) {
         '    npx wrangler d1 execute open-loops-reports --remote --command "SELECT body FROM examples WHERE id = \'' + r.id + '\'"\n\n' +
         '| signal | first seen | version |\n|---|---|---|\n| `' + ex.signal + '` | ' + ex.first_seen + ' | ' + ex.version + ' |'
     });
-    if (!ok) return;
-    await spendAlert(env, today);
-    await env.DB.prepare('UPDATE examples SET alerted = 1 WHERE id = ?').bind(r.id).run();
+    if (!ok) {
+      await env.DB.prepare('UPDATE examples SET alerted = 0 WHERE install = ? AND id = ? AND alerted = ?').bind(r.install, r.id, token).run();
+      await releaseAlert(env, today);
+      return;
+    }
+    await env.DB.prepare('UPDATE examples SET alerted = 1 WHERE install = ? AND id = ?').bind(r.install, r.id).run();
   }
 }
 
@@ -200,6 +229,9 @@ export async function daily(env, now) {
   await env.DB.prepare('DELETE FROM reports WHERE received < ?').bind(cutoff).run();
   await env.DB.prepare('DELETE FROM examples WHERE received < ?').bind(cutoff).run();
   await env.DB.prepare('DELETE FROM alert_failures WHERE at < ?').bind(cutoff).run();
+  // A claim is only held while a send is in flight. One still here was left by a run that died.
+  await env.DB.prepare('UPDATE reports SET alerted = 0 WHERE alerted > 1').run();
+  await env.DB.prepare('UPDATE examples SET alerted = 0 WHERE alerted > 1').run();
   await alertFailures(env, now);
   await alertExamples(env, now);
   if (new Date(now).getUTCDay() === 1) await weekly(env, now);
