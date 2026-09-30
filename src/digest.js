@@ -784,6 +784,6 @@ function render(b) {
 
 if (typeof module !== 'undefined') {
   module.exports = { render: render, headline: headline, digestOrder: digestOrder, rank: rank,
-                     ownerTitle: ownerTitle, draft: draft, firstName: firstName,
+                     ownerTitle: ownerTitle, draft: draft, firstName: firstName, nameBook: nameBook,
                      OWNER_ORDER: OWNER_ORDER, SPLIT: SPLIT };
 }

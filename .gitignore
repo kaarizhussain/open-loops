@@ -6,6 +6,7 @@ node_modules/
 .DS_Store
 openloops.config.json
 ledger.json
+alerts.json
 
 # The Enron corpus is 443MB of somebody else's mail. tools/enron.js says where to
 # get it; it must never be committed here.

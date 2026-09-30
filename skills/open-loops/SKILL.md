@@ -1,6 +1,6 @@
 ---
 name: open-loops
-description: Track commitments made and received in Slack, and send a daily digest of what is about to slip. Use when someone wants to set up Open Loops, run today's digest, schedule it daily, see how accurate it has been, or turn diagnostic reports on or off. Also use when they ask what they have promised, what someone owes them, or what has gone quiet.
+description: Track commitments made and received in Slack, and send a daily digest of what is about to slip. Use when someone wants to set up Open Loops, run today's digest, schedule it daily, see how accurate it has been, or turn diagnostic reports or midday alerts on or off. Also use when they ask what they have promised, what someone owes them, or what has gone quiet.
 ---
 
 # Open Loops
@@ -60,6 +60,11 @@ The run's input can turn text storage off but never on; only the config decides 
 `tools/report.js` — the one file with a network call — sends the developer a fixed set of
 fields: an ID, versions, the date, and a code location or the kind of item corrected.
 Never message text, names or paths. Setup step 5 has the exact wording; use it.
+
+With midday alerts on, each check reads the same channels and calendar again, through the same
+connectors, so the host assistant sees that text at every check, and an alert is posted to their
+own DM. `alerts.json` beside the config holds item keys and urgency levels from the last digest —
+no message text.
 
 **It costs less than it sounds like.** Every open item in the digest is re-detected from
 live messages on each run, so the list still quotes every sentence in full. The single
@@ -226,8 +231,9 @@ Unknown or incomplete coverage preserves unverified commitments from that source
 Other sources resolve normally, and explicit completion evidence still counts.
 Commitments outside the lookback window age out without being reported as completed.
 
-**Self-DM reads are not coverage reads and are never paged.** Keep the five-message
-lookup and the two correction reads below exactly as described.
+**Self-DM reads are not coverage reads and are never paged.** Keep the short lookup below
+(five messages, or fifteen with midday alerts on) and the two correction reads exactly as
+described.
 
 Any message containing a line like `Thread: 2 replies (latest: …)` is a thread root
 whose replies are **not** in the channel read. Fetch each one — a promise made inside a
@@ -253,6 +259,9 @@ and retyping them was most of every input file and where the copying errors were
 slack_read_channel(channel_id=<selfDm>, limit=5, response_format="detailed")
 ```
 
+Use `limit=15` when the config has `alerts` on: alerts posted between digests would
+otherwise push the last digest out of a five-message read.
+
 Only to find the digests — messages whose text begins with ` ```OPEN LOOPS — for ` — and
 note each one's `Message TS`, the date in its header, and the `D…` id the read printed.
 **This read does not go in the input.** The one to start from is the newest digest whose
@@ -269,9 +278,9 @@ On a re-run, also `slack_read_thread` each digest dated today.
 The thread reads — each digest, its details, and any replies typed under it — are
 `dmThread`: a list, one entry per thread read, each with its digest's `Message TS` as
 `root`. The channel read — replies typed straight into the DM since, and on a re-run
-today's digest itself — is `dm`; it is often empty, and that is fine. If none of the five
+today's digest itself — is `dm`; it is often empty, and that is fine. If none of the
 messages is a digest dated before today (the first run, or a busy DM), pass the
-five-message read as `dm`, add the thread of any digest dated today to `dmThread`, and
+lookup read as `dm`, add the thread of any digest dated today to `dmThread`, and
 otherwise leave `dmThread` out.
 
 Each digest's header ends with a reference (`· ref 7c1e`). The runner uses it to tell
@@ -377,6 +386,55 @@ own. With diagnostics off it sends nothing and discards anything queued. It neve
 the digest, and its output is not posted anywhere; a report that cannot be sent waits for
 the next run.
 
+## Midday check
+
+Only when the scheduled task's prompt sends you here, and only with midday alerts on. A check is
+the digest's fetch followed by a comparison: has anything become urgent since the last digest?
+It posts one short alert, or nothing. A quiet check is silent — no digest, no notes, no summary.
+
+**1. Ask what this run is.** Nothing is fetched to find out:
+
+```bash
+node <checkout>/tools/alerts.js --which --config <working dir>/openloops.config.json
+```
+
+It prints `DIGEST`, `CHECK <slot> <date>` or `SKIP — <reason>`. On `DIGEST` follow "Running the digest". On
+`SKIP` say the reason in one line and stop; do not fetch. Only on `CHECK` continue, with that slot
+and that date — the date is the machine's local date, and the detector's idea of overdue is
+relative to it.
+
+**2. Fetch exactly what the digest fetches** — the same channels, threads, calendar and DM
+reads, with the same rules, and write the input the same way. Every `text` is the connector's
+response verbatim, and the same immutability rules hold.
+
+**3. Run the comparison:**
+
+```bash
+node <checkout>/slack-run.js <input.json> --config <working dir>/openloops.config.json --check --slot <slot> --today <date>
+```
+
+It reads the ledger and never writes it. It prints one of:
+
+- an alert, which opens with `OPEN LOOPS ALERT — `;
+- `NO ALERT — …`, `SKIP — …` or `ALERTS OFF — …`: post nothing, and end with that one line.
+
+**4. Post an alert, verbatim,** as one plain message — no code fence, nothing added:
+
+```
+slack_send_message(channel_id=<selfDm>, message=<the runner's output, unchanged>)
+```
+
+Read it back by the timestamp the call returned: its first line must equal the first line of
+the runner's output character for character. Only then run
+`node <checkout>/tools/alerts.js --confirm --config <working dir>/openloops.config.json`, which records
+that it was posted so no later check says it again. If the post failed or the read-back differs,
+do not confirm: the next check finds the same items and tries again. Never edit the text to fix
+it, and never write `alerts.json` by hand.
+
+A check never posts a digest, never touches the ledger, and never asks anything. If something
+fails, post nothing and say what broke. The same closing step as a digest applies:
+`tools/report.js --send` (with `--failed <stage>` on a failure).
+
 ## Scheduling it
 
 Offer this after the first successful run, not before — nobody wants a daily message
@@ -403,6 +461,79 @@ Tell them two things: scheduled tasks only fire while the app is open, and it is
 running the task manually once so the Slack tool approvals get stored on it. Otherwise
 the first automatic run stalls on a permission prompt with nobody watching.
 
+### Offering midday alerts
+
+Once, and only in a conversation with them: after they have seen a successful manual digest
+and the daily schedule exists, and only when the config has no `alerts` entry. Never from a
+scheduled run — a scheduled run follows "Running the digest" or "Midday check" and nothing else,
+which is why this text lives here. Ask in these words:
+
+> **Midday alerts — off unless you say yes.**
+>
+> Open Loops can check for changes between daily digests and tell you sooner when something
+> needs attention: a new commitment that is overdue, due today, or, for a priority contact,
+> due tomorrow, or an existing one that has just become due or overdue.
+>
+> At 09:00, 12:00 and 15:00 **your local time** on weekdays, your scheduled task re-reads the
+> same Slack channels and calendar as your daily digest and compares them with your last
+> digest. Only if something matches, it posts one short alert message to your own Slack DM.
+> Each alert lists up to five items. Nothing is posted when nothing matches, so that's at most
+> three alerts a day. Items with no due date stay in your evening digest only. A priority
+> contact is someone you've marked in your config as a key account, investor or executive.
+>
+> **Slack may not notify you.** The alert is posted from your own account to your own DM, and
+> Slack may not send you a notification for a message you post yourself. Open Loops does not
+> send a desktop or phone notification of its own, so an alert can sit unread until you open
+> Slack.
+>
+> **Claude may show a routine notification after every check.** The Claude app may show a
+> "Scheduled task completed" notification after each check, including checks that found
+> nothing and posted no alert. That notification doesn't say whether there was an alert.
+>
+> **What this changes.** Saying yes edits your existing scheduled Open Loops task so it also
+> runs at those times. Each check reads the same channels as your digest, through your
+> connected Slack and calendar tools, so your assistant sees that text again at every check.
+> It uses more of your Claude usage.
+>
+> **What it needs.** The Claude app open and your computer awake at check times. If it was
+> closed or asleep, Claude runs at most one catch-up check when it next opens, for the most
+> recent check time it missed, and only if that time was less than two hours ago. Earlier
+> missed checks that day are not run, and a check more than two hours late is skipped, so
+> you'll still get your evening digest.
+>
+> To stop, set alerts to off in your config. The next check then does nothing. Turning alerts
+> back on means answering this question again.
+>
+> **Turn on midday alerts?** yes / **no**
+
+On a **yes**:
+
+```bash
+node <checkout>/tools/alerts.js --consent --yes --config <working dir>/openloops.config.json
+```
+
+(`--consent` without `--yes` prints this question and records nothing.) Then edit their existing
+scheduled task — one task, so there is still one writer — to run at `0 9,12,15,18 * * *` local, daily
+because the evening digest runs at weekends too (weekend checks report `SKIP` and fetch
+nothing), with this prompt. It points back here for the same reason the digest prompt does:
+
+```
+Run the Open Loops scheduled step and post to the user's own Slack DM.
+Working directory: <working dir>   config: <working dir>/openloops.config.json
+1. git -C <working dir>/checkout pull --ff-only   (if it fails, say so and carry on)
+2. Run: node <working dir>/checkout/tools/alerts.js --which --config <working dir>/openloops.config.json
+   It prints DIGEST, CHECK <slot> <date>, or SKIP — <reason>.
+3. Read <working dir>/checkout/skills/open-loops/SKILL.md. On DIGEST follow "Running the
+   digest" exactly; on CHECK follow "Midday check" exactly, with that slot and date; on SKIP
+   say the reason in one line and stop without fetching anything.
+   Excluded channels are not fetched at all.
+Connector responses are immutable: fetch more and run again, never edit fetched text.
+```
+
+Tell them to run it once by hand so the Slack tool approvals stored on the task cover the new
+steps. On a **no**, run `node <checkout>/tools/alerts.js --decline --config …` and do not offer
+again; they can still ask for alerts later, which is a request rather than an offer.
+
 ## Changing it, or stopping it
 
 Both are edits to files they own, and it is worth saying so unprompted — a tool that
@@ -411,6 +542,10 @@ looks hard to stop is one people are slower to start.
 To change what it reads or who it tracks, edit `openloops.config.json` and run again.
 Adding a channel to `exclude`, adding a name to `supporting`, moving `lookbackDays` —
 all of it takes effect on the next run, and nothing needs rebuilding.
+
+To stop midday alerts, set `"alerts": false` in the config: the next run of the task prints `SKIP` at
+check times and fetches nothing, and the evening digest carries on. The extra run times can
+stay or be removed from the task; alerts turn on again only by answering the question again.
 
 To stop the daily message, delete the scheduled task. The ledger stays where it is, so
 picking it up again later resumes rather than restarts. To remove it altogether, delete

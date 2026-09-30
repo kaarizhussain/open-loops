@@ -36,6 +36,13 @@ Claude or Codex retrieves messages through your connected Slack and calendar too
 and posts the digest to your own DM. Those connector responses are also processed
 by the host assistant; local detection does not mean the data never leaves your machine.
 
+**Midday alerts are off unless you opt in.** At 09:00, 12:00 and 15:00 on weekdays, a check re-reads the
+same channels and calendar as the digest and posts one short alert to your own DM, only if a commitment
+became due or overdue or a new urgent one appeared. It uses the digest's own status fields, alerts once
+per level, never writes the ledger, and leaves the evening digest and its reply numbering as they are. It
+sends no notification of its own: Slack may stay silent for a message you post yourself, and the Claude
+app may show a routine "task completed" notice after every check. See SKILL.md, "Offering midday alerts".
+
 **You choose what it reads.** `channels.include` is an allowlist: name two channels and
 it reads two channels. Direct messages are never included unless you add them by name,
 because they are the most sensitive thing in a workspace and the least likely to hold a

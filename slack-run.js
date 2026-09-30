@@ -41,6 +41,7 @@ var { fileStore } = require('./src/store.js');
 var { parseEvents } = require('./src/calendar.js');
 var { settings, loadConfig } = require('./src/config.js');
 var outbox = require('./src/outbox.js');
+var alerts = require('./src/alerts.js');
 var diag = require('./src/diagnostics.js');
 var path = require('path');
 
@@ -48,9 +49,10 @@ var DIGEST_HEADER = /^\s*(?:```)?\s*OPEN LOOPS — for (\d{4}-\d{2}-\d{2})(?:[^\
 /* What a run posts under its own digest, besides the digest: the details (whose
  * instructions contain "3 7") and any run notes. Both post as the reader, so only the
  * header tells them from a reply — and a notes line like "3 items aged out" leads with
- * a number, which is a rejection (2026-09-23). Exact headers only: a reply that merely
+ * a number, which is a rejection (2026-09-23). A midday alert is the same kind of message.
+ * Exact headers only: a reply that merely
  * starts "OPEN LOOPS …" is the reader's, and is read like any other. */
-var GENERATED_HEADER = /^\s*(?:```)?\s*OPEN LOOPS (?:DETAILS|NOTES) — /;
+var GENERATED_HEADER = /^\s*(?:```)?\s*OPEN LOOPS (?:DETAILS|NOTES|ALERT) — /;
 /* A digest's own lines, wherever they turn up. A digest posted without its header (2026-09-28)
  * is not recognised as one, and its numbered lines — " 1  11d late …" — read as a reply
  * rejecting those items. Recognised by what it says rather than by what it opens with. */
@@ -550,6 +552,11 @@ function main(argv) {
     ledger[kind] = ledger[kind].filter(function (item) { return retained[item.key]; });
   });
 
+  if (argv.indexOf('--check') > -1) {
+    return runCheck({ argv: argv, flag: flag, cfg: cfg, dir: reportDir, today: today, store: store,
+                      open: result.open, closed: result.closed, rows: rows, messages: messages });
+  }
+
   var keys = digest.digestOrder(result.open, today);
 
   /* Sample the silence. Everything else in this loop asks about things that appeared;
@@ -644,6 +651,13 @@ function main(argv) {
     store.rememberDigest(today, keys);
     store.rememberRef(ref, today, keys, sample.map(function (m) { return m.id; }));
     store.rememberReplies(replies.seen);
+    /* What this digest showed, for the next midday check to compare against. Written for
+     * everyone: it is a small file of keys and levels, inert until the reader opts in, and
+     * it is what lets a check run the same day they say yes. It must never cost the digest. */
+    // Beside a config only: a run with none has nowhere to keep it, and must not litter the working directory.
+    if (fs.existsSync(configPath)) {
+      try { alerts.writeBaseline(reportDir, result.open, today); } catch (e) { /* the next digest writes it */ }
+    }
     if (fresh.length) store.remember(fresh);
     if (replies.checked || replies.misses.length) {
       store.recordMisses(replies.misses, replies.checked);
@@ -655,6 +669,33 @@ function main(argv) {
   }
 
   return text;
+}
+
+/* A midday check. Reads the ledger and writes only alerts.json. Prints the alert to post, or a
+ * line saying why there is none. The gate (tools/alerts.js --which) decides whether to fetch at
+ * all; this decides again, because a run that was not gated must not alert out of hours. */
+function runCheck(o) {
+  var cfg = o.cfg, slot = o.flag('slot', '');
+  if (!alerts.consent(cfg)) return 'ALERTS OFF — nothing was compared or written.';
+  if (!slot) throw new Error('--check needs --slot HH:MM (the check time tools/alerts.js --which printed)');
+  var now = alerts.parseNow(o.flag('now', ''));
+  var want = alerts.decide(cfg, now, o.dir, o.store.digestDates());
+  if (want.run !== 'CHECK' || want.slot !== slot) {
+    return 'SKIP — ' + (want.run === 'CHECK' ? 'the ' + want.slot + ' check is due, not ' + slot : want.reason) + '.';
+  }
+  // The detector's idea of overdue and due today is relative to the date it was given.
+  if (o.today !== want.date) {
+    throw new Error('--check needs --today ' + want.date + ' (the local date tools/alerts.js --which printed), got ' + o.today);
+  }
+  var verdict = {};
+  o.rows.forEach(function (r) { verdict[L.cell(r[L.COL.key])] = L.cell(r[L.COL.verdict]); });
+  var text = alerts.check(o.dir, cfg, {
+    slot: slot, date: want.date, today: o.today, open: o.open,
+    verdictOf: function (k) { return verdict[k]; },
+    nameOf: digest.nameBook(o.messages, o.open.concat(o.closed || [])),
+    labels: loops.LABEL
+  });
+  return text || 'NO ALERT — the ' + slot + ' check found nothing new.';
 }
 
 /* Diagnostic reports for what the reader just corrected. Queued only; tools/report.js sends.
