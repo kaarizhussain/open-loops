@@ -107,7 +107,7 @@ function load(dir) {
   return { baseline: baseline,
            alerted: same && s.alerted && typeof s.alerted === 'object' ? s.alerted : {},
            slots: s.slots && typeof s.slots === 'object' ? s.slots : {},
-           pending: !s.pending ? null : same ? s.pending : { date: s.pending.date, slot: s.pending.slot, alerts: {} } };
+           pending: !s.pending ? null : same ? s.pending : { id: s.pending.id, date: s.pending.date, slot: s.pending.slot, alerts: {} } };
 }
 
 /* The checks task's file only. It names the baseline version its contents were compared against;
@@ -276,22 +276,23 @@ function check(dir, cfg, o) {
   var text = render(found, { date: o.date, slot: o.slot, times: c.times, labels: o.labels || loops.LABEL, nameOf: o.nameOf });
   var shown = {};
   found.slice(0, MAX_ITEMS).forEach(function (e) { shown[e.key] = e.level; });
-  s.pending = { date: o.date, slot: o.slot, alerts: shown };
+  // Every check that finds something is its own alert, whatever its date and slot: a rerun replaces this one.
+  s.pending = { id: crypto.randomBytes(8).toString('hex'), date: o.date, slot: o.slot, alerts: shown };
   save(dir, s);
   return text;
 }
 
 /* The alert is in the DM: remember it, so no later check says it again, and the slot is done.
  *
- * `want` names the alert that was posted ({ slot, date }). A check that posted and died leaves its
- * alert pending; the next check overwrites it, and a late confirm from the first session would then
- * record an alert that was never posted. Naming the slot and date refuses that, and records nothing. */
+ * `want` is the id of the alert that was posted, printed by the check that produced it. A check that
+ * posted and died leaves its alert pending, and the next check overwrites it, even for the same date
+ * and slot: a late confirm from the first session would then record an alert that was never posted.
+ * Only the id identifies the alert, so any other id is refused and nothing is recorded. */
 function confirm(dir, stamp, want) {
   var s = load(dir);
   if (!s.baseline || !s.pending) return false;
-  if (want && (s.pending.slot !== want.slot || s.pending.date !== want.date)) {
-    throw new Error('the pending alert is for ' + s.pending.date + ' ' + s.pending.slot + ', not ' +
-      want.date + ' ' + want.slot + '; nothing was recorded');
+  if (want && s.pending.id !== want.id) {
+    throw new Error(want.id + ' is not the pending alert (' + (s.pending.id || 'no id') + '); nothing was recorded');
   }
   Object.keys(s.pending.alerts).forEach(function (k) {
     s.alerted[k] = Math.max(s.alerted[k] || 0, s.pending.alerts[k]);

@@ -3,7 +3,7 @@
  *
  *   node tools/alerts.js --which --config <config>     CHECK <slot> <date> | SKIP — why | OFF — why
  *   node tools/alerts.js --baseline --ref <ref> --config <config>   the digest is posted and read back: its baseline
- *   node tools/alerts.js --confirm --slot HH:MM --date YYYY-MM-DD --config <config>   that alert is in the DM: remember it
+ *   node tools/alerts.js --confirm --id <alert id> --config <config>   that alert is in the DM: remember it
  *   node tools/alerts.js --consent --config <config>   show the consent question, record nothing
  *   node tools/alerts.js --consent --yes --config <c>  they said yes: alerts on
  *   node tools/alerts.js --decline --config <config>   they said no: never offer again
@@ -74,9 +74,9 @@ function main(argv) {
       : 'Nothing staged for that ref: no baseline was written.';
   }
   if (has('confirm')) {
-    var slot = flag('slot'), date = flag('date');
-    if (!slot || !date) throw new Error('--confirm needs --slot HH:MM --date YYYY-MM-DD, the alert that was posted');
-    return A.confirm(dir, undefined, { slot: slot, date: date })
+    var id = flag('id');
+    if (!id) throw new Error('--confirm needs --id <alert id>, the one the check printed for the alert that was posted');
+    return A.confirm(dir, undefined, { id: id })
       ? 'Confirmed: the alert is recorded, and its slot is done.' : 'Nothing pending.';
   }
   if (has('which')) {

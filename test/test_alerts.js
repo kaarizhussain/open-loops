@@ -346,7 +346,13 @@ var fresh = [sam(at(10, 1, 12), "We'll send you the signed MSA Thursday Oct 1.")
              lena(at(10, 1, 13), "We'll send the revised SOW Friday Oct 2."),
              sam(at(10, 1, 14), "We'll send the invoice Friday Oct 2.")];
 var ledgerBefore = bytes(ledger), baselineBefore = bytes(A.baselineFile(rdir));
-var alert1 = main(checkArgs('2026-10-01', '09:00', '2026-10-01T09:05', fresh));
+var realErr = process.stderr.write, errText = '';
+process.stderr.write = function (t) { errText += t; return true; };
+var alert1;
+try { alert1 = main(checkArgs('2026-10-01', '09:00', '2026-10-01T09:05', fresh)); } finally { process.stderr.write = realErr; }
+var alertId1 = (errText.match(/^alert id: ([0-9a-f]{16})$/m) || [])[1];
+assert.ok(alertId1 && alertId1 === A.load(rdir).pending.id, 'the check prints the pending alert id on stderr, not in the message: ' + errText);
+assert.ok(alert1.indexOf('alert id') === -1, 'the message to post carries no id');
 assert.ok(alert1.indexOf('OPEN LOOPS ALERT — 2026-10-01 09:00\n4 things changed since your last digest.') === 0, alert1);
 var fresh1 = alert1.slice(alert1.indexOf('New and urgent'), alert1.indexOf('Now overdue'));
 assert.ok(/• They promised — Sam: "We'll send you the signed MSA Thursday Oct 1\." \(#vector-freight\) · due today/.test(fresh1), alert1);
@@ -361,7 +367,7 @@ assert.ok(A.load(rdir).pending, 'pending until confirmed');
 assert.deepStrictEqual(bytes(A.baselineFile(rdir)), baselineBefore, 'a check never writes the digest\'s baseline');
 
 // Posted and confirmed: the 12:00 check has nothing to say about them — and a new one still does.
-assert.ok(/Confirmed/.test(cli.main(['--confirm', '--slot', '09:00', '--date', '2026-10-01', '--config', cfgPath])));
+assert.ok(/Confirmed/.test(cli.main(['--confirm', '--id', alertId1, '--config', cfgPath])));
 assert.ok(/^NO ALERT/.test(main(checkArgs('2026-10-01', '12:00', '2026-10-01T12:05', fresh))), 'the same items are not alerted twice');
 assert.deepStrictEqual(bytes(ledger), ledgerBefore, 'still the ledger, untouched');
 var later = fresh.concat(lena(at(10, 1, 15), "We'll send the updated rate card Thursday Oct 1."));

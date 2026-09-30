@@ -174,7 +174,7 @@ main([write(base('2026-09-01')), '--ledger', path.join(dir, 'shape-old.json')]);
   assert.notStrictEqual(A.load(d).baseline.version, v1.version, 'every posted digest is a new version');
 })();
 
-/* ---- 7. --confirm records the alert that was posted, not whichever one is pending ---- */
+/* ---- 7. --confirm names the alert by a unique id, so a rerun of the same slot cannot be confirmed by mistake ---- */
 (function () {
   var A = require('../src/alerts.js'), cli = require('../tools/alerts.js');
   var d = fs.mkdtempSync(path.join(os.tmpdir(), 'openloops-confirm-'));
@@ -183,20 +183,30 @@ main([write(base('2026-09-01')), '--ledger', path.join(dir, 'shape-old.json')]);
   fs.writeFileSync(cfg, JSON.stringify({ you: ME, alerts: ON }));
   A.writeBaseline(d, [], '2026-10-01');
   var overdue = { type: 'owed_by_us', what: 'x', due: '2026-09-30', workDue: '2026-09-30', status: 'overdue', overdueDays: 1, msgId: '1', subject: '#a' };
-  var check = function (slot) { return A.check(d, { alerts: ON }, { slot: slot, date: '2026-10-01', today: '2026-10-01', open: [overdue] }); };
+  var check = function (slot) {
+    assert.ok(A.check(d, { alerts: ON }, { slot: slot, date: '2026-10-01', today: '2026-10-01', open: [overdue] }));
+    return A.load(d).pending.id;
+  };
+  var confirm = function (id) { return cli.main(['--confirm'].concat(id ? ['--id', id] : [], ['--config', cfg])); };
 
-  // 12:00 posts and dies before it is confirmed; 15:00 runs and finds the same item pending again.
-  assert.ok(check('12:00'));
-  assert.ok(check('15:00'), 'the item was never confirmed, so 15:00 offers it too');
-  // The 12:00 session finally confirms. Its alert is not the pending one.
-  assert.throws(function () { cli.main(['--confirm', '--slot', '12:00', '--date', '2026-10-01', '--config', cfg]); }, /pending/i,
-    'a confirm for 12:00 does not record the 15:00 alert');
-  assert.deepStrictEqual(A.load(d).alerted, {}, 'nothing was recorded');
-  assert.ok(!(A.load(d).slots['2026-10-01'] || {})['15:00'], 'and the 15:00 slot is not marked done');
-  assert.throws(function () { cli.main(['--confirm', '--config', cfg]); }, /--slot/, 'a bare confirm no longer says which alert');
-  assert.ok(/Confirmed/.test(cli.main(['--confirm', '--slot', '15:00', '--date', '2026-10-01', '--config', cfg])), 'the alert that is pending confirms');
-  assert.ok((A.load(d).slots['2026-10-01'] || {})['15:00'], 'and completes its own slot');
-  assert.ok(/Nothing pending/.test(cli.main(['--confirm', '--slot', '15:00', '--date', '2026-10-01', '--config', cfg])));
+  // The same slot is run twice before either is confirmed: the second replaces the first as pending.
+  var first = check('12:00'), second = check('12:00');
+  assert.ok(/^[0-9a-f]{16}$/.test(first) && /^[0-9a-f]{16}$/.test(second), 'each pending alert has an id');
+  assert.notStrictEqual(first, second, 'a rerun of the same date and slot is a different alert');
+  assert.throws(function () { confirm(first); }, /not the pending alert/i, 'confirming the first records nothing');
+  assert.deepStrictEqual(A.load(d).alerted, {}, 'no item is recorded as alerted');
+  assert.ok(!(A.load(d).slots['2026-10-01'] || {})['12:00'], 'and the slot is not done');
+  assert.throws(function () { confirm(); }, /--id/, 'a confirm with no id is refused');
+  assert.throws(function () { confirm('0000000000000000'); }, /not the pending alert/i, 'so is an id that was never issued');
+  assert.ok(/Confirmed/.test(confirm(second)), 'the alert that is pending confirms');
+  assert.ok((A.load(d).slots['2026-10-01'] || {})['12:00'], 'and completes its slot');
+  assert.ok(/Nothing pending/.test(confirm(second)), 'and only once');
+
+  // A later check that found nothing cleared pending; the earlier id has nothing to confirm.
+  overdue = { type: 'owed_by_us', what: 'y', due: '2026-10-01', workDue: '2026-10-01', status: 'due_today', msgId: '2', subject: '#b' };
+  var third = check('15:00');
+  A.check(d, { alerts: ON }, { slot: '15:00', date: '2026-10-01', today: '2026-10-01', open: [] });
+  assert.ok(/Nothing pending/.test(confirm(third)), 'an alert that a later check replaced with silence is not confirmed');
 })();
 
 /* ---- 8. The ledger's rename rides out a reader holding the file (Windows EPERM/EBUSY) ---- */

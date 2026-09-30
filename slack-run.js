@@ -707,7 +707,10 @@ function runCheck(o) {
     nameOf: digest.nameBook(o.messages, o.open.concat(o.closed || [])),
     labels: loops.LABEL
   });
-  return text || 'NO ALERT — the ' + slot + ' check found nothing new.';
+  if (!text) return 'NO ALERT — the ' + slot + ' check found nothing new.';
+  /* Which alert this is, for --confirm. On stderr so the alert on stdout stays exactly the message to post. */
+  process.stderr.write('alert id: ' + alerts.load(o.dir).pending.id + String.fromCharCode(10));
+  return text;
 }
 
 /* Diagnostic reports for what the reader just corrected. Queued only; tools/report.js sends.
