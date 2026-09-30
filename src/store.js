@@ -141,6 +141,14 @@ function fileStore(file) {
 
     recallDigest: function (date) { return state.digests[date] || []; },
 
+    /* Legacy rows re-keyed by reconcileLegacy: an older digest's numbered list, and a reply reference's, name the old
+     * key, and a reply to "1" would otherwise look for a row that is no longer there. In memory until the next flush. */
+    migrateKeys: function (renames) {
+      var map = function (list) { return list.map(function (k) { return renames[k] || k; }); };
+      Object.keys(state.digests).forEach(function (d) { state.digests[d] = map(state.digests[d]); });
+      Object.keys(state.refs).forEach(function (r) { if (state.refs[r].keys) state.refs[r].keys = map(state.refs[r].keys); });
+    },
+
     /* The same memo, by the reference printed in the digest's header rather than its date.
      * A date names a day, and two digests can share one: a re-run, or another setup posting
      * into the same DM from its own ledger. Only a reference says which list a reply saw. */

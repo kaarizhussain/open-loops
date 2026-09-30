@@ -414,6 +414,16 @@ function warnings(s) {
       ' did not produce (' + x.date + ', ' + (x.ref ? 'ref ' + x.ref : 'no ref') + ').' +
       ' Another setup may be posting into this DM.');
   });
+  /* Rows from before a commitment's key named its channel can match more than one commitment. Each such record is
+   * said once (it is then kept inert), and so is a reply that landed on one. */
+  (s.b.legacyAmbiguous || []).forEach(function (a) {
+    out.push('NOT MATCHED — an older tracking record matches ' + a.n + ' commitments (' + a.channels.join(', ') + '). ' +
+      'They are tracked separately. Any earlier correction was applied to neither; reply to the current digest to correct the one you meant.');
+  });
+  for (var i = 0; i < (s.b.legacyReplies || 0); i++) {
+    out.push('NOT APPLIED — your correction refers to an older item that now matches multiple commitments. ' +
+      'Reply to the current digest to identify the one you meant.');
+  }
   (read.orderSuspect || []).slice(0, 3).forEach(function (label) {
     out.push('ORDER — ' + label + ': message timestamps repeat or run out of order, which a' +
       ' genuine read does not do. A message body may contain text that looks like a message' +

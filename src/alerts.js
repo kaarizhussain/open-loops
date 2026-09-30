@@ -175,12 +175,19 @@ function writeBaseline(dir, open, today) {
  *   verdictOf(key) — the ledger's verdict for an item: rejected and already-known ones never alert. */
 function evaluate(open, state, today, verdictOf) {
   var out = [];
+  /* A baseline written before keys named a channel holds the legacy key. It stands for the one commitment it maps
+   * to; if it maps to two, it says nothing about either and must not suppress both. */
+  var legacyCount = {};
+  open.forEach(function (l) { var lk = loops.legacyKey(keyOf(l)); legacyCount[lk] = (legacyCount[lk] || 0) + 1; });
+  var has = function (k) { return Object.prototype.hasOwnProperty.call(state.baseline.items, k); };
   open.forEach(function (l) {
     var key = keyOf(l), v = verdictOf ? String(verdictOf(key) || '') : '';
     if (/^(x|n|no|nope|wrong|false|fp|k|knew|known|already)\b/i.test(v)) return;
     var lv = level(l, today);
-    var inBaseline = Object.prototype.hasOwnProperty.call(state.baseline.items, key);
-    var seen = Math.max(inBaseline ? state.baseline.items[key] : 0, state.alerted[key] || 0);
+    var lk = loops.legacyKey(key);
+    var baseKey = has(key) ? key : (lk !== key && legacyCount[lk] === 1 && has(lk)) ? lk : null;
+    var inBaseline = baseKey !== null;
+    var seen = Math.max(inBaseline ? state.baseline.items[baseKey] : 0, state.alerted[key] || 0);
     if (lv < (inBaseline ? 2 : 1) || lv <= seen) return;
     out.push({ key: key, item: l, level: lv, fresh: !inBaseline });
   });

@@ -365,10 +365,12 @@ main([write(base('2026-09-01')), '--ledger', path.join(dir, 'shape-old.json')]);
   assert.ok(idsBoth.indexOf(idsAlone[0]) > -1, "#beta's message has the same id with and without #alpha: " + idsBoth + ' vs ' + idsAlone);
   assert.ok(idsAlone[0].indexOf(T) === 0 && idsAlone[0].indexOf('#beta') > -1, 'and the id carries the original timestamp and the channel: ' + idsAlone[0]);
 
-  // A thread identity carries its channel to the detector, but the ledger key keeps its historical form.
+  // A thread identity carries its channel to the detector and into the ledger key.
   var legacy = loops.loopKey({ type: 'owed_to_us', threadId: T, said: '2026-08-25', what: 'x' });
   var qualified = loops.loopKey({ type: 'owed_to_us', threadId: T + '@#alpha', said: '2026-08-25', what: 'x' });
-  assert.strictEqual(qualified, legacy, 'a channel-qualified thread id maps to the key every existing ledger row already has');
+  assert.notStrictEqual(qualified, legacy, 'a new commitment in a thread is keyed by its channel as well');
+  assert.strictEqual(loops.legacyKey(qualified), legacy, 'and legacyKey gives back exactly the key every existing ledger row has');
+  assert.strictEqual(loops.legacyKey(legacy), legacy, 'a key with no channel part is returned as it is');
   assert.notStrictEqual(loops.loopKey({ type: 'owed_to_us', threadId: '#alpha', said: '2026-08-25', what: 'x' }), legacy);
 
   // Equal thread-root timestamps in two channels are two threads: one cannot close the other's commitment.
@@ -393,17 +395,144 @@ main([write(base('2026-09-01')), '--ledger', path.join(dir, 'shape-old.json')]);
   var out13b = main([write(mk([head, promise, delivery], [head])), '--ledger', path.join(dir, 'id-threads2.json'), '--dry']);
   assert.ok(out13b.indexOf('CLOSED ITSELF') > -1 || out13b.indexOf('revised contract Friday') === -1, 'control: a delivery in its own thread closes it');
 
-  // Existing corrections still apply: the ledger key for that thread item is the bare-root form, and a verdict on it holds.
+  // A verdict recorded under the new key holds.
   var rows13 = JSON.parse(fs.readFileSync(led13, 'utf8')).rows;
   var row = rows13.filter(function (r) { return /revised contract/.test(r[6] || ''); })[0];
   assert.ok(row, 'precondition: the thread item is tracked');
-  assert.strictEqual(row[0].split('|')[1], root, 'its key holds the bare thread root, as every existing ledger row does: ' + row[0]);
+  assert.strictEqual(row[0].split('|')[1], root + '@#alpha', 'a new commitment is keyed by thread root and channel: ' + row[0]);
   var led = JSON.parse(fs.readFileSync(led13, 'utf8'));
   led.rows.forEach(function (r) { if (r[0] === row[0]) r[7] = 'x'; });
   fs.writeFileSync(led13, JSON.stringify(led));
   var nextDay = mk([head, promise], [head, delivery]); nextDay.today = '2026-09-02';
   var after = main([write(nextDay), '--ledger', led13, '--dry']);
-  assert.ok(after.indexOf('revised contract Friday') === -1, 'a verdict recorded before this change still hides the item after it');
+  assert.ok(after.indexOf('revised contract Friday') === -1, 'a verdict on the channel-qualified key hides the item');
+})();
+
+/* ---- 14. Channel-qualified keys for new commitments; legacy bare-root records matched only when unambiguous ---- */
+(function () {
+  var loops = require('../src/loops.js'), A = require('../src/alerts.js');
+  var NL = String.fromCharCode(10), fence = function (t) { return '```' + NL + t + NL + '```'; };
+  var users = { U0LENA: { email: 'lena@vectorfreight.com', name: 'Lena Borg' } };
+  var root = '1788000000.000100';
+  var head = { ts: root, thread_ts: root, user: 'U0LENA', text: 'Thread about the contract' };
+  var promise = { ts: '1788000100.000100', thread_ts: root, user: 'U0LENA', text: "We'll send the revised contract Friday." };
+  // complete: true is the connector's own evidence that nothing was cut off; without it a read is 'unknown' and legacy records wait.
+  var thread = function (channel) { return { channel: channel, root: root, messages: [head, promise], complete: true }; };
+  var input = function (today, channels, extraConv) {
+    var i = base(today); i.conversations = extraConv || []; i.users = users;
+    i.threads = channels.map(thread);
+    return i;
+  };
+  var openCount = function (out) { return Number((out.match(/(\d+) open/) || [])[1]); };
+  var load = function (f) { return JSON.parse(fs.readFileSync(f, 'utf8')); };
+  var save = function (f, o) { fs.writeFileSync(f, JSON.stringify(o)); };
+  var LEGACY = loops.legacyKey;
+  var rowsWith = function (f, frag) { return load(f).rows.filter(function (r) { return r[0].indexOf(frag) > -1; }); };
+  var NOT_MATCHED = function (n, channels) {
+    return 'NOT MATCHED — an older tracking record matches ' + n + ' commitments (' + channels + '). They are tracked separately. ' +
+      'Any earlier correction was applied to neither; reply to the current digest to correct the one you meant.';
+  };
+  var NOT_APPLIED = 'NOT APPLIED — your correction refers to an older item that now matches multiple commitments. Reply to the current digest to identify the one you meant.';
+  var warnings = function (out, re) { return out.split(NL).filter(function (l) { return re.test(l); }).join(' | '); };
+  // A ledger as the previous code would have left it: the commitment held in both threads was ONE row under the bare-root key.
+  var legacyLedger = function (name, verdict, keepQ) {
+    var f = path.join(dir, name);
+    main([write(input('2026-09-01', ['#alpha', '#beta'])), '--ledger', f]);
+    var led = load(f), q = led.rows.map(function (r) { return r[0]; }), lk = LEGACY(q[0]);
+    assert.strictEqual(q.length, 2, 'precondition: two channels, two keys, two rows: ' + q);
+    assert.strictEqual(LEGACY(q[1]), lk, 'precondition: both share one legacy key');
+    var legacyRow = led.rows[0].slice(); legacyRow[0] = lk; legacyRow[7] = verdict;
+    led.rows = keepQ ? led.rows.concat([legacyRow]) : [legacyRow];
+    save(f, led);
+    return { file: f, legacy: lk, qs: q };
+  };
+
+  // Identical commitments on the same day in two channels sharing a root: rejecting one leaves the other open.
+  var led1 = path.join(dir, 'kq1.json');
+  var day1 = main([write(input('2026-09-01', ['#alpha', '#beta'])), '--ledger', led1]);
+  assert.strictEqual(openCount(day1), 2, 'two channels, two commitments, even with the same sentence and root');
+  var ts = at(2026, 9, 1, 18), brief = day1.split('-- thread --')[0].trim(), details = day1.split('-- thread --')[1].trim();
+  var d2 = input('2026-09-02', ['#alpha', '#beta']);
+  d2.dm = { channel: 'D0', text: me(ts, fence(brief)) };
+  d2.dmThread = { root: ts, text: threadRead(ts, fence(brief), [
+    [ts.replace(/[.]0+$/, '.000100'), fence(details)], [at(2026, 9, 1, 19).replace(/[.]0+$/, '.000200'), '1']]) };
+  var day2 = main([write(d2), '--ledger', led1]);
+  assert.strictEqual(load(led1).rows.filter(function (r) { return r[7] === 'x'; }).length, 1, 'exactly one of the two was rejected');
+  assert.strictEqual(openCount(day2), 1, 'and the other is still open: ' + day2.split(NL).slice(0, 3).join(' | '));
+
+  // Legacy, unambiguous, every read complete: the verdict carries over, the row is re-keyed, and old digests still resolve.
+  var c = legacyLedger('kq2.json', 'x', false);
+  var led2 = load(c.file);
+  var toLegacy = function (k) { return k === c.qs[0] || k === c.qs[1] ? c.legacy : k; };
+  Object.keys(led2.digests).forEach(function (k) { led2.digests[k] = led2.digests[k].map(toLegacy); });
+  Object.keys(led2.refs).forEach(function (r) { led2.refs[r].keys = led2.refs[r].keys.map(toLegacy); });
+  save(c.file, led2);
+  var one = main([write(input('2026-09-02', ['#alpha'])), '--ledger', c.file]);
+  assert.strictEqual(openCount(one), 0, 'a verdict recorded under the bare-root key still hides its one match');
+  var after2 = load(c.file);
+  assert.deepStrictEqual(rowsWith(c.file, '|' + root + '@#alpha|').map(function (r) { return r[7]; }), ['x'], 'the row moved to the channel-qualified key and kept its verdict');
+  assert.strictEqual(after2.rows.filter(function (r) { return r[0] === c.legacy || r[0] === c.legacy + '|ambiguous'; }).length, 0, 'no legacy copy is left behind');
+  assert.ok(JSON.stringify(after2.digests).indexOf(root + '@#alpha') > -1 && JSON.stringify(after2.digests).indexOf(c.legacy) === -1, 'older digest memos now name the new key');
+  assert.ok(JSON.stringify(after2.refs).indexOf(c.legacy) === -1, 'and so do reply references');
+
+  // Legacy, but a conversation could not be read: the record is preserved and the current item left uncorrected, until a complete run.
+  var d = legacyLedger('kq3.json', 'x', false);
+  var partial = input('2026-09-02', ['#alpha'], [{ channel: '#odd', members: [], messages: [{ ts: 'broken', user: 'U0AAA', text: 'x' }] }]);
+  var realErr = process.stderr.write; process.stderr.write = function () { return true; };
+  var out3; try { out3 = main([write(partial), '--ledger', d.file]); } finally { process.stderr.write = realErr; }
+  assert.strictEqual(openCount(out3), 1, 'with an incomplete read the old verdict is not applied to the current item');
+  assert.ok(load(d.file).rows.some(function (r) { return r[0] === d.legacy && r[7] === 'x'; }), 'the legacy record is preserved under its own key');
+  assert.ok(out3.indexOf('CLEARED SINCE THE LAST RUN') === -1 || out3.split('CLEARED SINCE THE LAST RUN')[1].indexOf('revised contract') === -1, 'and is not reported cleared');
+  var out3b = main([write(input('2026-09-03', ['#alpha'])), '--ledger', d.file]);
+  assert.strictEqual(openCount(out3b), 0, 'the next complete run applies it');
+  assert.ok(load(d.file).rows.every(function (r) { return r[0] !== d.legacy; }), 'and retires the legacy row');
+
+  // Legacy record matching two channels: applied to neither, preserved, and flagged, with or without a verdict.
+  [['x', 'with a verdict'], ['', 'with no verdict']].forEach(function (v) {
+    var a = legacyLedger('kq4' + (v[0] || 'none') + '.json', v[0], false);
+    var out4 = main([write(input('2026-09-02', ['#alpha', '#beta'])), '--ledger', a.file]);
+    assert.strictEqual(openCount(out4), 2, v[1] + ': both commitments are open');
+    assert.ok(out4.indexOf(NOT_MATCHED(2, '#alpha, #beta')) > -1, v[1] + ': the ambiguity is flagged, exactly: ' + warnings(out4, /NOT MATCHED/));
+    assert.strictEqual(rowsWith(a.file, a.legacy + '|ambiguous').length, 1, v[1] + ': the record is preserved, inert');
+    assert.ok(load(a.file).rows.filter(function (r) { return r[0].indexOf('@#') > -1; }).every(function (r) { return !r[7]; }), v[1] + ': neither new row inherited it');
+    assert.ok(out4.indexOf('CLEARED SINCE THE LAST RUN') === -1, v[1] + ': and it is not reported as cleared');
+    var again = main([write(input('2026-09-03', ['#alpha', '#beta'])), '--ledger', a.file]);
+    assert.ok(again.indexOf('NOT MATCHED') === -1, v[1] + ': flagged once, not every day');
+  });
+
+  // Existing channel-qualified rows do not make a collision look unique.
+  var e = legacyLedger('kq5.json', 'x', true);
+  var out5 = main([write(input('2026-09-02', ['#alpha', '#beta'])), '--ledger', e.file]);
+  assert.ok(out5.indexOf(NOT_MATCHED(2, '#alpha, #beta')) > -1, 'both channels already have their own rows, and the legacy record still matches two');
+  assert.strictEqual(openCount(out5), 2);
+
+  // A reply to an older digest whose item now matches two commitments is reported, not silently dropped.
+  var f6 = path.join(dir, 'kq6.json');
+  var old = main([write(input('2026-09-01', ['#alpha'])), '--ledger', f6]);
+  var led6 = load(f6), q6 = led6.rows[0][0], l6 = LEGACY(q6);
+  var to6 = function (x) { return x === q6 ? l6 : x; };
+  led6.rows[0][0] = l6;
+  Object.keys(led6.digests).forEach(function (k) { led6.digests[k] = led6.digests[k].map(to6); });
+  Object.keys(led6.refs).forEach(function (r) { led6.refs[r].keys = led6.refs[r].keys.map(to6); });
+  save(f6, led6);
+  var b6 = old.split('-- thread --')[0].trim(), det6 = old.split('-- thread --')[1].trim();
+  var d6 = input('2026-09-02', ['#alpha', '#beta']);
+  d6.dm = { channel: 'D0', text: me(ts, fence(b6)) };
+  d6.dmThread = { root: ts, text: threadRead(ts, fence(b6), [
+    [ts.replace(/[.]0+$/, '.000100'), fence(det6)], [at(2026, 9, 1, 19).replace(/[.]0+$/, '.000200'), '1']]) };
+  var out6 = main([write(d6), '--ledger', f6]);
+  assert.ok(out6.indexOf(NOT_APPLIED) > -1, 'the reply is reported: ' + warnings(out6, /NOT APPLIED|NOT MATCHED/));
+  assert.strictEqual(openCount(out6), 2, 'and neither commitment was rejected by it');
+
+  // Alert baseline: an old entry counts for the one commitment it maps to, and never suppresses two.
+  var mkItem = function (channel) {
+    return { type: 'owed_to_us', threadId: root + '@' + channel, said: '2026-08-25', what: 'We will send the contract', due: '2026-08-28', workDue: '2026-08-28', status: 'overdue', overdueDays: 4, who: 'lena@x.io', subject: channel };
+  };
+  var legacyKey = LEGACY(loops.loopKey(mkItem('#alpha')));
+  var st = function (items) { return { baseline: { items: items }, alerted: {} }; };
+  var baselineOld = {}; baselineOld[legacyKey] = 3;
+  assert.strictEqual(A.evaluate([mkItem('#alpha')], st(baselineOld), '2026-09-01').length, 0, 'a legacy baseline entry that maps to one commitment suppresses it, as before');
+  assert.strictEqual(A.evaluate([mkItem('#alpha'), mkItem('#beta')], st(baselineOld), '2026-09-01').length, 2, 'one that maps to two suppresses neither');
 })();
 
 console.log('hardening: OK');

@@ -101,7 +101,7 @@ function inScope(name, scope) {
  * forever, and re-applying it against a later, shorter list marks different items. */
 function marksFromDm(messages, store, rows) {
   var seen = store.seenReplies(), known = {}, marked = 0, wrong = 0, knew = 0, cur = null;
-  var misses = [], checked = 0, ignored = [], rejected = [], spot = [], counted = {}, foreign = [], dates = [], byRoot = {}, mass = [];
+  var misses = [], checked = 0, ignored = [], rejected = [], spot = [], counted = {}, foreign = [], dates = [], byRoot = {}, mass = [], applied = [];
   var since = store.refsSince ? store.refsSince() : null;
   seen.forEach(function (id) { known[id] = 1; });
 
@@ -150,6 +150,7 @@ function marksFromDm(messages, store, rows) {
     }
     [].concat(marks.wrong || [], marks.knew || []).forEach(function (i) {
       var key = keys[i - 1];
+      if (key) applied.push(key);
       if (key && !rows.some(function (r) { return L.cell(r[L.COL.key]) === key; })) {
         rows.push(L.placeholderRow(key, forDate));
       }
@@ -194,7 +195,7 @@ function marksFromDm(messages, store, rows) {
   });
 
   return { marked: marked, wrong: wrong, knew: knew, seen: seen, misses: misses, checked: checked,
-           ignored: ignored, foreign: foreign, dates: dates, mass: mass, rejected: rejected, spot: spot };
+           ignored: ignored, foreign: foreign, dates: dates, mass: mass, rejected: rejected, spot: spot, applied: applied };
 }
 
 /* Which numbered list a digest header refers to.
@@ -360,9 +361,9 @@ function main(argv) {
    * run's input, which would change a message's identity whenever another channel was or was not fetched:
    *   id        <ts>@<channel>          the message; ts keeps the original Slack timestamp
    *   threadId  <root ts>@<channel>     a thread; a channel's own stream is already named by its channel
-   * A thread read still replaces its own root because it shares that root's channel. The ledger key for a
-   * thread item keeps its historical form (loopKey drops the @channel): ledger rows store no channel to
-   * migrate from, and existing keys carry verdicts and digest memos. */
+   * A thread read still replaces its own root because it shares that root's channel. A commitment's
+   * ledger key names the channel too. Rows written before that store no channel, so they are matched by
+   * reconcileLegacy only when they fit one commitment. */
   var tag = function (m, channel) {
     m.ts = m.id;
     m.id = m.ts + '@' + channel;
@@ -448,7 +449,7 @@ function main(argv) {
     }
     repliesRead.forEach(function (m) { tag(m, t.channel); byId[m.id] = m; });
     if (repliesRead.suspect) orderSuspect.push(t.channel + ' thread ' + t.root);
-    var read = recordCoverage(t, t.root, repliesRead, t.channel,
+    var read = recordCoverage(t, t.root + '@' + t.channel, repliesRead, t.channel,
       t.channel + ' thread ' + t.root);
     if (repliesRead.length) delete roots[slot(t.channel, t.root)];
     if (!repliesRead.length) unread.push(t.channel + ' thread ' + t.root);
@@ -529,6 +530,23 @@ function main(argv) {
                tempo: L.tempos(rows, 3, cfg.lookbackDays) };
   var result = loops.detectLoops(messages, events, opts);
 
+  /* Rows written before keys named a channel are matched to today's commitments here, once, before anything is
+   * muted or merged. A legacy verdict moves only onto a single match and only when every read was complete;
+   * otherwise it is preserved as it was (see reconcileLegacy). Replies already applied above land on the legacy
+   * key first, so a correction typed under an old digest is carried over with it. */
+  var candidates = [];
+  result.open.forEach(function (l) { candidates.push({ key: loops.loopKey(l), channel: l.subject }); });
+  result.closed.forEach(function (l) {
+    candidates.push({ key: loops.loopKey(Object.assign({}, l, { type: l.openType })), channel: l.subject });
+    if (l.byUs) candidates.push({ key: loops.loopKey(Object.assign({}, l, { type: 'agreed_unscheduled' })), channel: l.subject });
+  });
+  var readsOk = failed.length === 0 && unread.length === 0 && shortRead.length === 0 && unfetched.length === 0;
+  var rec = L.reconcileLegacy(rows, candidates, { legacyKey: loops.legacyKey, readsOk: readsOk });
+  store.migrateKeys(rec.renames);
+  var ambiguousLegacy = {};
+  rec.ambiguous.forEach(function (a) { ambiguousLegacy[a.legacy] = 1; });
+  var ambiguousReplies = Object.keys(replies.applied.reduce(function (o, k) { if (ambiguousLegacy[k]) o[k] = 1; return o; }, {})).length;
+
   /* What has been muted: what you configured, plus what the tool concluded on its own,
    * minus anything you overruled. `unmute` always wins — a rule the tool taught itself
    * has to be undoable by one line, or it is not really reversible. */
@@ -589,12 +607,20 @@ function main(argv) {
     // A scheduling promise is stored under this type until a calendar hold exists.
     if (l.byUs) closedKeys.push(loops.loopKey(Object.assign({}, l, { type: 'agreed_unscheduled' })));
   });
+  /* What a check against the ledger may treat as read. A thread is "<root>@<channel>"; a legacy row names only the
+   * root, so a bare root counts as read only if every thread read with that root was complete. */
+  var availableThreads = Object.keys(sourceCoverage).filter(function (key) { return sourceCoverage[key].state === 'complete'; });
+  var bareRoots = {};
+  Object.keys(sourceCoverage).forEach(function (key) {
+    var m = /^([0-9.]+)@/.exec(key);
+    if (m) bareRoots[m[1]] = bareRoots[m[1]] !== false && sourceCoverage[key].state === 'complete';
+  });
+  Object.keys(bareRoots).forEach(function (r) { if (bareRoots[r]) availableThreads.push(r); });
   var ledger = L.mergeLedger(rows, result.open, today,
                              { storeText: cfg.storeText !== false, mutedKeys: mutedKeys,
                                windowStart: cut, closedKeys: closedKeys,
-                               availableThreads: Object.keys(sourceCoverage).filter(function (key) {
-                                 return sourceCoverage[key].state === 'complete';
-                               }),
+                               availableThreads: availableThreads,
+                               keepKeys: rec.deferred,
                                calendarRead: input.events != null && !calendarError });
   result.open = ledger.shown;
   L.pruneLedger(rows, today, cfg.keepLedgerDays);
@@ -679,7 +705,7 @@ function main(argv) {
      * read them the night before. Built and unused until there was a calendar. */
     briefs: loops.meetingBriefs(messages, events, result.open, opts),
     ledger: ledger, marked: replies.marked, markedWrong: replies.wrong, markedKnew: replies.knew,
-    ref: ref, notReapplied: notReapplied, foreignReplies: replies.foreign, massReplies: replies.mass, dmStartedToday: startedToday,
+    ref: ref, notReapplied: notReapplied, legacyAmbiguous: rec.ambiguous, legacyReplies: ambiguousReplies, foreignReplies: replies.foreign, massReplies: replies.mass, dmStartedToday: startedToday,
     principals: cfg.supporting,
     muted: muted, mutes: L.suggestMutes(rows).filter(function (s) { return !already[s.phrase]; }),
     learnedNow: fresh, learnedAll: learned,

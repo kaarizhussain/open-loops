@@ -53,6 +53,54 @@ function isKnown(v) {
  * isNew / trackedDays so the digest can say what changed. Returns the loops that
  * should actually be shown — anything the reader marked wrong never reaches the
  * digest again. */
+/* Rows written before a thread commitment's key named its channel are keyed "type|<root ts>|said|hash". Every
+ * commitment with that root, sentence and day in ANY channel shares that one legacy key, and the row stores no
+ * channel, so the only question is how many current commitments it could belong to. This answers it.
+ *
+ *   candidates  every current open or closed commitment: [{ key, channel }]. Commitments that already have
+ *               rows under their own key count too, so an existing row cannot make a collision look unique.
+ *   o.legacyKey maps a current key to its legacy form (loops.legacyKey); o.readsOk is true only if every
+ *               conversation was read completely.
+ *
+ * One match, every read complete: the legacy row becomes that commitment's row (verdict and first_seen kept;
+ * if the commitment already has a row of its own, the verdict moves into it unless it has one). One match but
+ * an incomplete read: nothing changes, the legacy row is left exactly as it is and kept out of "cleared", and
+ * the current commitment is tracked fresh until a complete run. Two or more matches: the record is applied to
+ * neither and preserved under "<legacy key>|ambiguous", which no live key can equal, so it is reported once
+ * and never matched again. Rows are changed in place; the caller rewrites stored digest memos from .renames. */
+function reconcileLegacy(rows, candidates, o) {
+  var groups = {}, byKey = {}, out = { renames: {}, ambiguous: [], deferred: {} };
+  candidates.forEach(function (c) {
+    var lk = o.legacyKey(c.key);
+    if (lk === c.key) return;
+    var g = groups[lk] = groups[lk] || { keys: {}, channels: {} };
+    g.keys[c.key] = 1;
+    if (c.channel) g.channels[c.channel] = 1;
+  });
+  rows.forEach(function (r) { byKey[cell(r[COL.key])] = r; });
+  Object.keys(groups).forEach(function (lk) {
+    var row = byKey[lk];
+    if (!row) return;
+    var qs = Object.keys(groups[lk].keys);
+    if (qs.length > 1) {
+      out.ambiguous.push({ legacy: lk, n: qs.length, channels: Object.keys(groups[lk].channels).sort(), verdict: cell(row[COL.verdict]) });
+      row[COL.key] = lk + '|ambiguous';
+      return;
+    }
+    if (!o.readsOk) { out.deferred[lk] = 1; return; }
+    var target = byKey[qs[0]];
+    if (!target) {
+      row[COL.key] = qs[0];
+    } else {
+      if (!cell(target[COL.verdict]) && cell(row[COL.verdict])) target[COL.verdict] = row[COL.verdict];
+      if (cell(row[COL.first_seen]) && cell(row[COL.first_seen]) < cell(target[COL.first_seen])) target[COL.first_seen] = row[COL.first_seen];
+      rows.splice(rows.indexOf(row), 1);
+    }
+    out.renames[lk] = qs[0];
+  });
+  return out;
+}
+
 function mergeLedger(rows, loops, today, opts) {
   var byKey = {}, touched = {}, shown = [], fresh = 0, suppressed = 0;
   // Retention mode: keep the key and the verdict, drop the words. Suppression still
@@ -121,9 +169,12 @@ function mergeLedger(rows, loops, today, opts) {
    * news. The key carries the date the commitment was made; meetings are keyed on an
    * event id instead, and are bounded by the calendar fetch rather than this window. */
   var windowStart = opts && opts.windowStart;
+  var kept = (opts && opts.keepKeys) || {};
   rows.forEach(function (r) {
     if (touched[cell(r[COL.key])]) return;
     if (wasMuted[cell(r[COL.key])]) return;
+    // A record kept for a reconcileLegacy decision is not a commitment that closed.
+    if (kept[cell(r[COL.key])] || /[|]ambiguous$/.test(cell(r[COL.key]))) return;
     if (cell(r[COL.gone_on]) || isWrong(r[COL.verdict])) return;
     // Missing source data cannot prove completion. Explicit detector evidence can.
     var parts = cell(r[COL.key]).split('|');
@@ -494,6 +545,7 @@ if (typeof module !== 'undefined') {
   module.exports = {
     mergeLedger: mergeLedger, precision: precision, isWrong: isWrong, isKnown: isKnown,
     cell: cell, daysApart: daysApart, parseMarks: parseMarks, applyMarks: applyMarks, placeholderRow: placeholderRow,
+    reconcileLegacy: reconcileLegacy,
     pruneLedger: pruneLedger, suggestMutes: suggestMutes, applyMutes: applyMutes,
     phrases: phrases, sampleQuiet: sampleQuiet, recall: recall, tempos: tempos,
     LEDGER_COLS: LEDGER_COLS, COL: COL

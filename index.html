@@ -1245,15 +1245,21 @@ function fnv(s) {
   return ('0000000' + h.toString(16)).slice(-8);
 }
 
-/* The key is the ledger's row id and what a reply's number resolves to. A Slack thread reaches the detector
- * as "<root ts>@<channel>" so two channels' threads can never merge, but its key keeps the bare root ts every
- * existing row was written with: rows store no channel, so they cannot be migrated, and a changed key would
- * bring back everything already marked wrong. Two threads with the same root in different channels share a
- * key only if they also hold an identical sentence on the same day. */
+/* The key is the ledger's row id and what a reply's number resolves to. A Slack thread reaches the detector as
+ * "<root ts>@<channel>", so the key of a commitment in a thread names its channel too: two channels with the
+ * same root and an identical sentence on the same day are two commitments with two keys. */
 function loopKey(l) {
   if (l.eventId) return l.type + '|' + l.eventId;
-  var thread = /^(\d+\.\d+)@/.exec(String(l.threadId));
-  return [l.type, thread ? thread[1] : l.threadId, l.said, fnv(String(l.what || ''))].join('|');
+  return [l.type, l.threadId, l.said, fnv(String(l.what || ''))].join('|');
+}
+
+/* The key every ledger row written before keys named a channel has: the same key with the "@channel" taken off
+ * the thread part. A key with no channel part comes back unchanged. Old rows store no channel, so this is the
+ * only way to find them, and it can match more than one commitment (see reconcileLegacy in ledger.js). */
+function legacyKey(key) {
+  var p = String(key).split('|');
+  if (p.length === 4 && /^\d+\.\d+@/.test(p[1])) { p[1] = p[1].slice(0, p[1].indexOf('@')); return p.join('|'); }
+  return String(key);
 }
 
 var OWNER = {
