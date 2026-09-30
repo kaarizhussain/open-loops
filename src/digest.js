@@ -517,8 +517,8 @@ function renderBrief(s) {
   p(counts(s));
   if (s.blind) {
     p('READ NOTHING — ' + s.read.threads + ' conversation' + (s.read.threads === 1 ? ' was' : 's were') +
-      ' handed over and no message could be parsed out of any of them. This is not a' +
-      ' quiet day. Until it is fixed this digest can say nothing about what is' +
+      ' handed over and no message could be parsed out of any of them. This does not' +
+      ' establish that the day was quiet. Until it is fixed this digest can say nothing about what is' +
       ' outstanding, so treat the empty list below as unknown rather than clear.');
   } else if (s.unread0) {
     p('READ NOTHING — ' + (s.read.skipped ? s.read.skipped + ' conversation' + (s.read.skipped === 1 ? ' was' : 's were') +

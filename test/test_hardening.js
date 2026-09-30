@@ -96,11 +96,14 @@ var quiet = function (edit, cfgExtra) {
 var seed = main([write(base('2026-09-01')), '--config', cfgFile({}), '--ledger', path.join(dir, 'blind.json')]);
 assert.ok(/scope doc/.test(seed), 'precondition: the ledger tracks items');
 var none = quiet(function (i) { i.conversations = []; });
-assert.ok(/READ NOTHING — no conversation was handed over to read. This does not establish that the day was quiet. Treat the empty list below as unknown rather than clear./.test(none), 'the exact wording');
+var SENTENCE = 'This does not establish that the day was quiet.', TAIL = 'Treat the empty list below as unknown rather than clear.';
+assert.ok(none.indexOf('READ NOTHING — no conversation was handed over to read. ' + SENTENCE + ' ' + TAIL) > -1, 'the exact wording: ' + none.split(String.fromCharCode(10))[3]);
+assert.ok(none.indexOf('not a quiet day') === -1);
 assert.ok(/READ NOTHING/.test(none) && !/Genuinely/.test(none), 'no conversations handed over: ' + none.split(String.fromCharCode(10)).slice(0, 4).join(' | '));
 var noneKey = quiet(function (i) { delete i.conversations; });
 assert.ok(/READ NOTHING/.test(noneKey) && !/Genuinely/.test(noneKey), 'no conversations key at all');
 var scoped = quiet(function () {}, { channels: { include: ['#does-not-exist'] } });
+assert.ok(scoped.indexOf(SENTENCE + ' ' + TAIL) > -1, 'the scope variant says it exactly too');
 assert.ok(/READ NOTHING/.test(scoped) && !/Genuinely/.test(scoped) && /skipped/.test(scoped.split(String.fromCharCode(10)).slice(0, 4).join(' ')),
   'every conversation skipped by scope says so: ' + scoped.split(String.fromCharCode(10)).slice(0, 4).join(' | '));
 

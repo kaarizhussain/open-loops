@@ -247,6 +247,8 @@ var blindRun = function (msgCount, convs, unread) {
 };
 var blind = blindRun(0, 3);
 assert.ok(/READ NOTHING/.test(parts(blind).brief), 'it must say it could not read anything, in the brief');
+assert.ok(parts(blind).brief.indexOf('This does not establish that the day was quiet. Until it is fixed') > -1 && parts(blind).brief.indexOf('not a quiet day') === -1,
+  'and in the same words as the other READ NOTHING variants');
 assert.ok(!/Genuinely/.test(blind), 'and must not claim the list is genuinely empty');
 assert.ok(/unknown rather than clear/.test(blind), 'an empty list here means unknown');
 
