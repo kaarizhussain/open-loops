@@ -361,7 +361,7 @@ assert.ok(A.load(rdir).pending, 'pending until confirmed');
 assert.deepStrictEqual(bytes(A.baselineFile(rdir)), baselineBefore, 'a check never writes the digest\'s baseline');
 
 // Posted and confirmed: the 12:00 check has nothing to say about them — and a new one still does.
-assert.ok(/Confirmed/.test(cli.main(['--confirm', '--config', cfgPath])));
+assert.ok(/Confirmed/.test(cli.main(['--confirm', '--slot', '09:00', '--date', '2026-10-01', '--config', cfgPath])));
 assert.ok(/^NO ALERT/.test(main(checkArgs('2026-10-01', '12:00', '2026-10-01T12:05', fresh))), 'the same items are not alerted twice');
 assert.deepStrictEqual(bytes(ledger), ledgerBefore, 'still the ledger, untouched');
 var later = fresh.concat(lena(at(10, 1, 15), "We'll send the updated rate card Thursday Oct 1."));

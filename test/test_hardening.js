@@ -174,4 +174,29 @@ main([write(base('2026-09-01')), '--ledger', path.join(dir, 'shape-old.json')]);
   assert.notStrictEqual(A.load(d).baseline.version, v1.version, 'every posted digest is a new version');
 })();
 
+/* ---- 7. --confirm records the alert that was posted, not whichever one is pending ---- */
+(function () {
+  var A = require('../src/alerts.js'), cli = require('../tools/alerts.js');
+  var d = fs.mkdtempSync(path.join(os.tmpdir(), 'openloops-confirm-'));
+  var cfg = path.join(d, 'openloops.config.json');
+  var ON = { delivery: 'dm', consentedAt: '2026-09-01T00:00:00.000Z', times: ['12:00', '15:00'] };
+  fs.writeFileSync(cfg, JSON.stringify({ you: ME, alerts: ON }));
+  A.writeBaseline(d, [], '2026-10-01');
+  var overdue = { type: 'owed_by_us', what: 'x', due: '2026-09-30', workDue: '2026-09-30', status: 'overdue', overdueDays: 1, msgId: '1', subject: '#a' };
+  var check = function (slot) { return A.check(d, { alerts: ON }, { slot: slot, date: '2026-10-01', today: '2026-10-01', open: [overdue] }); };
+
+  // 12:00 posts and dies before it is confirmed; 15:00 runs and finds the same item pending again.
+  assert.ok(check('12:00'));
+  assert.ok(check('15:00'), 'the item was never confirmed, so 15:00 offers it too');
+  // The 12:00 session finally confirms. Its alert is not the pending one.
+  assert.throws(function () { cli.main(['--confirm', '--slot', '12:00', '--date', '2026-10-01', '--config', cfg]); }, /pending/i,
+    'a confirm for 12:00 does not record the 15:00 alert');
+  assert.deepStrictEqual(A.load(d).alerted, {}, 'nothing was recorded');
+  assert.ok(!(A.load(d).slots['2026-10-01'] || {})['15:00'], 'and the 15:00 slot is not marked done');
+  assert.throws(function () { cli.main(['--confirm', '--config', cfg]); }, /--slot/, 'a bare confirm no longer says which alert');
+  assert.ok(/Confirmed/.test(cli.main(['--confirm', '--slot', '15:00', '--date', '2026-10-01', '--config', cfg])), 'the alert that is pending confirms');
+  assert.ok((A.load(d).slots['2026-10-01'] || {})['15:00'], 'and completes its own slot');
+  assert.ok(/Nothing pending/.test(cli.main(['--confirm', '--slot', '15:00', '--date', '2026-10-01', '--config', cfg])));
+})();
+
 console.log('hardening: OK');

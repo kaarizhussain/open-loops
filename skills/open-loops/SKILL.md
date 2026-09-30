@@ -439,8 +439,8 @@ slack_send_message(channel_id=<selfDm>, message=<the runner's output, unchanged>
 
 Read it back by the timestamp the call returned: its first line must equal the first line of
 the runner's output character for character. Only then run
-`node <checkout>/tools/alerts.js --confirm --config <working dir>/openloops.config.json`, which records
-that it was posted so no later check says it again. If the post failed or the read-back differs,
+`node <checkout>/tools/alerts.js --confirm --slot <slot> --date <date> --config <working dir>/openloops.config.json`, which records
+that this alert (its slot and date) was posted, so no later check says it again; it refuses if a later check has since replaced the pending alert. If the post failed or the read-back differs,
 do not confirm: the next check finds the same items and tries again. That is also why a post that
 really landed but was never confirmed (the run died, or the read-back failed) can be posted a
 second time; the consent text says so. Never edit the text to fix it, and never write

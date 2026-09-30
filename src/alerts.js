@@ -289,10 +289,18 @@ function check(dir, cfg, o) {
   return text;
 }
 
-/* The alert is in the DM: remember it, so no later check says it again, and the slot is done. */
-function confirm(dir, stamp) {
+/* The alert is in the DM: remember it, so no later check says it again, and the slot is done.
+ *
+ * `want` names the alert that was posted ({ slot, date }). A check that posted and died leaves its
+ * alert pending; the next check overwrites it, and a late confirm from the first session would then
+ * record an alert that was never posted. Naming the slot and date refuses that, and records nothing. */
+function confirm(dir, stamp, want) {
   var s = load(dir);
   if (!s.baseline || !s.pending) return false;
+  if (want && (s.pending.slot !== want.slot || s.pending.date !== want.date)) {
+    throw new Error('the pending alert is for ' + s.pending.date + ' ' + s.pending.slot + ', not ' +
+      want.date + ' ' + want.slot + '; nothing was recorded');
+  }
   Object.keys(s.pending.alerts).forEach(function (k) {
     s.alerted[k] = Math.max(s.alerted[k] || 0, s.pending.alerts[k]);
   });
