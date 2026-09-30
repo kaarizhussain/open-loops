@@ -62,4 +62,30 @@ var verdicts = function (f) { return rowsOf(f).map(function (r) { return r[7] ||
   assert.ok(!/x/.test(verdicts(led)), 'and no item is marked wrong by it: ' + verdicts(led));
 })();
 
+/* ---- 2. Scope settings fail closed: a config that cannot be read as written reads nothing ---- */
+var cfgFile = function (extra) {
+  var p = path.join(dir, 'cfg' + (n++) + '.json');
+  fs.writeFileSync(p, JSON.stringify(Object.assign({ you: ME }, extra)));
+  return p;
+};
+var readsHalcyon = function (cfgExtra, inputEdit) {
+  var i = base('2026-09-01'); if (inputEdit) inputEdit(i);
+  return main([write(i), '--config', cfgFile(cfgExtra), '--ledger', path.join(dir, 'scope' + (n++) + '.json'), '--dry']);
+};
+[
+  ['channels as a list', { channels: ['#halcyon'] }],
+  ['channels null', { channels: null }],
+  ['misspelled key', { channels: { excludes: ['#halcyon'] } }],
+  ['a string where a list belongs', { channels: { exclude: '#halcyon' } }],
+  ['exclude at the top level', { exclude: ['#halcyon'] }],
+  ['include at the top level', { include: ['#halcyon'] }]
+].forEach(function (c) {
+  assert.throws(function () { readsHalcyon(c[1]); }, /channels|exclude|include/i, c[0] + ' must stop the run, not read every channel');
+});
+assert.throws(function () { readsHalcyon({}, function (i) { i.scope = { exclude: '#halcyon' }; }); }, /scope/i,
+  "a run's own malformed scope stops the run too");
+assert.ok(readsHalcyon({ channels: { exclude: ['#halcyon'] } }).indexOf('scope doc') === -1, 'a valid exclude still excludes');
+assert.ok(readsHalcyon({ channels: { only: ['#vector-freight'] } }).indexOf('scope doc') === -1, "'only' is still accepted");
+assert.ok(readsHalcyon({ channels: { include: [], exclude: [] } }).indexOf('scope doc') > -1, 'and an empty scope reads everything');
+
 console.log('hardening: OK');

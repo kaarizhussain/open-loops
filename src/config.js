@@ -80,11 +80,35 @@ function loadConfig(fs, path) {
   }
 }
 
+/* A scope rule that cannot be read as written must stop the run. Every way of getting one
+ * wrong used to read MORE than was asked, silently: a list where an object belongs, a
+ * misspelled key, a string where a list belongs. Scope is default-allow, so the mistake
+ * that looks like it worked is the one that reads the channel you excluded. */
+var SCOPE_KEYS = { include: 1, exclude: 1, only: 1 };
+function scopeProblems(scope, label) {
+  if (!scope || typeof scope !== 'object' || Array.isArray(scope)) {
+    return [label + ' must be an object like {"exclude": ["#name"]}, got ' + JSON.stringify(scope)];
+  }
+  var out = [];
+  Object.keys(scope).forEach(function (k) {
+    if (!SCOPE_KEYS[k]) out.push(label + ' has an unknown key "' + k + '" — only include, exclude and only do anything');
+    else if (!Array.isArray(scope[k]) || !scope[k].every(function (x) { return typeof x === 'string'; })) {
+      out.push(label + '.' + k + ' must be a list of channel names, got ' + JSON.stringify(scope[k]));
+    }
+  });
+  return out;
+}
+
 /* Everything the run needs, in one object, with the reasons a setup is unusable
  * reported together rather than one per attempt. */
 function settings(fs, configPath, run) {
-  var s = merge(DEFAULTS, loadConfig(fs, configPath), run || {});
-  var missing = [];
+  var file = loadConfig(fs, configPath);
+  var s = merge(DEFAULTS, file, run || {});
+  var missing = scopeProblems(s.channels, '"channels"');
+  Object.keys(SCOPE_KEYS).forEach(function (k) {
+    if (k in file) missing.push('"' + k + '" at the top level of the config does nothing — it belongs inside ' +
+      '"channels": {"' + k + '": [...]}');
+  });
   if (!s.you) missing.push('"you" — the address messages are outbound from; without it ' +
     'there is no way to tell inbound from outbound');
   /* tzOffset is minutes from UTC. A zone name — "America/New_York", the natural thing
@@ -100,4 +124,4 @@ function settings(fs, configPath, run) {
   return s;
 }
 
-module.exports = { DEFAULTS: DEFAULTS, merge: merge, loadConfig: loadConfig, settings: settings };
+module.exports = { DEFAULTS: DEFAULTS, merge: merge, loadConfig: loadConfig, settings: settings, scopeProblems: scopeProblems };

@@ -39,7 +39,7 @@ var { readConversation } = require('./src/slack-json.js');
 var { coverage, emptyResponse } = require('./src/slack-coverage.js');
 var { fileStore } = require('./src/store.js');
 var { parseEvents } = require('./src/calendar.js');
-var { settings, loadConfig } = require('./src/config.js');
+var { settings, loadConfig, scopeProblems } = require('./src/config.js');
 var outbox = require('./src/outbox.js');
 var alerts = require('./src/alerts.js');
 var diag = require('./src/diagnostics.js');
@@ -86,7 +86,8 @@ function nameMatches(name, pattern) {
  * is not broken by the correction. */
 function inScope(name, scope) {
   scope = scope || {};
-  var exclude = scope.exclude || [], include = scope.include || scope.only || [];
+  // `include || only` never reached `only` through a config: the defaults merge in include: [], which is truthy.
+  var exclude = scope.exclude || [], include = scope.include && scope.include.length ? scope.include : scope.only || [];
   if (exclude.some(function (p) { return nameMatches(name, p); })) return false;
   if (include.length) return include.some(function (p) { return nameMatches(name, p); });
   return true;
@@ -329,6 +330,10 @@ function main(argv) {
   /* The config decides what may be read. The run's own scope can only narrow it — a run
    * input is assembled from what was fetched, and a channel restriction that fetched text
    * could lift is not a restriction. */
+  if (input.scope != null) {
+    var bad = scopeProblems(input.scope, 'the run input "scope"');
+    if (bad.length) throw new Error('Run input is unusable: ' + bad.join('; '));
+  }
   var allowed = function (name) { return inScope(name, cfg.channels) && inScope(name, input.scope); };
   var widenedStore = input.storeText === true && cfg.storeText === false;
   var self = cfg.you;
