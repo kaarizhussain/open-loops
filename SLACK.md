@@ -34,6 +34,12 @@ daily, and asks once whether to send diagnostic reports, which stay off unless y
 yes. Midday alerts are not part of setup; ask for them when you want them. Nothing
 below is needed unless you want to know what it did.
 
+**Is it working?** Ask Claude. It shows which channels are tracked, when the next digest runs, the last digest that was
+delivered and, separately, what the last attempt did: delivered, partly delivered, failed, or unknown. If a run
+fails while Slack is reachable, it posts a short notice to your DM saying which stage failed, so a quiet DM is not
+mistaken for nothing outstanding. A digest that follows a gap, on a schedule it has recorded, names the days since the
+previous one. A run that never starts (the app was closed at send time) can post nothing; the status and the next digest show the gap.
+
 **The long way**, and what the skill is doing on your behalf: copy
 `openloops.config.example.json` to `openloops.config.json` and put your address in it.
 Everything else has a default that does something sensible, so this is a valid config

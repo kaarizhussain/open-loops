@@ -42,6 +42,7 @@ var { parseEvents } = require('./src/calendar.js');
 var { settings, loadConfig, scopeProblems } = require('./src/config.js');
 var outbox = require('./src/outbox.js');
 var alerts = require('./src/alerts.js');
+var status = require('./src/status.js');
 var diag = require('./src/diagnostics.js');
 var path = require('path');
 
@@ -52,7 +53,7 @@ var DIGEST_HEADER = /^\s*(?:```)?\s*OPEN LOOPS — for (\d{4}-\d{2}-\d{2})(?:[^\
  * a number, which is a rejection (2026-09-23). A midday alert is the same kind of message.
  * Exact headers only: a reply that merely
  * starts "OPEN LOOPS …" is the reader's, and is read like any other. */
-var GENERATED_HEADER = /^\s*(?:```)?\s*OPEN LOOPS (?:DETAILS|NOTES|ALERT) — /;
+var GENERATED_HEADER = /^\s*(?:```)?\s*OPEN LOOPS (?:DETAILS|NOTES|ALERT|NOT RUN|DELIVERY UNKNOWN) — /;
 /* A digest's own lines, wherever they turn up. A digest posted without its header (2026-09-28)
  * is not recognised as one, and its numbered lines — " 1  11d late …" — read as a reply
  * rejecting those items. Recognised by what it says rather than by what it opens with. */
@@ -636,6 +637,16 @@ function main(argv) {
                       open: result.open, closed: result.closed, rows: rows, messages: messages });
   }
 
+  /* What this run read, once: the digest renders it, and the status record stages it. */
+  var readInfo = { orderSuspect: orderSuspect, widenedStore: widenedStore, threads: convs.length - skipped, confirmedEmpty: confirmedEmpty,
+          capped: shortRead.length > 0, shortRead: shortRead, unread: unread, failed: failed,
+          calendarError: calendarError,
+          windowStart: cut,
+          unfetchedThreads: unfetched.length,
+          skipped: skipped + skippedThreads, windowDays: window };
+  /* After a gap only: the last delivered digest, and the days the recorded schedule expected one. */
+  var prevGap = fs.existsSync(configPath) ? status.gap(reportDir, today) : null;
+
   var keys = digest.digestOrder(result.open, today);
 
   /* Sample the silence. Everything else in this loop asks about things that appeared;
@@ -710,16 +721,11 @@ function main(argv) {
     muted: muted, mutes: L.suggestMutes(rows).filter(function (s) { return !already[s.phrase]; }),
     learnedNow: fresh, learnedAll: learned,
     spotCheck: sample, recall: score, dark: result.dark, ignoredReplies: replies.ignored,
-    replyKey: replyKey,
+    replyKey: replyKey, gapLine: status.gapLine(prevGap),
     /* Conversations skipped, not threads. One counter served both, and only the
        conversation count was reduced by it — so skipping a thread under-reported how
        much was read, and enough of them printed a negative number of conversations. */
-    read: { orderSuspect: orderSuspect, widenedStore: widenedStore, threads: convs.length - skipped, confirmedEmpty: confirmedEmpty,
-            capped: shortRead.length > 0, shortRead: shortRead, unread: unread, failed: failed,
-            calendarError: calendarError,
-            windowStart: cut,
-            unfetchedThreads: unfetched.length,
-            skipped: skipped + skippedThreads, windowDays: window }
+    read: readInfo
   });
   }
 
@@ -738,6 +744,13 @@ function main(argv) {
      * not litter the working directory. */
     if (fs.existsSync(configPath)) {
       try { alerts.stageBaseline(reportDir, result.open, today, ref); } catch (e) { /* the next digest stages it */ }
+      /* What this digest read, for the status record. Staged like the baseline: it becomes "last delivered" only
+       * when tools/status.js --end says the digest posted and verified. Never at the digest's cost. */
+      try {
+        status.stage(reportDir, { ref: ref, date: today, read: status.readFacts(readInfo, messages.length),
+          channels: convs.filter(function (c) { return allowed(c.channel); }).map(function (c) { return c.channel; }),
+          conversations: readInfo.threads, messages: messages.length, meetings: (events || []).length, windowDays: window });
+      } catch (e) { /* the next digest stages it */ }
     }
     if (fresh.length) store.remember(fresh);
     if (replies.checked || replies.misses.length) {

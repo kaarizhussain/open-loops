@@ -529,6 +529,7 @@ function renderBrief(s) {
   p('OPEN LOOPS — for ' + today + (isNaN(t0) ? '' : ' · ' + DOW[t0.getUTCDay()]) +
     (b.ref ? ' · ref ' + b.ref : ''));
   p(counts(s));
+  if (b.gapLine) p(b.gapLine);
   if (s.blind) {
     p('READ NOTHING — ' + s.read.threads + ' conversation' + (s.read.threads === 1 ? ' was' : 's were') +
       ' handed over and no message could be parsed out of any of them. This does not' +

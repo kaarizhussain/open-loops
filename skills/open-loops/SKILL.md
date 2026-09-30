@@ -1,6 +1,6 @@
 ---
 name: open-loops
-description: Track commitments made and received in Slack, and send a daily digest of what is about to slip. Use when someone wants to set up Open Loops, run today's digest, schedule it daily, see how accurate it has been, or turn diagnostic reports or midday alerts on or off. Also use when they ask what they have promised, what someone owes them, or what has gone quiet.
+description: Track commitments made and received in Slack, and send a daily digest of what is about to slip. Use when someone wants to set up Open Loops, run today's digest, schedule it daily, see how accurate it has been, or turn diagnostic reports or midday alerts on or off, or check whether it is working. Also use when they ask what they have promised, what someone owes them, or what has gone quiet.
 ---
 
 # Open Loops
@@ -65,6 +65,10 @@ With midday alerts on, each check reads the same channels and calendar again, th
 connectors, so the host assistant sees that text at every check, and an alert is posted to their
 own DM. Two small files beside the config, `alerts-baseline.json` (written by the digest) and
 `alerts.json` (written by the checks), hold item keys and urgency levels — no message text.
+
+One more small file beside the config, `status.json`, records what the last attempt did and which digest was
+last delivered: dates, the digest's reference, channel names, counts and stage names. No message text, and it
+is never sent anywhere.
 
 **It costs less than it sounds like.** Every open item in the digest is re-detected from
 live messages on each run, so the list still quotes every sentence in full. The single
@@ -242,6 +246,15 @@ node <checkout>/tools/report.js --consent --yes --config <working dir>/openloops
 
 ## Running the digest
 
+**Begin the attempt.** A real run starts, before anything is fetched, with
+
+```bash
+node <checkout>/tools/status.js --begin --today <date> --config <working dir>/openloops.config.json
+```
+
+which prints `ATTEMPT <id>` and `STARTED <epoch seconds>`: keep both for "End the attempt", below. A preview (`--dry`) adds `--dry` and
+gets `ATTEMPT PREVIEW`; carry that through unchanged, and nothing is recorded or posted for it.
+
 **Fetch.** Each in-scope channel:
 
 ```
@@ -407,7 +420,7 @@ call returned — not simply the newest message, which may be your notes or some
 newer. It must open with exactly one code fence, and the first line inside that fence
 must equal the first line of the runner's output character for character. The runner's
 output is the authority; don't check it against a remembered format. If it differs — a
-dropped header, a doubled fence — post the brief and its details again from the saved
+dropped header, a doubled fence — and you know the first post landed, post the brief and its details again from the saved
 runner output, unchanged, and say in the notes that the first post was wrong. Never edit
 the posted text to fix it. The header is how the next run finds this digest and matches
 replies to it (2026-09-28: a post that lost it was invisible to the next run).
@@ -437,11 +450,48 @@ Post it even when the list is short or empty. A day with nothing outstanding is 
 information, and a digest that only appears when there is bad news trains the reader to
 dread opening it.
 
-**If something fails**, post nothing rather than something half-built, and say what
+**If something fails**, post no digest rather than something half-built, and say what
 broke. A digest that silently omits a channel is worse than no digest, because they
 cannot tell it apart from a quiet day. The exceptions: if one channel read fails,
 continue with the others and note which is missing at the end of the message; if the
-calendar fails, run without it and say so.
+calendar fails, run without it and say so. A run that stops still ends its attempt, below:
+that is what tells the reader the digest did not come.
+
+**End the attempt**, once, whatever happened — delivered, failed, or stopped part-way — from what actually happened:
+
+```bash
+node <checkout>/tools/status.js --end --attempt <id> --brief <b> --details <d> --verified <yes|no> [--failed <stage>] [--ref <ref>] --config <working dir>/openloops.config.json
+```
+
+- `--brief` and `--details` are `posted` only when Slack returned a timestamp for that post, `not_posted` only
+  when the call definitely failed, and `unknown` when it may or may not have posted (a timeout, an error that does
+  not say). `--details na` if you never tried.
+- `--verified yes` only if the brief read back correctly, above. The details are not read back, so it says nothing about them.
+- `--failed` says where it stopped: `fetch` (Slack could not be read, so no digest was built), `build` (Slack was
+  fetched but the runner failed or refused), `post`, or `verify`. Leave it off when nothing failed.
+- `--ref` is the reference in the digest's header, whenever a digest was built.
+- **If a post's outcome is uncertain, do not post again.** An explicit refusal from Slack means `not_posted`. Anything
+  else — a timeout, an error that does not say, no answer — is uncertain, and the latest few DM messages cannot settle it: not
+  finding it there proves nothing. Read the DM from the attempt's start (`slack_read_channel` with `oldest` set to the
+  `STARTED` value, following every page until none remain) and look for the expected digest itself: the brief opens with the
+  runner's first line, ref included, character for character; its details are a reply in that brief's thread
+  (`slack_read_thread`), opening `OPEN LOOPS DETAILS — for <date>`. If it is there, it posted. If every page of that period was
+  read and it is not there, it did not. If the read did not cover the period — a page failed, a cursor remains, the read
+  errored — or cannot tell the expected message from another, it is `unknown`: record that, and do not retry.
+
+It prints `DELIVERED — recorded.` and you are done, or `ALREADY RECORDED …` and you post nothing, or a message
+that opens `OPEN LOOPS`: the notice for this failed attempt, with `post:` on stderr saying where. Post it verbatim, once,
+with no code fence and nothing added, to their own DM — or, when it says the thread under the brief, as a reply in the
+brief's thread. Then tell it what Slack answered, and only what Slack answered:
+
+```bash
+node <checkout>/tools/status.js --notice-result <posted|not_posted|unknown> --attempt <id> --config <working dir>/openloops.config.json
+```
+
+`posted` only if Slack returned a timestamp. If Slack cannot be reached, do not keep trying: record `not_posted` (or
+`unknown` if it may have gone through). The notice says only what stage failed; it does not diagnose, and you never edit
+it. A preview posts no notice. The scheduler marking a run "succeeded" only means the session ended; it says nothing
+about whether a digest posted, which is what this record is for.
 
 **Last, every run, pass or fail:**
 
@@ -517,7 +567,12 @@ Offer this after the first successful run, not before — nobody wants a daily m
 from something they have not seen the output of.
 
 Create a scheduled task running daily at 18:00 local. Evening, so tomorrow starts
-already set up rather than starting with triage.
+already set up rather than starting with triage. Then record which task it is, so the status can
+find it and knows which days it runs:
+
+```bash
+node <checkout>/tools/status.js --schedule <the task's id> "0 18 * * *" --config <working dir>/openloops.config.json
+```
 
 **Do not copy this procedure into the task.** A task prompt is frozen when it is written,
 so a copied loop keeps running whatever this file said on setup day — the first real
@@ -638,6 +693,23 @@ edit the config, the task still starts one final, empty session and pauses itsel
 (`OFF`, above). Either way the daily digest
 task is never touched.
 
+## Is it working?
+
+When they ask whether it is working, whether today's digest ran, when the next one is, or what it tracks. Answer in
+the conversation with the tool's own text, not in Slack.
+
+1. `node <checkout>/tools/status.js --task --config <working dir>/openloops.config.json` prints the digest task's id, or `NONE`.
+2. Read the scheduler (`list_scheduled_tasks`). On `NONE`, find the digest task: one whose prompt points at this
+   working directory's `SKILL.md` and "Running the digest" (not the checks task), and only if exactly one does,
+   record it with `--schedule` as under "Scheduling it". With none or several, say so and leave the next run unknown.
+3. `node <checkout>/tools/status.js --show --next <that task's nextRunAt> --config <working dir>/openloops.config.json` — or `--paused` instead of `--next`
+   when the task is disabled, or neither when the scheduler could not be read or the task is gone. Pass the
+   scheduler's time as it gave it; do not work one out from the cron. If its cron differs from what `--schedule`
+   recorded, record the new one first. The tool itself records a pause or resume from `--paused` or `--next`, so the days the
+   task was off are not counted as missed.
+4. Show the output unchanged. A failed or unknown attempt, a partial delivery or an incomplete read is there to be
+   said plainly, not softened. It never decides whether the digest itself was right; that is what corrections are for.
+
 ## Changing it, or stopping it
 
 Both are edits to files they own, and it is worth saying so unprompted — a tool that
@@ -647,13 +719,18 @@ To change what it reads or who it tracks, edit `openloops.config.json` and run a
 Adding a channel to `exclude`, adding a name to `supporting`, moving `lookbackDays` —
 all of it takes effect on the next run, and nothing needs rebuilding.
 
+To move the time, update the existing digest task's schedule (`update_scheduled_task`, its `cronExpression`) and record
+the new one with `status.js --schedule`; never create a second digest task. To pause it, disable that task and run
+`status.js --schedule-state paused`; to resume, enable it and run `--schedule-state resumed`. Days it was paused are
+never reported as missed. The midday checks are a separate task and keep their own times.
+
 To stop midday alerts, ask, and the "Open Loops checks" task is paused straight away. Setting
 `"alerts": false` in the config yourself works too, but the task then starts one final, empty
 session at its next run before it pauses itself (or delete it). The evening digest task carries on
 untouched.
 Alerts turn on again only by answering the question again.
 
-To stop the daily message, delete the scheduled task. The ledger stays where it is, so
+To stop the daily message, delete the scheduled task and run `status.js --schedule-state deleted`. The ledger stays where it is, so
 picking it up again later resumes rather than restarts. To remove it altogether, delete
 the working directory. That is all of it.
 
