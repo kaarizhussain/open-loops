@@ -74,6 +74,14 @@ function nextDow(from, target) {
   return iso(d);
 }
 
+/* A weekday of the week after this one (weeks run Monday to Sunday), whatever day it is said on. nextDow is strictly-after, so a
+ * Friday sender asking for "next week" got the Friday after next: a week too late. */
+function nextWeekDay(from, idx) {
+  var d = toUTC(from), dow = d.getUTCDay();
+  d.setUTCDate(d.getUTCDate() - ((dow + 6) % 7) + 7 + ((idx + 6) % 7));
+  return iso(d);
+}
+
 /* Deadline language -> ISO date, resolved relative to when the message was sent. */
 function parseDue(text, from) {
   var t = text.toLowerCase();
@@ -94,9 +102,13 @@ function parseDue(text, from) {
   if (m) {
     var d = toUTC(from);
     // The capture may be the full name, so key on the first three letters either way.
-    var cand = new Date(Date.UTC(d.getUTCFullYear(), MONTHS[m[1].slice(0, 3)], +m[2]));
-    if (cand < d) cand = new Date(Date.UTC(d.getUTCFullYear() + 1, MONTHS[m[1].slice(0, 3)], +m[2]));
-    return iso(cand);
+    var mon = MONTHS[m[1].slice(0, 3)];
+    /* "Feb 30" and "Jun 31" are not dates. Date.UTC rolls them into the next month, which fabricated a deadline a day or
+     * more off; a date the month does not have is no deadline, and the other cues are tried. */
+    var inMonth = function (y) { var c = new Date(Date.UTC(y, mon, +m[2])); return c.getUTCMonth() === mon ? c : null; };
+    var cand = null;   // this year's, or else next year's; further out than that is not what anyone meant
+    for (var yy = d.getUTCFullYear(); yy <= d.getUTCFullYear() + 1 && !cand; yy++) { var cy = inMonth(yy); if (cy && cy >= d) cand = cy; }
+    if (cand) return iso(cand);
   }
 
   /* "by the 15th" — a day with no month, meaning the next one to come round.
@@ -109,10 +121,12 @@ function parseDue(text, from) {
   if (om) {
     var dom = +om[1], base = toUTC(from);
     if (dom >= 1 && dom <= 31) {
-      var next = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), dom));
-      // Already gone this month, so they mean next month's.
-      if (next < base) next = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, dom));
-      return iso(next);
+      /* The next one to come round: this month's if it has not gone, else the next month that has such a day. "By the 31st" said in
+       * September is October 31st, not the 1st of October. */
+      for (var k = 0; k < 4; k++) {
+        var cm = base.getUTCMonth() + k, c = new Date(Date.UTC(base.getUTCFullYear(), cm, dom));
+        if (c.getUTCMonth() === cm % 12 && c >= base) return iso(c);
+      }
     }
   }
   if (/\btomorrow\b/.test(t)) return addDays(from, 1);
@@ -123,9 +137,9 @@ function parseDue(text, from) {
   if (dm) {
     var idx = DOW.indexOf(dm[1].slice(0, 3));
     // "Tuesday next week" resolves a week later than a bare "Tuesday".
-    if (idx >= 0) return nextDow(nextWk ? nextDow(from, 5) : from, idx);
+    if (idx >= 0) return nextWk ? nextWeekDay(from, idx) : nextDow(from, idx);
   }
-  if (nextWk) return nextDow(nextDow(from, 5), 5);
+  if (nextWk) return nextWeekDay(from, 5);
   /* "End of the week" said on a Friday means today. nextDow is strictly-after, which is
    * right for a bare weekday — "Friday" said on a Friday usually means the next one —
    * but a week has one Friday, and resolving to the following one gave a same-day
@@ -194,13 +208,18 @@ var COMMIT = new RegExp(FIRM.source + '|' + LETS.source, 'i');
  * Tentative *verbs* were never the problem: "I can send it Friday" and "I should be
  * able to send it Friday" already fire nothing, because neither is a cue. It is only
  * hedges sitting in front of a real cue that got through. */
-var HEDGE = /\b(?:maybe|perhaps|hopefully|unlikely|no promises|not sure|unsure|don['’]?t think|do not think|doubt|probably not|might not|may not)\b/i;
+var HEDGE = /\b(?:maybe|perhaps|hopefully|unlikely|no promises|not sure|unsure|don['’]?t think|do not think|(?<!\b(?:without a|no|beyond a|beyond any)\s)doubt|probably not|might not|may not)\b/i;
+
+/* A refusal that sits AFTER the cue: "I will not be able to send it Friday", "I'll be unable to…", "I can't promise I'll…". The cue pattern
+ * matches the "I will" and the hedge list above only looks in front of it, so each of these was read as a firm promise with a date. */
+var REFUSED = /\b(?:i|we)(?:['’]ll|\s+will)\s+(?:not\s+be\s+able|be\s+unable)\b|\b(?:can['’]?t|cannot|can\s+not)\s+promise\b/i;
 
 /* Only what comes after it. "Maybe I'll send it Friday" is hedged; "I'll send it
  * Friday, not sure about the deck though" is a firm promise with a caveat attached to
  * something else, and blocking that would lose a real commitment to a word about a
  * different one. Same earliest-position rule the owner split uses. */
 function hedged(s) {
+  if (REFUSED.test(s)) return true;
   var h = s.search(HEDGE);
   if (h < 0) return false;
   var c = s.search(COMMIT);
@@ -261,8 +280,11 @@ function committer(what) {
   if (/\b(?:i['’]?ll|i will|i['’]?m going to|we['’]?ll|we will|let me|let['’]?s)\b/i.test(t)) return 'self';
   var m = t.match(/(\S+)\s+will\s/i);
   if (!m) return 'self';
+  /* A word followed by a comma or dash is an opener, not a subject: "Thanks, will send it Thursday", "Got it, will send Friday",
+   * "Thanks Dana, will send the deck" are all the reader's dropped-subject promise. */
+  if (/[,;:—–-]$/.test(m[1])) return 'self';
   var w = m[1].replace(/[^A-Za-z]/g, '');
-  if (!w || /^(yes|sure|ok|okay|and|then|also|so|but)$/i.test(w)) return 'self';
+  if (!w || /^(yes|sure|ok|okay|and|then|also|so|but|tomorrow|today|tonight|now|later|soon|monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i.test(w)) return 'self';
   return /^[A-Z][a-z]+$/.test(w) && !NOT_A_NAME.test(w) ? w : 'other';
 }
 
