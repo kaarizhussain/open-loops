@@ -199,4 +199,21 @@ main([write(base('2026-09-01')), '--ledger', path.join(dir, 'shape-old.json')]);
   assert.ok(/Nothing pending/.test(cli.main(['--confirm', '--slot', '15:00', '--date', '2026-10-01', '--config', cfg])));
 })();
 
+/* ---- 8. The ledger's rename rides out a reader holding the file (Windows EPERM/EBUSY) ---- */
+(function () {
+  var { fileStore } = require('../src/store.js');
+  var f = path.join(dir, 'busy-ledger.json');
+  var store = fileStore(f);
+  var real = fs.renameSync, left = 5;
+  fs.renameSync = function (a, b) {
+    if (left-- > 0) { var e = new Error('EPERM: operation not permitted, rename'); e.code = 'EPERM'; throw e; }
+    return real.apply(fs, arguments);
+  };
+  try { store.writeLedger([]); } finally { fs.renameSync = real; }
+  assert.ok(JSON.parse(fs.readFileSync(f, 'utf8')).rows, 'the ledger was written after the reader let go');
+  // A different error is not retried: it is not the reader, and hiding it would hide a real fault.
+  fs.renameSync = function () { var e = new Error('ENOSPC'); e.code = 'ENOSPC'; throw e; };
+  try { assert.throws(function () { store.writeLedger([]); }, /ENOSPC/); } finally { fs.renameSync = real; }
+})();
+
 console.log('hardening: OK');

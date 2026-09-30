@@ -20,6 +20,7 @@
 var fs = require('fs');
 var path = require('path');
 var L = require('./ledger.js');
+var retry = require('./busy.js').retry;
 
 var EMPTY = { rows: [], digests: {}, refs: {}, refsSince: null, seen: [], learned: [], audit: { checked: 0, missed: [], asked: {}, quiet: 0, found: 0 } };
 
@@ -68,7 +69,8 @@ function fileStore(file) {
      * as "nothing was ever marked wrong". */
     var tmp = file + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(state, null, 1));
-    fs.renameSync(tmp, file);
+    // A reader (a check, a scan, an editor) can hold the file; on Windows the rename then fails instead of waiting.
+    retry(function () { fs.renameSync(tmp, file); });
   };
 
   return {

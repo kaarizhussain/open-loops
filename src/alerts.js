@@ -77,16 +77,8 @@ function baselineFile(dir) { return path.join(dir, 'alerts-baseline.json'); }  /
 function stagedFile(dir) { return path.join(dir, 'alerts-baseline.next.json'); }  // the digest's, until it is posted
 
 /* The other task may have this file open or be renaming over it at this moment. On Windows that
- * fails with EPERM/EBUSY/EACCES instead of waiting, so those are retried briefly. */
-var BUSY = { EPERM: 1, EBUSY: 1, EACCES: 1 };
-function retry(fn) {
-  for (var i = 0; ; i++) {
-    try { return fn(); } catch (e) {
-      if (!BUSY[e.code] || i >= 40) throw e;
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5 + i);
-    }
-  }
-}
+ * fails with EPERM/EBUSY/EACCES instead of waiting, so those are retried briefly (src/busy.js). */
+var retry = require('./busy.js').retry;
 
 // A missing or torn file reads as "nothing there", never as half a record.
 function readJson(f) {
