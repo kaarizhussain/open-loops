@@ -365,6 +365,7 @@ function main(argv) {
   var reportDir = path.dirname(path.resolve(configPath));
   outbox.prune(reportDir, cfg);    // diagnostics off: anything still queued is discarded, never sent
   var today = flag('today', input.today || new Date().toISOString().slice(0, 10));
+  if (!status.validDate(today)) throw new Error('--today must be a real date like 2026-09-30, got "' + today + '".');
   var store = fileStore(flag('ledger', cfg.ledger));
   store.beginRun(today);    // a second run today starts from before the first
   if (cfg.storeText === false) store.dropText();
@@ -493,7 +494,20 @@ function main(argv) {
 
   // Yesterday's corrections land before today's list is built, or a rejected item
   // shows up one more time before disappearing.
-  var dmMessages = input.dm ? readConversation(input.dm,
+  /* The self-DM is where corrections come back. A read of it that failed, is malformed, or has text but no message structure means the
+   * corrections were not read — and that has to be said, where an empty DM (nothing typed since the digest) is a normal, valid read and
+   * says nothing. Channels get this treatment; the DM used to crash the run or pass in silence. */
+  var dmUnreadable = false;
+  var dmTextOf = function (src) { return [].concat(src && src.text != null ? [src.text] : [], ((src && src.pages) || []).map(function (p) { return p && p.text; })).filter(function (x) { return typeof x === 'string'; }).join('\n'); };
+  var readDm = function (src, opts) {
+    try {
+      var got = readConversation(src, opts);
+      var txt = dmTextOf(src);
+      if (!got.length && txt.trim() && !/Message TS:/.test(txt)) dmUnreadable = true;   // text, and nothing in it that is a message
+      return got;
+    } catch (e) { dmUnreadable = true; return []; }
+  };
+  var dmMessages = input.dm ? readDm(input.dm,
     { channel: 'DM', tzOffset: cfg.tzOffset, self: cfg.you, selfUid: cfg.selfUid || cfg.selfDm, users: input.users }) : [];
   /* Replies typed in the digest's thread count too — the details live there, so that is
    * where a reader is when they decide an item is wrong, and a thread reply does not
@@ -510,7 +524,7 @@ function main(argv) {
   var unmatched = 0;
   [].concat(input.dmThread || []).forEach(function (t) {
     var rooted = /^\d+\.\d+$/.test(String((t && t.root) || ''));
-    readConversation(t, { channel: 'DM', threadId: t.root, tzOffset: cfg.tzOffset,
+    readDm(t, { channel: 'DM', threadId: t && t.root, tzOffset: cfg.tzOffset,
       self: cfg.you, selfUid: cfg.selfUid || cfg.selfDm, users: input.users }).forEach(function (m) {
       if (!rooted && !/^\d+\.\d+$/.test(String(m.threadId || ''))) {   // a thread read that names its own parent still resolves
         if (!GENERATED_HEADER.test(m.body) && !DIGEST_HEADER.test(m.body) && !DIGEST_BODY.test(m.body)) unmatched++;
@@ -751,7 +765,7 @@ function main(argv) {
     muted: muted, mutes: L.suggestMutes(rows).filter(function (s) { return !already[s.phrase]; }),
     learnedNow: fresh, learnedAll: learned,
     spotCheck: sample, recall: score, dark: result.dark, ignoredReplies: replies.ignored,
-    replyKey: replyKey, gapLine: status.gapLine(prevGap), dmLookup: lookup, unmatchedReplies: unmatchedReplies,
+    replyKey: replyKey, gapLine: status.gapLine(prevGap), dmLookup: lookup, unmatchedReplies: unmatchedReplies, dmUnreadable: dmUnreadable,
     /* Conversations skipped, not threads. One counter served both, and only the
        conversation count was reduced by it — so skipping a thread under-reported how
        much was read, and enough of them printed a negative number of conversations. */

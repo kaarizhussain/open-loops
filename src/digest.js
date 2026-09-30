@@ -414,6 +414,9 @@ function warnings(s) {
   if (b.unmatchedReplies) {
     out.push('NOT APPLIED — a reply could not be matched to a digest (its thread has no reference, or the digest it answers was not read). Reply again under the digest you meant.');
   }
+  if (b.dmUnreadable) {
+    out.push('CORRECTIONS NOT CHECKED — your DM read could not be parsed, so corrections typed since the last digest were not read.');
+  }
   if (b.dmLookup) {
     out.push('CORRECTIONS NOT CHECKED — the earlier digest could not be located within the available DM history' +
       (b.dmLookup === 'cannot_page' ? ' (this connector cannot page it)' : '') + '. Earlier corrections may not have been reapplied.');
