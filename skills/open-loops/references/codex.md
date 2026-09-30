@@ -95,8 +95,22 @@ Use the `pages`, `pagination_info`, and requested `oldest` format and coverage r
 SKILL.md's "Fetch and preserve pagination evidence" section. Set `oldest` to the window
 start in Slack epoch seconds and exhaust that requested range; omit it only if the
 request had no oldest parameter. Preserve each page's pagination metadata verbatim.
-Self-DM reads are not coverage reads and are never paged. Use the five-message lookup
-and two correction reads described in SKILL.md.
+The self-DM lookup is paged separately from channel coverage. Read newest first,
+five messages per page where supported. Save each page as verbatim `text` or
+structured `messages`, with its original `pagination_info`, and run:
+
+```text
+node "<checkout>/tools/dm-lookup.js" --page "<page.json>" --number <n> --today <local-date> --config "<config>"
+```
+
+Start at page 1. Follow the connector cursor and increment `n` only on `NEXT`.
+Stop on `FOUND`, `NONE`, `CAPPED` (ten pages), or `UNKNOWN`. Use `--failed` if
+the DM read fails. Copy the returned `dmLookup:` value into the input's `dmLookup`
+field: `found`, `searched_none`, `capped`, `cannot_page`, or `failed`. `NONE` means
+the history was fully searched with no earlier digest; capped, failed or unsupported
+pagination never means first run. Do not manufacture pagination evidence. Keep raw
+pages for checking the mapping, but do not use lookup pages as the correction reads.
+After `FOUND`, use its timestamp for the two correction reads described in SKILL.md.
 Start from the last digest dated before today: its thread, and the DM after it. On a
 re-run, also read the thread of each digest dated today. Never start from today's digest.
 Use the local date and the current numeric UTC offset in minutes for `today`/`tzOffset`.
@@ -151,6 +165,7 @@ verified so a mapping can be checked against its source.
     }]
   }],
   "dm": { "messages": [] },
+  "dmLookup": "searched_none",
   "events": { "events": [] }
 }
 ```
@@ -160,7 +175,8 @@ verified so a mapping can be checked against its source.
 fields. Map user profile email/name separately under `users`; omit unknown profiles
 rather than guessing. Supply `members` only for a DM, with the other person's address.
 `dmThread` is a list, one entry per digest thread read; give each its digest root
-timestamp as `root` and the full parent/replies as `messages`. Self-DM objects intentionally keep the unpaged form. Use the original
+timestamp as `root` and the full parent/replies as `messages`. The two correction reads
+keep the unpaged input form; the separate lookup follows pages as described above. Use the original
 digest header, including its `· ref` reference, so numbered corrections resolve
 against the list they answered.
 

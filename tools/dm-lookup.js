@@ -8,6 +8,7 @@
  * a read of the latest five can hold nothing else. So the DM is read newest first, a page at a time, and each page
  * is handed to this tool. <file> holds that page's connector response, copied verbatim:
  *   { "text": "<the response text>", "pagination_info": "<its pagination metadata, verbatim>" }
+ * Codex may instead supply `messages` using the runner's structured Slack schema, with source fields unchanged.
  *
  * It prints one of
  *   FOUND ts=… date=… ref=…   the newest digest dated before today: stop, start from it
@@ -35,9 +36,11 @@ function main(argv) {
     throw new Error('usage: --page <file> --number <n, from 1> --today YYYY-MM-DD --config <config>');
   }
   var page = JSON.parse(fs.readFileSync(pageFile, 'utf8'));
-  if (!page || typeof page.text !== 'string') throw new Error('the page file needs a "text" field holding the response verbatim');
+  if (!page || (typeof page.text !== 'string' && !Array.isArray(page.messages))) {
+    throw new Error('the page file needs verbatim "text" or structured "messages"');
+  }
   var cfg = loadConfig(fs, flag('config') || 'openloops.config.json');
-  var source = { channel: 'DM', pages: [{ text: page.text, pagination_info: page.pagination_info }] };
+  var source = { channel: 'DM', pages: [page] };
   var messages = readConversation(source, { channel: 'DM', tzOffset: cfg.tzOffset || 0,
     self: String(cfg.you || 'unknown@localhost').toLowerCase(), selfUid: cfg.selfUid || cfg.selfDm });
   var best = null;

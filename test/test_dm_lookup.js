@@ -73,6 +73,18 @@ assert.ok(found.out.indexOf('FOUND ts=' + T0 + ' date=2026-09-30 ref=' + ref) ==
 assert.ok(/dmLookup: found$/.test(found.out));
 var foundTs = found.out.match(/ts=(\S+)/)[1];
 
+// Codex follows the same lookup with structured Slack records, without inventing Claude banners.
+var structuredLookup = function (chunk, more, n) {
+  var f = path.join(dir, 'structured-' + n + '.json');
+  fs.writeFileSync(f, JSON.stringify({ messages: chunk.map(function (m) {
+    return { ts: m.ts, user: 'U0EXAMPLE001', text: m.body };
+  }), pagination_info: more ? 'There are more messages. next_cursor: "next"' : 'There are no more messages' }));
+  return lookup.main(['--page', f, '--number', String(n), '--today', '2026-10-07', '--config', cfgPath]);
+};
+assert.ok(/^NEXT/.test(structuredLookup(history.slice(-5), true, 1)));
+assert.strictEqual(structuredLookup(history.slice(0, 2), false, 2), found.out,
+  'structured pages find the same digest past the six notices');
+
 /* ------------------------------ and the corrections under that digest are read ------------------------------ */
 // What the procedure says to fetch next, built only from what it returned: the thread under that digest, and the DM since it.
 var thread = [{ ts: foundTs, body: digestMsg.body }, { ts: at(10, 1, 9), body: '1' }].map(banner).join(NL);
