@@ -464,10 +464,25 @@ node <checkout>/tools/report.js --example 3 --config <working dir>/openloops.con
 It writes `example-draft.json` in the working directory and prints what would be sent.
 Show them that output unchanged, then say, in these words:
 
-> This is text from your Slack. Email addresses and Slack IDs have been swapped for
-> placeholders, but names, companies and anything confidential in the sentence have
-> **not** been checked. Read it first. You can edit it, send it as it is, or not send it.
-> It's deleted after 90 days.
+> This is text from your Slack. Open Loops attempts to replace email addresses and Slack
+> IDs with placeholders, but it may miss some, and names, companies and anything
+> confidential in the sentence have **not** been checked. Check the entire sentence before
+> sending. You can edit it, send it as it is, or not send it.
+>
+> **Where it goes.** A sent example is stored in a private database the developer
+> controls, not in public, and is deleted from there automatically after 90 days.
+>
+> **Who may process it.** The developer may investigate it with Claude, an AI assistant,
+> using the developer's personal Claude account. If so, the sentence is sent to Anthropic
+> as part of that session. How Anthropic uses and keeps it is governed by Anthropic's
+> consumer terms and privacy policy and by that account's settings, not by Open Loops. A
+> copy may also remain in the session record on the developer's computer.
+>
+> **What the 90 days covers.** The 90-day deletion applies only to the database. It does
+> not delete any copy held by Anthropic or kept on the developer's computer.
+>
+> It is never posted publicly. Any test added to Open Loops' public code uses made-up
+> names and wording, never your sentence.
 >
 > **send / edit / no**
 
