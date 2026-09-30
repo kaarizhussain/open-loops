@@ -4,11 +4,11 @@
  *
  *   node tools/status.js --begin [--today YYYY-MM-DD] [--dry] --config <config>      a real run starts: prints ATTEMPT <id>, then
  *        STARTED <epoch seconds> — the `oldest` for any read that has to settle whether a post landed
- *   node tools/status.js --end --attempt <id> --brief posted|not_posted|unknown --details posted|not_posted|unknown|na
+ *   node tools/status.js --end --attempt <id> --brief posted|rejected|not_attempted|unknown --details posted|rejected|not_attempted|unknown
  *        --verified yes|no [--failed fetch|build|post|verify] [--ref <ref>] --config <config>
  *        the run is over. Delivered: records it. Otherwise prints the notice to post, once per attempt.
- *   node tools/status.js --notice-result posted|not_posted|unknown --attempt <id> --config <config>
- *        only after Slack answered the notice's own post
+ *   node tools/status.js --notice-result posted|rejected|unknown --attempt <id> --config <config>
+ *        only after Slack answered the notice's own post: posted = a timestamp, rejected = explicitly refused
  *   node tools/status.js --schedule <taskId> "<cron>" --config <config>    the digest task, as the scheduler has it
  *   node tools/status.js --schedule-state paused|resumed|deleted --config <config>   the digest task was paused, resumed or deleted
  *   node tools/status.js --task --config <config>                           the recorded digest task id, or NONE
@@ -51,7 +51,7 @@ function main(argv, err) {
     if (r.done) return 'ALREADY RECORDED (' + r.outcome + ') — no second notice.';
     if (r.outcome === 'delivered') return 'DELIVERED — recorded.';
     err('outcome: ' + r.outcome + '\npost: ' + (r.notice.where === 'thread' ? 'the thread under the brief' : 'your own DM') +
-        '\nwhen Slack has answered that post: node tools/status.js --notice-result posted|not_posted|unknown --attempt ' + id);
+        '\nwhen Slack has answered that post: node tools/status.js --notice-result posted|rejected|unknown --attempt ' + id);
     return r.notice.text;
   }
   if (has('schedule')) {

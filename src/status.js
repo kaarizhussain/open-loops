@@ -172,7 +172,12 @@ function stage(dir, o) {
 
 /* ------------------------------------------------------------------ attempts */
 
-var BRIEF = ['posted', 'not_posted', 'unknown'], DETAILS = ['posted', 'not_posted', 'unknown', 'na'];
+/* What can be said about a post. Not finding a message proves nothing — it may have gone out with a damaged header, or be
+ * in flight after a timeout — so there is no word for "it was not there". `posted` is a timestamp from Slack or a message
+ * positively identified; `rejected` is Slack explicitly refusing it; `not_attempted` is a run that stopped before trying;
+ * everything else is `unknown`. */
+var BRIEF = ['posted', 'rejected', 'not_attempted', 'unknown'], DETAILS = BRIEF;
+var NOT_A_FACT = ['not_posted', 'na', 'absent', 'not_found'];
 var FAILED = ['', 'fetch', 'build', 'post', 'verify'];
 
 function begin(dir, today, now) {
@@ -191,7 +196,8 @@ function classify(f) {
     return { outcome: 'partial', cause: f.details === 'posted' ? 'verify' : 'details' };
   }
   if (f.details === 'posted') return { outcome: 'unknown' };
-  return { outcome: 'not_delivered', cause: f.failed === 'fetch' || f.failed === 'build' ? f.failed : 'post' };
+  // A refused post was a post attempt, whatever stage the assistant named.
+  return { outcome: 'not_delivered', cause: f.brief === 'not_attempted' && (f.failed === 'fetch' || f.failed === 'build') ? f.failed : 'post' };
 }
 
 function lastDelivered(d) {
@@ -231,9 +237,16 @@ function end(dir, o, now) {
   if (!a || a.id !== o.id) throw new Error('no attempt ' + o.id + ' is open: run --begin first, and use the id it printed');
   if (a.outcome !== 'started') return { outcome: a.outcome, done: true, notice: null };
   var f = { brief: o.brief, details: o.details, verified: o.verified === true, failed: o.failed || '' };
+  if (NOT_A_FACT.indexOf(f.brief) > -1 || NOT_A_FACT.indexOf(f.details) > -1) {
+    throw new Error('"' + (NOT_A_FACT.indexOf(f.brief) > -1 ? f.brief : f.details) + '" is not something that can be reported: absence proves nothing. ' +
+      'Use rejected (Slack explicitly refused the post), not_attempted (the run stopped before trying) or unknown.');
+  }
   if (BRIEF.indexOf(f.brief) < 0) throw new Error('--brief must be one of ' + BRIEF.join(', '));
   if (DETAILS.indexOf(f.details) < 0) throw new Error('--details must be one of ' + DETAILS.join(', '));
   if (FAILED.indexOf(f.failed) < 0) throw new Error('--failed must be one of ' + FAILED.filter(Boolean).join(', '));
+  if (f.brief === 'not_attempted' && f.failed !== 'fetch' && f.failed !== 'build') {
+    throw new Error('--brief not_attempted only fits a run that stopped before posting (--failed fetch or build); a post that was tried and did not land is rejected or unknown');
+  }
   var c = classify(f), at = (now || new Date()).toISOString();
   a.outcome = c.outcome; a.cause = c.cause || null; a.endedAt = at;
   a.brief = f.brief; a.details = f.details; a.verified = f.verified; a.ref = o.ref || null;
@@ -258,7 +271,7 @@ function noticeResult(dir, id, result) {
   var s = load(dir), a = s.attempt;
   if (!a || a.id !== id) throw new Error('no attempt ' + id + ' is open');
   if (a.notice !== 'pending') throw new Error('attempt ' + id + ' has no notice waiting on a result');
-  if (['posted', 'not_posted', 'unknown'].indexOf(result) < 0) throw new Error('--notice-result must be posted, not_posted or unknown');
+  if (['posted', 'rejected', 'unknown'].indexOf(result) < 0) throw new Error('--notice-result must be posted (Slack returned a timestamp), rejected (Slack explicitly refused it) or unknown');
   a.notice = result;
   save(dir, s);
 }
@@ -291,7 +304,7 @@ function attemptLine(a, delivered) {
   var when = stamp(a.startedAt);
   if (a.outcome === 'delivered') return delivered && delivered.ref === a.ref ? 'the same one' : when + ' — delivered';
   var note = { pending: 'A notice was generated but not confirmed posted.', posted: 'A notice was posted to your DM.',
-               not_posted: 'A notice could not be posted.', unknown: 'Whether the notice posted is unknown.' }[a.notice] || '';
+               rejected: 'Slack rejected the notice, so it was not posted.', unknown: 'Whether the notice posted is unknown.' }[a.notice] || '';
   var ref = a.ref ? ' (ref ' + a.ref + ')' : '';
   var body = a.outcome === 'started'
     ? 'started; no completion recorded. It may still be running or may have been interrupted; its delivery outcome is unknown.'

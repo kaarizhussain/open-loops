@@ -463,21 +463,23 @@ that is what tells the reader the digest did not come.
 node <checkout>/tools/status.js --end --attempt <id> --brief <b> --details <d> --verified <yes|no> [--failed <stage>] [--ref <ref>] --config <working dir>/openloops.config.json
 ```
 
-- `--brief` and `--details` are `posted` only when Slack returned a timestamp for that post, `not_posted` only
-  when the call definitely failed, and `unknown` when it may or may not have posted (a timeout, an error that does
-  not say). `--details na` if you never tried.
+- `--brief` and `--details` are `posted` only when Slack returned a timestamp for that post or you found and positively
+  identified the message; `rejected` only when Slack explicitly refused it; `not_attempted` when the run stopped before trying
+  (for the brief, only with `--failed fetch` or `build`); and `unknown` in every other case. There is no word for "not
+  there": a timeout, an error that does not say, no answer, and a DM read that does not show the message are all `unknown`.
 - `--verified yes` only if the brief read back correctly, above. The details are not read back, so it says nothing about them.
 - `--failed` says where it stopped: `fetch` (Slack could not be read, so no digest was built), `build` (Slack was
   fetched but the runner failed or refused), `post`, or `verify`. Leave it off when nothing failed.
 - `--ref` is the reference in the digest's header, whenever a digest was built.
-- **If a post's outcome is uncertain, do not post again.** An explicit refusal from Slack means `not_posted`. Anything
-  else — a timeout, an error that does not say, no answer — is uncertain, and the latest few DM messages cannot settle it: not
-  finding it there proves nothing. Read the DM from the attempt's start (`slack_read_channel` with `oldest` set to the
-  `STARTED` value, following every page until none remain) and look for the expected digest itself: the brief opens with the
-  runner's first line, ref included, character for character; its details are a reply in that brief's thread
-  (`slack_read_thread`), opening `OPEN LOOPS DETAILS — for <date>`. If it is there, it posted. If every page of that period was
-  read and it is not there, it did not. If the read did not cover the period — a page failed, a cursor remains, the read
-  errored — or cannot tell the expected message from another, it is `unknown`: record that, and do not retry.
+- **If a post's outcome is uncertain, do not post again.** An explicit refusal from Slack means `rejected`. Anything else —
+  a timeout, an error that does not say, no answer — is uncertain, and the latest few DM messages cannot settle it. To try to
+  settle it, read the DM from the attempt's start (`slack_read_channel` with `oldest` set to the `STARTED` value, following
+  every page until none remain) and look for the expected digest itself: the brief opens with the runner's first line, ref
+  included, character for character; its details are a reply in that brief's thread (`slack_read_thread`), opening
+  `OPEN LOOPS DETAILS — for <date>`. Only a positive identification makes it `posted`. Not finding it — even on a read that
+  covered the whole period — proves nothing: the message may have gone out with a damaged header, or may still be in flight
+  after a timeout. It stays `unknown`. Record that, do not retry on your own, and say so; if they want another digest, they
+  check their DM and ask for it.
 
 It prints `DELIVERED — recorded.` and you are done, or `ALREADY RECORDED …` and you post nothing, or a message
 that opens `OPEN LOOPS`: the notice for this failed attempt, with `post:` on stderr saying where. Post it verbatim, once,
@@ -485,11 +487,11 @@ with no code fence and nothing added, to their own DM — or, when it says the t
 brief's thread. Then tell it what Slack answered, and only what Slack answered:
 
 ```bash
-node <checkout>/tools/status.js --notice-result <posted|not_posted|unknown> --attempt <id> --config <working dir>/openloops.config.json
+node <checkout>/tools/status.js --notice-result <posted|rejected|unknown> --attempt <id> --config <working dir>/openloops.config.json
 ```
 
-`posted` only if Slack returned a timestamp. If Slack cannot be reached, do not keep trying: record `not_posted` (or
-`unknown` if it may have gone through). The notice says only what stage failed; it does not diagnose, and you never edit
+`posted` only if Slack returned a timestamp; `rejected` only if Slack explicitly refused it; anything else, including a
+Slack that cannot be reached, is `unknown`. Do not keep trying. The notice says only what stage failed; it does not diagnose, and you never edit
 it. A preview posts no notice. The scheduler marking a run "succeeded" only means the session ended; it says nothing
 about whether a digest posted, which is what this record is for.
 

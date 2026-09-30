@@ -100,16 +100,38 @@ var dp = tmp();
 var C = function (brief, details, verified, failed) { return S.classify({ brief: brief, details: details, verified: verified, failed: failed || '' }); };
 assert.deepStrictEqual(C('posted', 'posted', true), { outcome: 'delivered' });
 assert.deepStrictEqual(C('posted', 'posted', false), { outcome: 'partial', cause: 'verify' }, 'both posted, brief did not read back: not delivered');
-assert.deepStrictEqual(C('posted', 'not_posted', true), { outcome: 'partial', cause: 'details' }, 'the brief alone is partial');
-assert.deepStrictEqual(C('posted', 'na', false), { outcome: 'partial', cause: 'details' });
-assert.deepStrictEqual(C('not_posted', 'na', false, 'fetch'), { outcome: 'not_delivered', cause: 'fetch' });
-assert.deepStrictEqual(C('not_posted', 'na', false, 'build'), { outcome: 'not_delivered', cause: 'build' });
-assert.deepStrictEqual(C('not_posted', 'na', false, 'post'), { outcome: 'not_delivered', cause: 'post' });
-assert.deepStrictEqual(C('not_posted', 'na', false), { outcome: 'not_delivered', cause: 'post' });
-assert.deepStrictEqual(C('unknown', 'na', false), { outcome: 'unknown' }, 'an uncertain post is unknown, not "nothing posted"');
+assert.deepStrictEqual(C('posted', 'rejected', true), { outcome: 'partial', cause: 'details' }, 'the brief alone is partial');
+assert.deepStrictEqual(C('posted', 'not_attempted', false), { outcome: 'partial', cause: 'details' });
+assert.deepStrictEqual(C('not_attempted', 'not_attempted', false, 'fetch'), { outcome: 'not_delivered', cause: 'fetch' });
+assert.deepStrictEqual(C('not_attempted', 'not_attempted', false, 'build'), { outcome: 'not_delivered', cause: 'build' });
+assert.deepStrictEqual(C('rejected', 'not_attempted', false, 'post'), { outcome: 'not_delivered', cause: 'post' });
+assert.deepStrictEqual(C('rejected', 'not_attempted', false), { outcome: 'not_delivered', cause: 'post' });
+assert.deepStrictEqual(C('unknown', 'not_attempted', false), { outcome: 'unknown' }, 'an uncertain post is unknown, not "nothing posted"');
 assert.deepStrictEqual(C('posted', 'unknown', true), { outcome: 'unknown' }, 'an uncertain details post is unknown, not partial');
-assert.deepStrictEqual(C('not_posted', 'posted', true), { outcome: 'unknown' }, 'facts that contradict each other are not guessed at');
+assert.deepStrictEqual(C('rejected', 'posted', true), { outcome: 'unknown' }, 'facts that contradict each other are not guessed at');
 assert.deepStrictEqual(C('posted', 'posted', true, 'post'), { outcome: 'delivered' }, 'a stage named on a delivered run is ignored');
+
+/* ------------------------------ absence proves nothing ------------------------------ */
+// Not finding a post — even on a complete read of the DM — is not evidence it did not post: it may carry a damaged header,
+// or still be in flight after a timeout. So there is no way to report "not there"; only Slack refusing it, or never trying.
+var dU = tmp(), uid = S.begin(dU, '2026-09-30', at('2026-09-30T18:03'));
+['not_posted', 'na', 'absent', 'not_found'].forEach(function (v) {
+  assert.throws(function () { S.end(dU, { id: uid, brief: v, details: 'not_attempted', verified: false, failed: 'post' }); }, /absence proves nothing/, v + ' cannot be reported for the brief');
+  assert.throws(function () { S.end(dU, { id: uid, brief: 'posted', details: v, verified: true }); }, /absence proves nothing/, v + ' cannot be reported for the details');
+});
+assert.throws(function () { S.end(dU, { id: uid, brief: 'not_attempted', details: 'not_attempted', verified: false, failed: 'post' }); }, /only fits a run that stopped before posting/, 'a tried post is not "never attempted"');
+assert.throws(function () { S.end(dU, { id: uid, brief: 'not_attempted', details: 'not_attempted', verified: false }); }, /only fits a run that stopped before posting/);
+assert.strictEqual(S.load(dU).attempt.outcome, 'started', 'a fact that cannot be reported records nothing');
+// What can be reported for a post that may or may not have landed is unknown, with no claim that nothing was posted and no retry on its own.
+var ux = S.end(dU, { id: uid, brief: 'unknown', details: 'not_attempted', verified: false, failed: 'post' }, at('2026-09-30T18:05'));
+assert.strictEqual(ux.outcome, 'unknown');
+assert.ok(/Check this DM before running it again: it may already be here\./.test(ux.notice.text) && !/Nothing was posted|did not post|was not posted/.test(ux.notice.text), ux.notice.text);
+assert.ok(/delivery unknown/.test(S.view(dU, {}, null, at('2026-09-30T19:00'))) && !/Nothing was posted/.test(S.view(dU, {}, null, at('2026-09-30T19:00'))));
+assert.strictEqual(S.classify({ brief: 'unknown', details: 'posted', verified: true, failed: '' }).outcome, 'unknown', 'a details message found in the thread does not make an unknown brief delivered');
+// The instructions say the same: a complete read with no match is still unknown.
+var skillText = fs.readFileSync(path.join(__dirname, '..', 'skills', 'open-loops', 'SKILL.md'), 'utf8').split(String.fromCharCode(13)).join('');
+assert.ok(/even on a read that\s+covered the whole period — proves nothing/.test(skillText) && /damaged header/.test(skillText) && /in flight/.test(skillText), 'SKILL.md: not finding the post proves nothing');
+assert.ok(!/it is not there, it did not/.test(skillText) && !/`not_posted`/.test(skillText), 'SKILL.md no longer lets absence count as "not posted"');
 
 /* ------------------------------ a failure never overwrites the last delivery ------------------------------ */
 var dir2 = tmp();
@@ -129,16 +151,16 @@ var deliveredBefore = JSON.stringify(st1.delivered);
 var a2 = S.begin(dir2, '2026-09-30', at('2026-09-30T18:03'));
 var stA = S.load(dir2);
 assert.strictEqual(stA.attempt.outcome, 'started'); assert.strictEqual(JSON.stringify(stA.delivered), deliveredBefore, 'beginning an attempt leaves the delivery alone');
-var r2 = S.end(dir2, { id: a2, brief: 'not_posted', details: 'na', verified: false, failed: 'fetch' }, at('2026-09-30T18:04'));
+var r2 = S.end(dir2, { id: a2, brief: 'not_attempted', details: 'not_attempted', verified: false, failed: 'fetch' }, at('2026-09-30T18:04'));
 assert.strictEqual(r2.outcome, 'not_delivered');
 assert.strictEqual(JSON.stringify(S.load(dir2).delivered), deliveredBefore, 'a failed attempt does not touch the last delivered digest');
 assert.ok(/Last delivered digest: Tue 2026-09-29 · ref 6261/.test(r2.notice.text), 'and the notice keeps it findable: ' + r2.notice.text);
 // One notice per attempt.
-var r2b = S.end(dir2, { id: a2, brief: 'not_posted', details: 'na', verified: false, failed: 'fetch' }, at('2026-09-30T18:05'));
+var r2b = S.end(dir2, { id: a2, brief: 'not_attempted', details: 'not_attempted', verified: false, failed: 'fetch' }, at('2026-09-30T18:05'));
 assert.strictEqual(r2b.notice, null, 'a second end for the same attempt issues no second notice'); assert.ok(r2b.done);
 // A second failed attempt is its own attempt, with its own notice.
 var a3 = S.begin(dir2, '2026-09-30', at('2026-09-30T19:03'));
-assert.ok(S.end(dir2, { id: a3, brief: 'not_posted', details: 'na', verified: false, failed: 'build' }, at('2026-09-30T19:04')).notice);
+assert.ok(S.end(dir2, { id: a3, brief: 'not_attempted', details: 'not_attempted', verified: false, failed: 'build' }, at('2026-09-30T19:04')).notice);
 // A run that never ends stays "started": no guess at its outcome.
 var a4 = S.begin(dir2, '2026-10-01', at('2026-10-01T18:03'));
 assert.strictEqual(S.load(dir2).attempt.outcome, 'started');
@@ -148,7 +170,7 @@ assert.throws(function () { S.end(dir2, { id: a4, brief: 'maybe', details: 'post
 /* ------------------------------ a notice is "posted" only when Slack said so ------------------------------ */
 var dir3 = tmp();
 var b1 = S.begin(dir3, '2026-09-30', at('2026-09-30T18:03'));
-S.end(dir3, { id: b1, brief: 'not_posted', details: 'na', verified: false, failed: 'post' }, at('2026-09-30T18:04'));
+S.end(dir3, { id: b1, brief: 'rejected', details: 'not_attempted', verified: false, failed: 'post' }, at('2026-09-30T18:04'));
 assert.strictEqual(S.load(dir3).attempt.notice, 'pending', 'generating the text is not delivering it');
 assert.ok(/A notice was generated but not confirmed posted\./.test(S.view(dir3, {}, null, at('2026-09-30T19:00'))), 'and the status says so');
 S.noticeResult(dir3, b1, 'posted');
@@ -156,7 +178,8 @@ assert.ok(/A notice was posted to your DM\./.test(S.view(dir3, {}, null, at('202
 assert.throws(function () { S.noticeResult(dir3, b1, 'posted'); }, /no notice waiting/, 'a result is recorded once');
 var b2 = S.begin(dir3, '2026-10-01', at('2026-10-01T18:03'));
 assert.throws(function () { S.noticeResult(dir3, b2, 'posted'); }, /no notice waiting/, 'a notice that was never generated cannot be confirmed');
-S.end(dir3, { id: b2, brief: 'not_posted', details: 'na', verified: false, failed: 'post' }, at('2026-10-01T18:04'));
+S.end(dir3, { id: b2, brief: 'rejected', details: 'not_attempted', verified: false, failed: 'post' }, at('2026-10-01T18:04'));
+assert.throws(function () { S.noticeResult(dir3, b2, 'not_posted'); }, /must be posted/, 'a notice that "was not there" is not a result');
 S.noticeResult(dir3, b2, 'unknown');
 assert.ok(/Whether the notice posted is unknown\./.test(S.view(dir3, {}, null, at('2026-10-01T19:00'))));
 assert.throws(function () { S.noticeResult(dir3, b2, 'yes'); }, /no notice waiting|must be/);
@@ -173,11 +196,11 @@ var np = N('not_delivered', 'post');
 assert.ok(/was built, but it could not be posted\. Nothing was posted\./.test(np.text), np.text);
 assert.ok(!/nothing was checked/i.test(np.text), 'a post failure does not claim nothing was checked either');
 [nf, nb, np].forEach(function (n) { assert.ok(/An empty DM today does not mean nothing is outstanding/.test(n.text) && /run Open Loops/.test(n.text)); });
-var nd = N('partial', 'details', 'not_posted');
+var nd = N('partial', 'details', 'rejected');
 assert.ok(nd.text.indexOf('OPEN LOOPS NOTES — for 2026-09-30\n') === 0 && nd.where === 'thread');
 assert.ok(/The brief posted, but the full details are unavailable/.test(nd.text), nd.text);
 assert.ok(!/complete/i.test(nd.text), 'the brief is not called complete when its details are missing');
-var nv1 = N('partial', 'verify', 'posted'), nv2 = N('partial', 'verify', 'not_posted');
+var nv1 = N('partial', 'verify', 'posted'), nv2 = N('partial', 'verify', 'rejected');
 assert.ok(/The brief and details posted, but the brief did not read back as expected/.test(nv1.text), nv1.text);
 assert.ok(/full details are unavailable, and the brief did not read back/.test(nv2.text), nv2.text);
 assert.ok(!/verified/.test(nv1.text), 'the details were never read back, so nothing says they were verified');
@@ -228,16 +251,16 @@ var att = function (facts, now) {
 var vs = att(null);
 assert.ok(/Last attempt {12}Thu 10-01, 18:03 — started; no completion recorded\. It may still be running or may have been interrupted; its delivery outcome is unknown\./.test(vs), vs);
 assert.ok(!/failed/i.test(vs), 'a started attempt is not called failed');
-var vf = att({ brief: 'not_posted', details: 'na', verified: false, failed: 'build' });
+var vf = att({ brief: 'not_attempted', details: 'not_attempted', verified: false, failed: 'build' });
 assert.ok(/Slack was fetched, but processing failed\. Nothing was posted\./.test(vf) && !/nothing was checked/i.test(vf), vf);
 assert.ok(/Tue 09-29, 18:05 · ref 6261/.test(vf), 'the last delivered digest is still shown: ' + vf);
-assert.ok(/Slack could not be fetched\. Nothing was posted\./.test(att({ brief: 'not_posted', details: 'na', verified: false, failed: 'fetch' })));
-assert.ok(/the digest was built, but posting failed\. Nothing was posted\./.test(att({ brief: 'not_posted', details: 'na', verified: false, failed: 'post' })));
-assert.ok(/partly delivered \(ref 7c1e\): the brief posted, but the full details are unavailable\./.test(att({ brief: 'posted', details: 'not_posted', verified: true, ref: '7c1e' })));
+assert.ok(/Slack could not be fetched\. Nothing was posted\./.test(att({ brief: 'not_attempted', details: 'not_attempted', verified: false, failed: 'fetch' })));
+assert.ok(/the digest was built, but posting failed\. Nothing was posted\./.test(att({ brief: 'rejected', details: 'not_attempted', verified: false, failed: 'post' })));
+assert.ok(/partly delivered \(ref 7c1e\): the brief posted, but the full details are unavailable\./.test(att({ brief: 'posted', details: 'rejected', verified: true, ref: '7c1e' })));
 var vv = att({ brief: 'posted', details: 'posted', verified: false, ref: '7c1e' });
 assert.ok(/brief and details posted \(brief not verified\)/.test(vv) && /replies to it may not be recognised/.test(vv), vv);
-assert.ok(/delivery unknown: Open Loops could not confirm whether the digest posted\. Check your DM before running it again\./.test(att({ brief: 'unknown', details: 'na', verified: false })));
-assert.ok(!/Nothing was posted/.test(att({ brief: 'unknown', details: 'na', verified: false })), 'unknown is never reported as nothing posted');
+assert.ok(/delivery unknown: Open Loops could not confirm whether the digest posted\. Check your DM before running it again\./.test(att({ brief: 'unknown', details: 'not_attempted', verified: false })));
+assert.ok(!/Nothing was posted/.test(att({ brief: 'unknown', details: 'not_attempted', verified: false })), 'unknown is never reported as nothing posted');
 
 // A delivered digest whose read was incomplete says where.
 stagedOf(dir4, '7c1e', 'incomplete');
@@ -253,15 +276,15 @@ var dir5 = tmp(), cp5 = path.join(dir5, 'openloops.config.json'); fs.writeFileSy
 var errs = [];
 var run = function (args) { return cli.main(args.concat(['--config', cp5]), function (m) { errs.push(m); }); };
 assert.ok(/^PREVIEW/.test(run(['--begin', '--dry'])) && !fs.existsSync(S.file(dir5)), 'a preview records nothing');
-assert.ok(/^PREVIEW/.test(run(['--end', '--attempt', 'PREVIEW', '--brief', 'not_posted', '--details', 'na', '--verified', 'no', '--failed', 'fetch'])) && !fs.existsSync(S.file(dir5)),
+assert.ok(/^PREVIEW/.test(run(['--end', '--attempt', 'PREVIEW', '--brief', 'not_attempted', '--details', 'not_attempted', '--verified', 'no', '--failed', 'fetch'])) && !fs.existsSync(S.file(dir5)),
   'and a preview that "fails" issues no notice and records nothing');
 var begun = run(['--begin', '--today', '2026-10-01', '--now', '2026-10-01T18:03']); var aid = begun.split('\n')[0].replace('ATTEMPT ', '');
 assert.ok(/^ATTEMPT [0-9a-f]{8}\nSTARTED \d{10}$/.test(begun), 'begin also prints the start, as the oldest for any read that settles a post: ' + begun);
 assert.strictEqual(+begun.split('\n')[1].replace('STARTED ', ''), Math.floor(new Date(2026, 9, 1, 18, 3).getTime() / 1000));
-var out = run(['--end', '--attempt', aid, '--brief', 'posted', '--details', 'not_posted', '--verified', 'yes']);
+var out = run(['--end', '--attempt', aid, '--brief', 'posted', '--details', 'rejected', '--verified', 'yes']);
 assert.ok(out.indexOf('OPEN LOOPS NOTES — for 2026-10-01\n') === 0, out);
 assert.ok(/outcome: partial/.test(errs.join('\n')) && /the thread under the brief/.test(errs.join('\n')), 'where to post it goes to stderr, not into the message');
-assert.ok(/^ALREADY RECORDED/.test(run(['--end', '--attempt', aid, '--brief', 'posted', '--details', 'not_posted', '--verified', 'yes'])));
+assert.ok(/^ALREADY RECORDED/.test(run(['--end', '--attempt', aid, '--brief', 'posted', '--details', 'rejected', '--verified', 'yes'])));
 assert.strictEqual(run(['--notice-result', 'posted', '--attempt', aid]), 'Recorded.');
 assert.strictEqual(run(['--task']), 'NONE');
 assert.ok(/^Recorded: t1 at "0 18 \* \* 1-5"/.test(run(['--schedule', 't1', '0 18 * * 1-5'])) && run(['--task']) === 't1');
@@ -277,6 +300,8 @@ assert.ok(/^Recorded: the digest task is paused\./.test(run(['--schedule-state',
 assert.ok(/^Recorded: the digest task is deleted\./.test(run(['--schedule-state', 'deleted'])) && run(['--task']) === 'NONE', 'a deleted task is no task');
 assert.ok(/Next run {16}none — the digest task was deleted on /.test(run(['--show'])));
 assert.throws(function () { run(['--end', '--brief', 'posted']); }, /--attempt/);
+var aid2 = run(['--begin', '--today', '2026-10-02']).split('\n')[0].replace('ATTEMPT ', '');
+assert.throws(function () { run(['--end', '--attempt', aid2, '--brief', 'not_posted', '--details', 'not_attempted', '--verified', 'no', '--failed', 'post']); }, /absence proves nothing/, 'the command line cannot report absence either');
 
 /* ------------------------------ the runner: staging, the gap line, previews, and the DM reader ------------------------------ */
 var ME = 'alex@example.com';
