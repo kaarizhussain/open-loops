@@ -112,4 +112,14 @@ function pairsFrom(result, baseKey) {
   return pairs;
 }
 
-module.exports = { token: token, norm: norm, ownerOf: ownerOf, apply: apply, pairsFrom: pairsFrom, TOKEN: TOKEN };
+/* Whether any two different people share a base key: the only time a salt decides a key. */
+function hasGroup(pairs) {
+  var seen = {};
+  return pairs.some(function (p) {
+    var g = seen[p.base] = seen[p.base] || {};
+    g[norm(p.who)] = 1;
+    return Object.keys(g).length > 1;
+  });
+}
+
+module.exports = { token: token, norm: norm, ownerOf: ownerOf, apply: apply, pairsFrom: pairsFrom, hasGroup: hasGroup, TOKEN: TOKEN };

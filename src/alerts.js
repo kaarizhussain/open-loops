@@ -106,6 +106,18 @@ function writeJson(f, o) {
   retry(function () { fs.renameSync(tmp, f); });
 }
 
+/* The salt that keeps two people apart while the ledger has none of its own (a ledger from before identities, until its next digest makes one).
+ * A check never writes the ledger, so it keeps the salt in the file that is the checks' alone, and every later check reads the same one: the keys
+ * of two people who share a commitment stay the same from one check to the next, and a confirmed alert is not said again. The digest, which owns the
+ * ledger, makes the ledger's salt; from then on this one is not used. */
+function checkSalt(dir) {
+  var s = readJson(file(dir));
+  if (typeof s.identitySalt === 'string' && s.identitySalt) return s.identitySalt;
+  s.identitySalt = crypto.randomBytes(16).toString('hex');
+  writeJson(file(dir), s);
+  return s.identitySalt;
+}
+
 function loadBaseline(dir) {
   var b = readJson(baselineFile(dir));
   return b.version && typeof b.version === 'string' && b.items && typeof b.items === 'object' ? b : null;
@@ -117,7 +129,7 @@ function loadBaseline(dir) {
 function load(dir) {
   var baseline = loadBaseline(dir), s = readJson(file(dir));
   var same = !!baseline && s.baselineVersion === baseline.version;
-  return { baseline: baseline,
+  return { baseline: baseline, identitySalt: typeof s.identitySalt === 'string' && s.identitySalt ? s.identitySalt : undefined,
            alerted: same && s.alerted && typeof s.alerted === 'object' ? s.alerted : {},
            slots: s.slots && typeof s.slots === 'object' ? s.slots : {},
            pending: !s.pending ? null : same ? s.pending : { id: s.pending.id, date: s.pending.date, slot: s.pending.slot, alerts: {} } };
@@ -128,7 +140,7 @@ function load(dir) {
 function save(dir, s) {
   var keep = {}, cutoff = addDays(localParts(new Date()).date, -KEEP_DAYS);
   Object.keys(s.slots).forEach(function (d) { if (d >= cutoff) keep[d] = s.slots[d]; });
-  writeJson(file(dir), { baselineVersion: s.baseline.version, alerted: s.alerted, slots: keep, pending: s.pending });
+  writeJson(file(dir), { baselineVersion: s.baseline.version, alerted: s.alerted, slots: keep, pending: s.pending, identitySalt: s.identitySalt });
 }
 
 /* ------------------------------------------------------------------ the rules */
@@ -330,7 +342,7 @@ function confirm(dir, stamp, want) {
 module.exports = {
   DEFAULT_TIMES: DEFAULT_TIMES, LATE_MINUTES: LATE_MINUTES, MAX_ITEMS: MAX_ITEMS,
   consent: consent, level: level, evaluate: evaluate, decide: decide, render: render,
-  consentProblem: consentProblem, check: check, confirm: confirm, writeBaseline: writeBaseline, stageBaseline: stageBaseline,
+  consentProblem: consentProblem, checkSalt: checkSalt, check: check, confirm: confirm, writeBaseline: writeBaseline, stageBaseline: stageBaseline,
   promoteBaseline: promoteBaseline, baselineOf: baselineOf, stagedFile: stagedFile,
   load: load, save: save, file: file, baselineFile: baselineFile, parseNow: parseNow, localParts: localParts, addDays: addDays
 };

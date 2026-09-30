@@ -59,13 +59,15 @@ function load(file) {
   }
 }
 
-function fileStore(file) {
+function fileStore(file, sopts) {
   var state = load(file), discarded = [];
   /* The ledger's identity salt: random, made once, kept in the ledger itself so it travels with every copy and backup, and never
    * remade. A ledger that already holds person tokens but has lost its salt cannot be read back into the same people, so it is an
    * error — quietly making a new salt would split every person from their corrections. */
   var ensureSalt = function () {
     if (state.identitySalt) return state.identitySalt;
+    /* A midday check never writes the ledger, so it must not make a salt either: one made in memory would differ at the next check. */
+    if (sopts && sopts.noSalt) return null;
     var held = (state.rows || []).some(function (r) { return /^[0-9a-f]{64}$/.test(L.cell(r[L.COL.who_id])); });
     if (held) throw new Error('Ledger at ' + file + ' holds person identifiers but no identity salt. Restore the file it was copied from, or move it aside: a new salt would detach every person from their corrections.');
     state.identitySalt = require('crypto').randomBytes(16).toString('hex');
@@ -95,7 +97,7 @@ function fileStore(file) {
         // An older row's owner becomes a token before the address is scrubbed; nothing else of it is kept.
         (s.rows || []).forEach(function (r) {
           var id = L.cell(r[L.COL.who_id]);
-          if (!/^[0-9a-f]{64}$/.test(id) && id !== '~' && L.cell(r[L.COL.who])) r[L.COL.who_id] = require('./identity.js').token(salt, L.cell(r[L.COL.who]));
+          if (salt && !/^[0-9a-f]{64}$/.test(id) && id !== '~' && L.cell(r[L.COL.who])) r[L.COL.who_id] = require('./identity.js').token(salt, L.cell(r[L.COL.who]));
           r[L.COL.who] = ''; r[L.COL.what] = '';
         });
         s.learned = [];

@@ -372,7 +372,7 @@ function mainInner(argv) {
   outbox.prune(reportDir, cfg);    // diagnostics off: anything still queued is discarded, never sent
   var today = flag('today', input.today || new Date().toISOString().slice(0, 10));
   if (!status.validDate(today)) throw new Error('--today must be a real date like 2026-09-30, got "' + today + '".');
-  var store = fileStore(flag('ledger', cfg.ledger));
+  var store = fileStore(flag('ledger', cfg.ledger), { noSalt: argv.indexOf('--check') > -1 });
   store.beginRun(today);    // a second run today starts from before the first
   if (cfg.storeText === false) store.dropText();
 
@@ -578,8 +578,11 @@ function mainInner(argv) {
 
   /* Whose commitment each one is, before any key is used: two people who say one sentence in one thread on one day share a base key, and
    * used to share one row. Everything after this — candidates, mutes, the merge, digest order, replies — reads the resolved key. */
-  var identitySalt = store.identitySalt();
-  var ident = identity.apply(rows, identity.pairsFrom(result, loops.baseKey), identitySalt);
+  var identityPairs = identity.pairsFrom(result, loops.baseKey);
+  /* A digest owns the ledger and makes its salt. A midday check may not write it: with no salt in the ledger it uses the checks' own one, and only
+   * when two people actually share a key (otherwise no salt decides anything). */
+  var identitySalt = store.identitySalt() || (identity.hasGroup(identityPairs) ? alerts.checkSalt(reportDir) : 'no-shared-keys');
+  var ident = identity.apply(rows, identityPairs, identitySalt);
   loops.setIdentityResolver(ident.resolve);
 
   /* Rows written before keys named a channel are matched to today's commitments here, once, before anything is

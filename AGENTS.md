@@ -30,7 +30,9 @@ This section is the owner's own deployment; someone running their own copy sets 
       `tools/alerts.js --baseline --ref <ref>` promotes it once the digest is posted and read
       back, so the baseline is what the reader was shown, never a digest that failed to post.
     - `alerts.json`, written by the checks only, holds what they alerted and which slots
-      ran, tagged with the baseline version they compared against. When that version is no
+      ran, tagged with the baseline version they compared against. It also holds, only when two people share a commitment key and the ledger has
+      no salt of its own, the salt that keeps them apart from one check to the next: a check may not write the
+      ledger, so it may not make the ledger's salt either, and one made in memory differs at every check. When that version is no
       longer the baseline's, the alerts it recorded are void and start again. The slots that
       already ran that day stay done: a new baseline never reopens a completed 12:00 or 15:00.
     - A check that overlaps a digest may compare against the older baseline once, and its
