@@ -220,6 +220,8 @@ principals: [{ label: 'Dana',   address: 'dana@northstar.io' },
              { label: 'Marcus', address: 'marcus@northstar.io' }]
 ```
 
+That is what the detector's options and a run input call the list. In `openloops.config.json` it is `"supporting"` — `"supporting": [{ "label": "Dana" }]` — and a `principals` key there does nothing.
+
 Your own "I'll…" is always yours. A principal's pile holds what was promised in their
 name — "Dana will send the signed copy" — and with several, the name in the promise
 decides whose, and goes on each line. Anyone else's promise is theirs to chase. Leaving

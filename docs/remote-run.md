@@ -26,10 +26,11 @@ detector, delivered on schedule with the computer off.
   its ledger changes a second time, and replies still match their digest by its `· ref`.
 - **The ledger is written to a temporary file and then renamed into place**, so a run
   cut off mid-write cannot leave a half-written ledger.
-- **Each run's rendered digest is saved** (`out-YYYY-MM-DD.txt`) — by the scheduled
-  task, not by `slack-run.js`, which only prints it — so a failed Slack post can be sent
-  again without re-running detection. Making the runner write it is part of the remote
-  version's contract.
+- **Saving each run's rendered digest is not done yet.** `slack-run.js` only prints it, and
+  nothing in the current instructions saves it, so a failed Slack post is sent again from the
+  run's own output while that run is still going, or by running the digest again (a same-day
+  re-run replaces the earlier one). A remote version needs the runner to write it
+  (`out-YYYY-MM-DD.txt` is the name this document assumes).
 - **`storeText:false`** keeps keys and verdicts but drops the quoted text.
 
 What these don't cover:

@@ -275,10 +275,9 @@ function phrases(text, n) {
  * rejections and all over the real items too, so it says nothing. A phrase that shows
  * up only in the misses is a pattern the detector is wrong about.
  *
- * ponytail: needs a couple of dozen judged rows before it says anything useful, and
- * says nothing rather than guessing below that. Frequency over a small corpus is
- * mostly noise, and a confident wrong suggestion here costs more than silence — it
- * would be muting real commitments. */
+ * ponytail: no minimum number of judged rows is required — two rejections of a phrase are enough to propose it. Frequency over a small
+ * corpus is mostly noise, so add a judged-count gate here if proposals made over a handful of rows prove noisy. Only the fourth rejection
+ * (minCount 4) ever acts on its own. */
 function suggestMutes(rows, minCount) {
   minCount = minCount || 2;
   var wrong = {}, kept = {};

@@ -131,7 +131,7 @@ support one or more executives, take names, and addresses if they have them.
 
 ```json
 {
-  "you": "<from step 1>",
+  "you": "<from step 2>",
   "selfDm": "<their user id>",
   "supporting": [],
   "channels": { "include": ["<the channels they chose>"] },
@@ -447,8 +447,8 @@ call returned — not simply the newest message, which may be your notes or some
 newer. It must open with exactly one code fence, and the first line inside that fence
 must equal the first line of the runner's output character for character. The runner's
 output is the authority; don't check it against a remembered format. If it differs — a
-dropped header, a doubled fence — and you know the first post landed, post the brief and its details again from the saved
-runner output, unchanged, and say in the notes that the first post was wrong and stays in the DM. Never edit
+dropped header, a doubled fence — and you know the first post landed, post the brief and its details again from the runner output you already have in this run,
+unchanged, and say in the notes that the first post was wrong and stays in the DM. Never edit
 the posted text to fix it. **Then read the replacement back**, by its own timestamp, with the same check: from here on the
 replacement is the brief. Record what actually happened to it — posted, rejected or unknown — and if its outcome is
 uncertain, do not post a third time. The header is how the next run finds this digest and matches
@@ -872,11 +872,7 @@ Nobody has yet run it against their own correspondence for a fortnight and marke
 it got wrong, so its precision for them is unknown. Say that if they ask how accurate it
 is, rather than quoting the demo.
 
-What is known is a rate, from 3,725 real emails in the Enron corpus: it finds something
-in about two of every five messages. Most of those are real commitment language rather
-than mistakes — people do write "please review this" that often — but it means the list
-is long before it is wrong, and the reader's problem on a busy mailbox is volume rather
-than error. Worth saying up front to anyone whose inbox is heavy.
+What is known is a firing rate, from the Enron benchmark (3,725 real emails in 16 mailboxes; see `docs/evaluation.md`): about 36 items per 100 messages. That is how often it fires, not how often it is right — that corpus has no labels — and it is a figure about those mailboxes, not a prediction for theirs. It does mean the list can be long before it is wrong, and the reader's problem on a busy mailbox may be volume rather than error. Worth saying up front to anyone whose inbox is heavy.
 
 Two of the seven signals need a calendar, and a workspace with one member cannot
 exercise the two that need somebody else — nothing inbound ever arrives.

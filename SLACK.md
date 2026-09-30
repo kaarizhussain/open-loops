@@ -25,7 +25,7 @@ workflow and accepts structured Slack messages as well as the text format below.
 npx skills add kaarizhussain/open-loops
 ```
 
-It reads your address and DM channel straight off the Slack connector, shows you the
+It reads your address and Slack user id straight off the Slack connector (your own DM is that id), shows you the
 channels it would read so you can strike the ones it should not, asks who you support,
 writes the config, tells you in a few lines what it will read and where the data goes,
 and runs it once, posting the digest to your DM and showing you the same brief in the
@@ -59,12 +59,15 @@ The settings are documented below, each where it matters.
 
 ## The loop
 
+This is the outline. The steps an assistant actually follows — the configuration check, attempt recording, read-back, the paged DM lookup and the failure notices — are in
+`skills/open-loops/SKILL.md`; where the two differ, that file wins.
+
 **1. Fetch.** List the conversations, drop the ones out of scope (see below), then read
 what is left:
 
 ```
 slack_list_user_channels(types="public_channel,private_channel")
-slack_read_channel(channel_id=…, oldest=<window start>, limit=100)
+slack_read_channel(channel_id=…, oldest=<window start>, limit=100, response_format="detailed")
 ```
 
 Note the missing `im`. Direct messages are opt-in — add them to `types` only when you
@@ -75,11 +78,13 @@ have decided you want them read, rather than because they were in the default.
 inside one is invisible without going back for it:
 
 ```
-slack_read_thread(channel_id=…, message_ts=<the root's Message TS>)
+slack_read_thread(channel_id=…, message_ts=<the root's Message TS>, response_format="detailed")
 ```
 
 Also read your own DM — that is where corrections come back — but only since the latest
-digest: find it with a short read, then read its thread (the digest, its details, and
+digest. Find it by paging the DM newest first until a digest dated before today turns up (failure notices,
+alerts and notes are messages too, so the newest five can all be something else; `tools/dm-lookup.js` does the
+sorting and says when the search gave out), then read its thread (the digest, its details, and
 replies typed under it) and the DM from its timestamp on (replies typed straight into the
 DM). A thread reply does not appear in a read of the DM itself. Older DM history is old
 digests the runner never needs; reading and retyping it made up most of every input.
@@ -100,6 +105,7 @@ config file:
   ],
   "dm": { "channel": "D0…", "text": "<connector output for your self-DM>" },
   "dmThread": [{ "root": "<digest Message TS>", "text": "<slack_read_thread output for the last digest before today>" }],
+  "dmLookup": "<found | searched_none | capped | cannot_page | failed — from tools/dm-lookup.js>",
   "events": "<list_events response, object or raw JSON>"
 }
 ```
@@ -214,8 +220,8 @@ real:
 3 7
 ```
 
-They stop appearing, and the next digest opens with *"Took your last reply — 2 items
-marked wrong."* An acknowledgement matters more than it sounds: a correction that
+They stop appearing, and the next digest opens with *"Took your last reply — 2 marked not
+real, dropped for good."* An acknowledgement matters more than it sounds: a correction that
 produces no visible response teaches you that corrections don't matter, and then you
 stop sending them.
 
@@ -316,7 +322,7 @@ not sit there being counted as false positives forever.
 
 ### When it decides for itself
 
-Past four rejections of the same phrase, with none of them kept, it stops asking and
+At four rejections of the same phrase, with none of them kept, it stops asking and
 mutes it — and says so:
 
 ```
@@ -344,9 +350,10 @@ Rejecting a phrase and rejecting an item are also separate decisions. `unmute` s
 phrase being muted; it does not un-reject rows you already marked wrong, and those stay
 held back by their own verdicts.
 
-Below the bar it only proposes. And it says nothing at all until it has a couple of
-dozen judged items — frequency over a handful of rows is noise, and a confident wrong
-suggestion here mutes real commitments.
+Below the bar it only proposes: a phrase that turns up in two rejected items is offered in the digest, and
+nothing is muted until you say so. There is no minimum number of judged items, so a proposal made over a
+handful of rows is weak evidence — read it rather than accepting it, because a confident wrong mute hides
+real commitments.
 
 Matching is plain case-insensitive substring rather than regex, on purpose: a mute list
 is something a person has to be able to check at a glance.
