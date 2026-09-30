@@ -3,6 +3,10 @@
 # The Worker sends a repository_dispatch; this files or updates the issue as
 # github-actions[bot] and assigns the owner. That is what makes GitHub notify: an issue
 # created with the owner's own token notifies nobody.
+#
+# mode "note" is the local triage task telling the owner something (a reproduced problem,
+# a local fix, a question). It comments on the given issue, or opens a `triage-note` issue
+# when there is none — and never reopens or re-labels `new`, so triage cannot feed itself.
 name: alert
 on:
   repository_dispatch:
@@ -17,6 +21,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          MODE: ${{ github.event.client_payload.mode }}
+          ISSUE: ${{ github.event.client_payload.issue }}
           KEY: ${{ github.event.client_payload.key }}
           TITLE: ${{ github.event.client_payload.title }}
           BODY: ${{ github.event.client_payload.body }}
@@ -24,6 +30,16 @@ jobs:
           OWNER: kaarizhussain
         run: |
           set -euo pipefail
+          if [ "$MODE" = "note" ]; then
+            if [ -n "$ISSUE" ]; then
+              [[ "$ISSUE" =~ ^[0-9]{1,6}$ ]] || { echo "bad issue"; exit 1; }
+              gh issue comment "$ISSUE" --body "$BODY"$'\n\n'"@$OWNER"
+            else
+              gh label create triage-note --force >/dev/null
+              gh issue create --title "$TITLE" --body "$BODY"$'\n\n'"@$OWNER" --label triage-note --assignee "$OWNER"
+            fi
+            exit 0
+          fi
           [[ "$KEY" =~ ^k-[0-9a-f]{12}$ ]] || { echo "bad key"; exit 1; }
           [[ "$LABELS" =~ ^[a-z,-]{1,60}$ ]] || { echo "bad labels"; exit 1; }
           for l in $KEY ${LABELS//,/ }; do gh label create "$l" --force >/dev/null; done
