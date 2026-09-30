@@ -47,7 +47,8 @@ function load(file) {
             missed: Array.isArray(raw.audit.missed) ? raw.audit.missed : [],
             asked: raw.audit.asked || {} }
         : { checked: 0, missed: [], asked: {} },
-      before: raw.before && raw.before.date && raw.before.state ? raw.before : null
+      before: raw.before && raw.before.date && raw.before.state ? raw.before : null,
+      identitySalt: typeof raw.identitySalt === 'string' && raw.identitySalt ? raw.identitySalt : undefined
     };
   } catch (e) {
     // Missing is the normal first run. Corrupt is not, and losing the verdicts in it
@@ -60,6 +61,16 @@ function load(file) {
 
 function fileStore(file) {
   var state = load(file), discarded = [];
+  /* The ledger's identity salt: random, made once, kept in the ledger itself so it travels with every copy and backup, and never
+   * remade. A ledger that already holds person tokens but has lost its salt cannot be read back into the same people, so it is an
+   * error — quietly making a new salt would split every person from their corrections. */
+  var ensureSalt = function () {
+    if (state.identitySalt) return state.identitySalt;
+    var held = (state.rows || []).some(function (r) { return /^[0-9a-f]{64}$/.test(L.cell(r[L.COL.who_id])); });
+    if (held) throw new Error('Ledger at ' + file + ' holds person identifiers but no identity salt. Restore the file it was copied from, or move it aside: a new salt would detach every person from their corrections.');
+    state.identitySalt = require('crypto').randomBytes(16).toString('hex');
+    return state.identitySalt;
+  };
 
   var flush = function () {
     var dir = path.dirname(file);
@@ -79,8 +90,14 @@ function fileStore(file) {
     // Scrub the rerun snapshot too, or beginRun can resurrect yesterday's text.
     // Keep this in memory until the normal flush so --dry stays read-only.
     dropText: function () {
+      var salt = ensureSalt();
       var scrub = function (s) {
-        (s.rows || []).forEach(function (r) { r[L.COL.who] = ''; r[L.COL.what] = ''; });
+        // An older row's owner becomes a token before the address is scrubbed; nothing else of it is kept.
+        (s.rows || []).forEach(function (r) {
+          var id = L.cell(r[L.COL.who_id]);
+          if (!/^[0-9a-f]{64}$/.test(id) && id !== '~' && L.cell(r[L.COL.who])) r[L.COL.who_id] = require('./identity.js').token(salt, L.cell(r[L.COL.who]));
+          r[L.COL.who] = ''; r[L.COL.what] = '';
+        });
         s.learned = [];
         if (s.before) scrub(s.before.state);
       };
@@ -103,9 +120,11 @@ function fileStore(file) {
         // What the earlier run today had recorded, so a run that does not re-read it can say so.
         discarded = state.rows.filter(function (r) { return L.cell(r[L.COL.verdict]); })
           .map(function (r) { return L.cell(r[L.COL.key]); });
-        var keep = state.before, refs = state.refs, since = state.refsSince;
+        var keep = state.before, refs = state.refs, since = state.refsSince, salt = state.identitySalt;
         state = JSON.parse(JSON.stringify(keep.state));
         state.before = keep;
+        // The salt is not part of what a re-run rolls back: a snapshot taken before it was made must not unmake it.
+        if (salt) state.identitySalt = salt;
         /* Except the digests already posted. The earlier run today is rolled back, but its
          * digest is in the DM and may have been answered — by its numbering, not this run's. */
         state.refs = refs;
@@ -116,6 +135,8 @@ function fileStore(file) {
         state.before = { date: date, state: snap };
       }
     },
+
+    identitySalt: ensureSalt,
 
     // Keys that carried a verdict before a same-day re-run rolled the ledger back.
     discardedVerdicts: function () { return discarded.slice(); },

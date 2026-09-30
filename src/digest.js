@@ -414,6 +414,15 @@ function warnings(s) {
   if (b.unmatchedReplies) {
     out.push('NOT APPLIED — a reply could not be matched to a digest (its thread has no reference, or the digest it answers was not read). Reply again under the digest you meant.');
   }
+  /* A correction on an older record that nobody's name is on: kept apart, applied to no one. */
+  (b.ownerUnknown || []).slice(0, 3).forEach(function (u) {
+    out.push(u.people >= 2
+      ? 'NOT MATCHED — an older tracking record matches commitments from ' + u.people + ' different people, and its owner is unknown. Any earlier correction was applied to none of them. Reply to the current digest to correct the one you meant.'
+      : 'NOT CONFIRMED — an older tracking record has no recorded owner, so it was kept separately. Any earlier correction was not applied to the current commitment. Reply to the current digest if that correction still applies.');
+  });
+  if (b.inertReplies) {
+    out.push('NOT APPLIED — this reply refers to an older tracking record whose owner cannot be confirmed. Reply under the current digest to correct the item you mean.');
+  }
   if (b.dmUnreadable) {
     out.push('CORRECTIONS NOT CHECKED — your DM read could not be parsed, so corrections typed since the last digest were not read.');
   }

@@ -65,7 +65,7 @@ assert.throws(function () { fileStore(file); }, /could not be read/,
 
 /* --- the shape is the spreadsheet's, so a ledger can move between runtimes --- */
 var portable = fileStore(path.join(dir, 'portable.json'));
-portable.writeLedger([['k', '', '', '', 'owed_by_us', '', '', '']]);
+portable.writeLedger([['k', '', '', '', 'owed_by_us', '', '', '', '']]);   // the ninth column is who_id
 var raw = JSON.parse(fs.readFileSync(path.join(dir, 'portable.json'), 'utf8'));
 assert.ok(Array.isArray(raw.rows[0]), 'rows stay arrays, matching the sheet layout');
 assert.strictEqual(raw.rows[0].length, L.LEDGER_COLS.length);

@@ -61,4 +61,7 @@ fs.writeFileSync(c, JSON.stringify({ you: 'a@b.co', supporting: [{ label: 'Dana'
 assert.deepStrictEqual(settings(fs, c, {}).supporting, [{ label: 'Dana' }], 'supporting is the config key, and principals in a config file does nothing');
 assert.ok(/In `openloops\.config\.json` it is `"supporting"`/.test(readme) && /a `principals` key there does nothing/.test(readme), 'the README says so');
 
+// The ledger's identity token is disclosed where storeText is explained.
+assert.ok(/With `storeText: false` the ledger also keeps a salted one-way identifier of who said each item, only so that two people's identical sentences stay apart\./.test(skill), 'SKILL.md discloses the identifier');
+
 console.log('docs claims: OK');

@@ -1329,9 +1329,17 @@ function fnv(s) {
 /* The key is the ledger's row id and what a reply's number resolves to. A Slack thread reaches the detector as
  * "<root ts>@<channel>", so the key of a commitment in a thread names its channel too: two channels with the
  * same root and an identical sentence on the same day are two commitments with two keys. */
-function loopKey(l) {
+function baseKey(l) {
   if (l.eventId) return l.type + '|' + l.eventId;
   return [l.type, l.threadId, l.said, fnv(String(l.what || ''))].join('|');
+}
+/* Whose it is, when that matters. src/identity.js decides, once per run, from the ledger: a commitment nobody else shares a key with is
+ * keyed exactly as it always was, so no existing row, digest memo or correction changes. Set by the runner for the length of a run. */
+var identityResolver = null;
+function setIdentityResolver(fn) { identityResolver = fn || null; }
+function loopKey(l) {
+  var base = baseKey(l);
+  return identityResolver && !l.eventId ? identityResolver(base, l.who) : base;
 }
 
 /* The key every ledger row written before keys named a channel has: the same key with the "@channel" taken off
@@ -1339,6 +1347,8 @@ function loopKey(l) {
  * only way to find them, and it can match more than one commitment (see reconcileLegacy in ledger.js). */
 function legacyKey(key) {
   var p = String(key).split('|');
+  // A person-qualified key is the channel-qualified key plus a token: take the token off first, so both era's rows still match.
+  if (p.length === 5 && /^[0-9a-f]{64}(?:~\d+)?$/.test(p[4])) p.pop();
   if (p.length === 4 && /^\d+\.\d+@/.test(p[1])) { p[1] = p[1].slice(0, p[1].indexOf('@')); return p.join('|'); }
   return String(key);
 }

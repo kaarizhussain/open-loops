@@ -38,6 +38,7 @@ var digest = require('./src/digest.js');
 var { readConversation } = require('./src/slack-json.js');
 var { coverage, emptyResponse } = require('./src/slack-coverage.js');
 var { fileStore } = require('./src/store.js');
+var identity = require('./src/identity.js');
 var { parseEvents } = require('./src/calendar.js');
 var { settings, loadConfig, scopeProblems } = require('./src/config.js');
 var outbox = require('./src/outbox.js');
@@ -304,7 +305,12 @@ function checkConfig(configPath) {
   return 'Config OK.';
 }
 
+/* The identity resolver is set for one run and cleared after it, even when the run throws: a later run in the same process must not inherit it. */
 function main(argv) {
+  try { return mainInner(argv); } finally { loops.setIdentityResolver(null); }
+}
+
+function mainInner(argv) {
   var flag = function (name, fallback) {
     var i = argv.indexOf('--' + name);
     return i > -1 && argv[i + 1] ? argv[i + 1] : fallback;
@@ -570,22 +576,37 @@ function main(argv) {
                tempo: L.tempos(rows, 3, cfg.lookbackDays) };
   var result = loops.detectLoops(messages, events, opts);
 
+  /* Whose commitment each one is, before any key is used: two people who say one sentence in one thread on one day share a base key, and
+   * used to share one row. Everything after this — candidates, mutes, the merge, digest order, replies — reads the resolved key. */
+  var identitySalt = store.identitySalt();
+  var ident = identity.apply(rows, identity.pairsFrom(result, loops.baseKey), identitySalt);
+  loops.setIdentityResolver(ident.resolve);
+
   /* Rows written before keys named a channel are matched to today's commitments here, once, before anything is
    * muted or merged. A legacy verdict moves only onto a single match and only when every read was complete;
    * otherwise it is preserved as it was (see reconcileLegacy). Replies already applied above land on the legacy
    * key first, so a correction typed under an old digest is carried over with it. */
   var candidates = [];
-  result.open.forEach(function (l) { candidates.push({ key: loops.loopKey(l), channel: l.subject }); });
+  result.open.forEach(function (l) { candidates.push({ key: loops.loopKey(l), channel: l.subject, who: l.who }); });
   result.closed.forEach(function (l) {
-    candidates.push({ key: loops.loopKey(Object.assign({}, l, { type: l.openType })), channel: l.subject });
-    if (l.byUs) candidates.push({ key: loops.loopKey(Object.assign({}, l, { type: 'agreed_unscheduled' })), channel: l.subject });
+    candidates.push({ key: loops.loopKey(Object.assign({}, l, { type: l.openType })), channel: l.subject, who: l.who });
+    if (l.byUs) candidates.push({ key: loops.loopKey(Object.assign({}, l, { type: 'agreed_unscheduled' })), channel: l.subject, who: l.who });
   });
   var readsOk = failed.length === 0 && unread.length === 0 && shortRead.length === 0 && unfetched.length === 0;
-  var rec = L.reconcileLegacy(rows, candidates, { legacyKey: loops.legacyKey, readsOk: readsOk });
+  var rec = L.reconcileLegacy(rows, candidates, { legacyKey: loops.legacyKey, readsOk: readsOk,
+    owner: function (row) { return identity.ownerOf(row, identitySalt); }, tokenOf: function (who) { return identity.token(identitySalt, who); } });
   store.migrateKeys(rec.renames);
   var ambiguousLegacy = {};
   rec.ambiguous.forEach(function (a) { ambiguousLegacy[a.legacy] = 1; });
   var ambiguousReplies = Object.keys(replies.applied.reduce(function (o, k) { if (ambiguousLegacy[k]) o[k] = 1; return o; }, {})).length;
+  /* Records with a correction and no recorded owner, set aside above (current-format rows by identity.apply, pre-channel rows by
+   * reconcileLegacy). A reply that landed on one of them is reported on its own: it cannot be applied to anyone. */
+  var ownerUnknown = ident.unowned.concat(rec.unowned);
+  var unownedKeys = {};
+  ident.unowned.forEach(function (u) { unownedKeys[u.base] = 1; });
+  rec.unowned.forEach(function (u) { unownedKeys[u.legacy] = 1; });
+  var inertReplies = Object.keys(replies.applied.reduce(function (o, k) { if (unownedKeys[k]) o[k] = 1; return o; }, {})).length;
+  var inertWrong = Object.keys(replies.rejected.reduce(function (o, x) { if (unownedKeys[x.key]) o[x.key] = 1; return o; }, {})).length;
 
   /* What has been muted: what you configured, plus what the tool concluded on its own,
    * minus anything you overruled. `unmute` always wins — a rule the tool taught itself
@@ -658,6 +679,7 @@ function main(argv) {
   Object.keys(bareRoots).forEach(function (r) { if (bareRoots[r]) availableThreads.push(r); });
   var ledger = L.mergeLedger(rows, result.open, today,
                              { storeText: cfg.storeText !== false, mutedKeys: mutedKeys,
+                               identity: { token: function (w) { return identity.token(identitySalt, w); } },
                                windowStart: cut, closedKeys: closedKeys,
                                availableThreads: availableThreads,
                                keepKeys: rec.deferred,
@@ -759,13 +781,14 @@ function main(argv) {
      * assistant is asked "what do I need before this". Same items, read the way you
      * read them the night before. Built and unused until there was a calendar. */
     briefs: loops.meetingBriefs(messages, events, result.open, opts),
-    ledger: ledger, marked: replies.marked, markedWrong: replies.wrong, markedKnew: replies.knew,
+    // A reply that landed on a record nobody owns was applied to no one: it is not acknowledged as if it had been.
+    ledger: ledger, marked: replies.marked - inertReplies, markedWrong: replies.wrong - inertWrong, markedKnew: replies.knew - (inertReplies - inertWrong),
     ref: ref, notReapplied: notReapplied, legacyAmbiguous: rec.ambiguous, legacyReplies: ambiguousReplies, foreignReplies: replies.foreign, massReplies: replies.mass, dmStartedToday: startedToday,
     principals: cfg.supporting,
     muted: muted, mutes: L.suggestMutes(rows).filter(function (s) { return !already[s.phrase]; }),
     learnedNow: fresh, learnedAll: learned,
     spotCheck: sample, recall: score, dark: result.dark, ignoredReplies: replies.ignored,
-    replyKey: replyKey, gapLine: status.gapLine(prevGap), dmLookup: lookup, unmatchedReplies: unmatchedReplies, dmUnreadable: dmUnreadable,
+    replyKey: replyKey, gapLine: status.gapLine(prevGap), dmLookup: lookup, unmatchedReplies: unmatchedReplies, ownerUnknown: ownerUnknown, inertReplies: inertReplies, dmUnreadable: dmUnreadable,
     /* Conversations skipped, not threads. One counter served both, and only the
        conversation count was reduced by it — so skipping a thread under-reported how
        much was read, and enough of them printed a negative number of conversations. */

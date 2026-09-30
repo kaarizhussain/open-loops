@@ -14,7 +14,7 @@
  * one keystroke or it does not get done for a fortnight running.
  */
 
-var LEDGER_COLS = ['key', 'first_seen', 'last_seen', 'gone_on', 'type', 'who', 'what', 'verdict'];
+var LEDGER_COLS = ['key', 'first_seen', 'last_seen', 'gone_on', 'type', 'who', 'what', 'verdict', 'who_id'];
 var COL = {};
 LEDGER_COLS.forEach(function (name, i) { COL[name] = i; });
 
@@ -69,25 +69,37 @@ function isKnown(v) {
  * neither and preserved under "<legacy key>|ambiguous", which no live key can equal, so it is reported once
  * and never matched again. Rows are changed in place; the caller rewrites stored digest memos from .renames. */
 function reconcileLegacy(rows, candidates, o) {
-  var groups = {}, byKey = {}, out = { renames: {}, ambiguous: [], deferred: {} };
+  var groups = {}, byKey = {}, out = { renames: {}, ambiguous: [], deferred: {}, unowned: [] };
   candidates.forEach(function (c) {
     var lk = o.legacyKey(c.key);
     if (lk === c.key) return;
-    var g = groups[lk] = groups[lk] || { keys: {}, channels: {} };
+    var g = groups[lk] = groups[lk] || { keys: {}, channels: {}, people: {}, who: null };
     g.keys[c.key] = 1;
     if (c.channel) g.channels[c.channel] = 1;
+    g.people[String(c.who == null ? '' : c.who).trim().toLowerCase()] = 1;
+    if (g.who === null) g.who = c.who;
   });
   rows.forEach(function (r) { byKey[cell(r[COL.key])] = r; });
   Object.keys(groups).forEach(function (lk) {
     var row = byKey[lk];
     if (!row) return;
     var qs = Object.keys(groups[lk].keys);
+    /* Ownership (o.owner / o.tokenOf, given by the Slack runner). A legacy row with a correction on it and nobody's name is not handed to
+     * whoever appears now, even if only one person does: their appearance does not make the correction theirs. It is kept inert and reported. */
+    var own = o.owner ? o.owner(row) : null;
+    if (own && own.state === 'unknown' && cell(row[COL.verdict])) {
+      out.unowned.push({ legacy: lk, people: Math.max(1, Object.keys(groups[lk].people).length) });
+      row[COL.key] = lk + '|ambiguous';
+      return;
+    }
     if (qs.length > 1) {
       out.ambiguous.push({ legacy: lk, n: qs.length, channels: Object.keys(groups[lk].channels).sort(), verdict: cell(row[COL.verdict]) });
       row[COL.key] = lk + '|ambiguous';
       return;
     }
     if (!o.readsOk) { out.deferred[lk] = 1; return; }
+    // A row that belongs to somebody else is not this commitment's: left as it is, and kept out of "cleared".
+    if (own && own.state === 'known' && o.tokenOf && own.token !== o.tokenOf(groups[lk].who)) { out.deferred[lk] = 1; return; }
     var target = byKey[qs[0]];
     if (!target) {
       row[COL.key] = qs[0];
@@ -106,7 +118,10 @@ function mergeLedger(rows, loops, today, opts) {
   // Retention mode: keep the key and the verdict, drop the words. Suppression still
   // works; what is lost is being able to read back what an item said.
   var keepText = !opts || opts.storeText !== false;
+  var ident = opts && opts.identity;   // { token(who) } — only when the caller keeps people apart (the Slack runner does)
   rows.forEach(function (r) {
+    // Before `who` is scrubbed, an older row's owner is written down as a token: that is all a scrubbed ledger keeps of it.
+    if (ident && !/^[0-9a-f]{64}$/.test(cell(r[COL.who_id])) && cell(r[COL.who_id]) !== '~' && cell(r[COL.who])) r[COL.who_id] = ident.token(cell(r[COL.who]));
     if (!keepText) { r[COL.who] = ''; r[COL.what] = ''; }
     byKey[cell(r[COL.key])] = r;
   });
@@ -116,6 +131,7 @@ function mergeLedger(rows, loops, today, opts) {
     touched[k] = 1;
     // A row a reply created before the item had one (see slack-run's marksFromDm) has no words yet.
     if (row && keepText && !cell(row[COL.what])) { row[COL.who] = l.who || ''; row[COL.what] = l.what || ''; }
+    if (row && ident && !/^[0-9a-f]{64}$/.test(cell(row[COL.who_id]))) row[COL.who_id] = ident.token(l.who);   // a placeholder, or a row with no owner a lone person now continues
 
     if (row && isWrong(row[COL.verdict])) {
       /* Still detected, just hidden — so its clock has to keep running. Leaving
@@ -135,6 +151,7 @@ function mergeLedger(rows, loops, today, opts) {
     } else {
       row = [k, today, today, '', l.type,
              keepText ? (l.who || '') : '', keepText ? (l.what || '') : '', ''];
+      if (ident) row.push(ident.token(l.who));
       byKey[k] = row;
       rows.push(row);
       l.isNew = true;
@@ -531,7 +548,7 @@ function parseMarks(text, max) {
  * appeared in that run has no row yet — and a rejection with no row to land on was
  * dropped without a word. The verdict goes on this; mergeLedger fills in the words. */
 function placeholderRow(key, date) {
-  return [key, date, date, '', String(key).split('|')[0], '', '', ''];
+  return [key, date, date, '', String(key).split('|')[0], '', '', '', '~'];   // '~': it belongs to whoever fills it
 }
 
 function applyMarks(rows, keys, marks) {
