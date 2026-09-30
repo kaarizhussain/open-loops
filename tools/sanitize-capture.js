@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* Turn a real connector capture into a fixture that can be committed.
  *
- *   node tools/sanitize-capture.js --you <email> --self <slack user id> --out <dir> <file>...
+ *   node tools/sanitize-capture.js --you <email> --self <slack user id> --out <dir> [--overwrite] <file>...
  *
  * Replaces identifiers and nothing else: email addresses, Slack ids, and the display
  * names the connector prints on its banners. Message text, timestamps, ordering, thread
@@ -16,6 +16,13 @@
  *
  * The mapping is printed, never written: it is the one thing here holding the real
  * identifiers. Exits non-zero if any of them survives into the output.
+ *
+ * It checks only what it mapped. An email with a character its pattern does not take, a banner with no address or id to
+ * tie a name to, a handle inside a mention, anything else that identifies someone: these pass through, and the run still
+ * succeeds. A successful run does NOT mean a capture is anonymous or safe to publish. Read every output file.
+ *
+ * It never overwrites: two inputs that would write the same file stop the run (--overwrite does not change that), and an
+ * output file that already exists stops it unless --overwrite says replacing it is meant.
  */
 var fs = require('fs');
 var path = require('path');
@@ -27,6 +34,8 @@ var opt = function (k) {
   var i = argv.indexOf('--' + k);
   return i > -1 ? argv.splice(i, 2)[1] : null;
 };
+var overwrite = argv.indexOf('--overwrite') > -1;
+if (overwrite) argv.splice(argv.indexOf('--overwrite'), 1);
 var you = (opt('you') || '').toLowerCase(), self = opt('self'), out = opt('out');
 // Display names that are already invented — test personas — and carry meaning in the text.
 var keep = (opt('keep') || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
@@ -34,6 +43,25 @@ var files = argv;
 if (!you || !self || !out || !files.length) {
   console.error('usage: node tools/sanitize-capture.js --you <email> --self <slack user id> --out <dir> [--keep "Name A,Name B"] <file>...');
   process.exit(2);
+}
+
+/* Checked before anything is read or written. */
+var byName = {};
+files.forEach(function (f) { var n = path.basename(f); (byName[n] = byName[n] || []).push(f); });
+Object.keys(byName).forEach(function (n) {
+  if (byName[n].length > 1) {
+    console.error('sanitize-capture: two inputs would write the same output file "' + n + '" (' + byName[n].join(', ') + '). Nothing was written. Rename one, or run them separately.');
+    process.exit(2);
+  }
+});
+if (!overwrite) {
+  files.forEach(function (f) {
+    var target = path.join(out, path.basename(f));
+    if (fs.existsSync(target)) {
+      console.error('sanitize-capture: ' + target + ' already exists. Nothing was written. Remove it, or pass --overwrite.');
+      process.exit(2);
+    }
+  });
 }
 
 var texts = files.map(function (f) { return fs.readFileSync(f, 'utf8'); });
@@ -104,4 +132,4 @@ if (Object.keys(leaked).length) {
   console.error('LEAKED into the output: ' + Object.keys(leaked).join(', '));
   process.exit(1);
 }
-console.log('wrote ' + files.length + ' file(s) to ' + out);
+console.log('wrote ' + files.length + ' file(s) to ' + out + '. This checks only the identifiers it found. It does not establish the output is safe to publish: read every file before committing it.');

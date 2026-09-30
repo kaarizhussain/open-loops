@@ -68,7 +68,8 @@ This section is the owner's own deployment; someone running their own copy sets 
 - **A channel is not one relationship.** Conversation, ownership and attribution are
   decided per message and per commitment, never per channel.
 - **Nothing real in the public repo.** Captures and fixtures go through
-  `tools/sanitize-capture.js` first; no real emails, Slack IDs or names.
+  `tools/sanitize-capture.js` first; no real emails, Slack IDs or names. The tool replaces only the identifiers it recognises: a
+  successful run does not make a capture anonymous or safe to publish, so read every file before committing it.
 
 ## Changing behaviour
 

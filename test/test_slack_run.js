@@ -126,7 +126,7 @@ var dTs = at(2026, 9, 1, 18);
 var threaded2 = JSON.parse(JSON.stringify(input));
 threaded2.today = '2026-09-02';
 threaded2.dm = { channel: 'D0', text: me(dTs, '```\n' + tBrief + '\n```') };
-threaded2.dmThread = { text: threadRead(dTs, '```\n' + tBrief + '\n```', [
+threaded2.dmThread = { root: dTs, text: threadRead(dTs, '```\n' + tBrief + '\n```', [
   [at(2026, 9, 1, 18) .replace(/\.0+$/, '.000100'), '```\n' + tDetails + '\n```'],
   // Its own timestamp: the '1' in input.dm above is a different message, under another
   // ledger's digest, and a reply is recognised by its timestamp.
@@ -147,7 +147,7 @@ var sFirst = main([write(input), '--ledger', sLedger]);
 var sBrief = sFirst.split('-- thread --')[0].trim(), sDetails = sFirst.split('-- thread --')[1].trim();
 var since = JSON.parse(JSON.stringify(input));
 since.today = '2026-09-02';
-since.dmThread = { text: threadRead(dTs, '```\n' + sBrief + '\n```', [
+since.dmThread = { root: dTs, text: threadRead(dTs, '```\n' + sBrief + '\n```', [
   [at(2026, 9, 1, 18).replace(/\.0+$/, '.000100'), '```\n' + sDetails + '\n```']
 ]) };
 since.dm = { channel: 'D0', text: [

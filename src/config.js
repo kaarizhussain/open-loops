@@ -85,6 +85,17 @@ function loadConfig(fs, path) {
  * misspelled key, a string where a list belongs. Scope is default-allow, so the mistake
  * that looks like it worked is the one that reads the channel you excluded. */
 var SCOPE_KEYS = { include: 1, exclude: 1, only: 1 };
+/* What a channel pattern may be: a name, or a name with one * at the end. Anything else used to be accepted and matched nothing,
+ * so an exclude like "*-private" excluded nothing and the channel was read. */
+function patternProblem(p) {
+  if (p !== p.trim()) return 'has leading or trailing spaces';
+  if (p.replace(/^#/, '') === '') return 'is empty';
+  var star = p.indexOf('*');
+  if (star > -1 && (star !== p.length - 1 || p.replace(/^#/, '') === '*')) {
+    return 'is not supported — a * is only allowed at the end ("team-*")';
+  }
+  return null;
+}
 function scopeProblems(scope, label) {
   if (!scope || typeof scope !== 'object' || Array.isArray(scope)) {
     return [label + ' must be an object like {"exclude": ["#name"]}, got ' + JSON.stringify(scope)];
@@ -94,6 +105,9 @@ function scopeProblems(scope, label) {
     if (!SCOPE_KEYS[k]) out.push(label + ' has an unknown key "' + k + '" — only include, exclude and only do anything');
     else if (!Array.isArray(scope[k]) || !scope[k].every(function (x) { return typeof x === 'string'; })) {
       out.push(label + '.' + k + ' must be a list of channel names, got ' + JSON.stringify(scope[k]));
+    } else {
+      var nm = label.slice(-1) === '"' ? label.slice(0, -1) + '.' + k + '"' : label + '.' + k;
+      scope[k].forEach(function (p) { var why = patternProblem(p); if (why) out.push(nm + ' entry "' + p + '" ' + why); });
     }
   });
   return out;

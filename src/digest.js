@@ -402,6 +402,10 @@ function warnings(s) {
   var b = s.b, read = s.read, out = [];
   /* The earlier digest could not be found, so the corrections typed under it were not read. Said outright: a run that
    * cannot tell a first run from a search that gave out would otherwise look like one. */
+  /* A reply that cannot be tied to the digest it answers applies no correction: guessing rejects the wrong item. */
+  if (b.unmatchedReplies) {
+    out.push('NOT APPLIED — a reply could not be matched to a digest (its thread has no reference, or the digest it answers was not read). Reply again under the digest you meant.');
+  }
   if (b.dmLookup) {
     out.push('CORRECTIONS NOT CHECKED — the earlier digest could not be located within the available DM history' +
       (b.dmLookup === 'cannot_page' ? ' (this connector cannot page it)' : '') + '. Earlier corrections may not have been reapplied.');
@@ -534,7 +538,11 @@ function renderBrief(s) {
   var t0 = utc(today);
   p('OPEN LOOPS — for ' + today + (isNaN(t0) ? '' : ' · ' + DOW[t0.getUTCDay()]) +
     (b.ref ? ' · ref ' + b.ref : ''));
-  p(counts(s));
+  /* An empty list from a read that did not finish is not a clear list. Said in the brief itself, where the reader looks,
+   * not only in a warning count below it. */
+  var rd = s.read, readShort = !s.open.length && !s.blind && !s.unread0 &&
+    !!((rd.shortRead || []).length || rd.capped || (rd.failed || []).length || rd.unfetchedThreads || (rd.unread || []).length || rd.calendarError);
+  p(counts(s) + (readShort ? ' · read incomplete' : ''));
   if (b.gapLine) p(b.gapLine);
   if (s.blind) {
     p('READ NOTHING — ' + s.read.threads + ' conversation' + (s.read.threads === 1 ? ' was' : 's were') +
@@ -546,7 +554,7 @@ function renderBrief(s) {
       ' skipped by your channel settings and none was read.' : 'no conversation was handed over to read.') +
       ' This does not establish that the day was quiet. Treat the empty list below as unknown rather than clear.');
   } else if (!s.open.length) {
-    p(headline(s.open, b.source));
+    p(readShort ? 'Nothing found in what was read — but the read was INCOMPLETE. Do not treat this as clear.' : headline(s.open, b.source));
   }
   /* Say the reply landed. Correcting something and seeing no acknowledgement is how
    * a reader learns the correction does not matter, and then they stop sending them. */

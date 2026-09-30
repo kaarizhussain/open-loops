@@ -102,7 +102,7 @@ function inScope(name, scope) {
  * forever, and re-applying it against a later, shorter list marks different items. */
 function marksFromDm(messages, store, rows) {
   var seen = store.seenReplies(), known = {}, marked = 0, wrong = 0, knew = 0, cur = null;
-  var misses = [], checked = 0, ignored = [], rejected = [], spot = [], counted = {}, foreign = [], dates = [], byRoot = {}, mass = [], applied = [];
+  var misses = [], checked = 0, ignored = [], rejected = [], spot = [], counted = {}, foreign = [], dates = [], byRoot = {}, mass = [], applied = [], orphans = [];
   var since = store.refsSince ? store.refsSince() : null;
   seen.forEach(function (id) { known[id] = 1; });
 
@@ -124,7 +124,10 @@ function marksFromDm(messages, store, rows) {
      * is placed by time. One whose parent digest was not read cannot be resolved at all. */
     var inThread = /^\d+\.\d+$/.test(String(m.threadId || ''));
     var memo = inThread ? byRoot[m.threadId] : cur;
-    if (!memo || known[m.id]) return;
+    /* A thread reply whose digest was not read is not placed by time against some other digest: it is counted, applies nothing,
+     * and is reported. */
+    if (!memo) { if (inThread && !known[m.id]) orphans.push(m.id); return; }
+    if (known[m.id]) return;
     var forDate = memo.date, keys = memo.keys, asked = memo.asked;
 
     /* Under a digest this ledger did not produce. Its numbers belong to somebody else's
@@ -196,7 +199,7 @@ function marksFromDm(messages, store, rows) {
   });
 
   return { marked: marked, wrong: wrong, knew: knew, seen: seen, misses: misses, checked: checked,
-           ignored: ignored, foreign: foreign, dates: dates, mass: mass, rejected: rejected, spot: spot, applied: applied };
+           ignored: ignored, foreign: foreign, dates: dates, mass: mass, rejected: rejected, spot: spot, applied: applied, orphaned: orphans };
 }
 
 /* Which numbered list a digest header refers to.
@@ -290,6 +293,17 @@ function report(ledgerPath) {
   return out.join('\n');
 }
 
+/* Whether the configuration can be used at all, before anything is fetched. The runner only sees a scope rule after the
+ * conversations it covers were already fetched, so a malformed one has to be caught here. */
+function checkConfig(configPath) {
+  try { settings(fs, configPath, {}); }
+  catch (e) {
+    var why = String(e.message).replace(/^Config is incomplete:\s*/, '').split(String.fromCharCode(10)).map(function (x) { return x.trim(); }).filter(Boolean).join('; ');
+    throw new Error('Config is unusable: ' + why.replace(/[.]$/, '') + '. Fix the configuration before fetching or running a digest.');
+  }
+  return 'Config OK.';
+}
+
 function main(argv) {
   var flag = function (name, fallback) {
     var i = argv.indexOf('--' + name);
@@ -305,6 +319,7 @@ function main(argv) {
       'off to use ./openloops.config.json: running without the file you meant would read channels it excludes.');
   }
 
+  if (argv[0] === '--check-config') return checkConfig(configPath);
   if (argv[0] === '--report') {
     var rc = settings(fs, configPath, { you: 'report@localhost' });
     return report(flag('ledger', rc.ledger));
@@ -489,14 +504,24 @@ function main(argv) {
    * as yesterday's, because both may have been answered. */
   var inDm = {};
   dmMessages.forEach(function (m) { inDm[m.id] = 1; });
+  /* A thread read with no valid root cannot be tied to the digest it answers. Its replies used to be placed by time against
+   * whichever digest came last, and a "2" typed under yesterday's list rejected today's item 2. They are counted and applied
+   * to nothing; the digest says so. */
+  var unmatched = 0;
   [].concat(input.dmThread || []).forEach(function (t) {
+    var rooted = /^\d+\.\d+$/.test(String((t && t.root) || ''));
     readConversation(t, { channel: 'DM', threadId: t.root, tzOffset: cfg.tzOffset,
       self: cfg.you, selfUid: cfg.selfUid || cfg.selfDm, users: input.users }).forEach(function (m) {
+      if (!rooted && !/^\d+\.\d+$/.test(String(m.threadId || ''))) {   // a thread read that names its own parent still resolves
+        if (!GENERATED_HEADER.test(m.body) && !DIGEST_HEADER.test(m.body) && !DIGEST_BODY.test(m.body)) unmatched++;
+        return;
+      }
       if (!inDm[m.id]) { inDm[m.id] = 1; dmMessages.push(m); }
     });
   });
   dmMessages.sort(function (a, b) { return parseFloat(a.id) - parseFloat(b.id); });
   var replies = marksFromDm(dmMessages, store, rows);
+  var unmatchedReplies = unmatched + replies.orphaned.length;
   /* A same-day re-run starts from before the first run, so a correction applied by the first
    * run is gone unless this run reads that reply again. Say so instead of relisting the item. */
   var carried = {};
@@ -726,7 +751,7 @@ function main(argv) {
     muted: muted, mutes: L.suggestMutes(rows).filter(function (s) { return !already[s.phrase]; }),
     learnedNow: fresh, learnedAll: learned,
     spotCheck: sample, recall: score, dark: result.dark, ignoredReplies: replies.ignored,
-    replyKey: replyKey, gapLine: status.gapLine(prevGap), dmLookup: lookup,
+    replyKey: replyKey, gapLine: status.gapLine(prevGap), dmLookup: lookup, unmatchedReplies: unmatchedReplies,
     /* Conversations skipped, not threads. One counter served both, and only the
        conversation count was reduced by it — so skipping a thread under-reported how
        much was read, and enough of them printed a negative number of conversations. */

@@ -415,7 +415,7 @@ function stamp(iso) {
 function attemptLine(a, delivered) {
   if (!a) return 'none recorded';
   var when = stamp(a.startedAt);
-  if (a.outcome === 'delivered') return delivered && delivered.ref === a.ref ? 'the same one' : when + ' — delivered';
+  if (a.outcome === 'delivered') return delivered && a.endedAt && a.endedAt === delivered.at ? 'the same one' : when + ' — delivered';
   var note = { pending: 'A notice was generated but not confirmed posted.', posted: 'A notice was posted to your DM.',
                rejected: 'Slack rejected the notice, so it was not posted.', unknown: 'Whether the notice posted is unknown.' }[a.notice] || '';
   var ref = a.ref ? ' (ref ' + a.ref + ')' : '';
@@ -449,7 +449,7 @@ function view(dir, cfg, sched, now, scope) {
   }
   var dv = s.delivered;
   if (dv) {
-    L('Last delivered digest', stamp(dv.at) + ' · ref ' + dv.ref + '\nbrief and details posted; brief verified\n' + readLine(dv));
+    L('Last delivered digest', stamp(dv.at) + (dv.ref ? ' · ref ' + dv.ref : ' · ref not recorded') + '\nbrief and details posted; brief verified\n' + readLine(dv));
   } else L('Last delivered digest', 'No verified delivery recorded by status tracking yet');
   L('Last attempt', attemptLine(s.attempt, dv));
   var g = gap(dir, today);

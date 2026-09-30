@@ -139,7 +139,11 @@ support one or more executives, take names, and addresses if they have them.
 }
 ```
 
-Everything else has a working default. Do not write settings they did not ask for —
+Everything else has a working default.
+
+Then run `node <checkout>/slack-run.js --check-config --config <working dir>/openloops.config.json`; it must print `Config OK.` before anything is fetched.
+
+Do not write settings they did not ask for —
 a config full of defaults is one nobody can tell they have edited.
 
 Don't ask about it, but if they mention clients or people who matter most, add them as
@@ -245,6 +249,15 @@ node <checkout>/tools/report.js --consent --yes --config <working dir>/openloops
 `diagnostics` record by hand; only `--consent` makes one.
 
 ## Running the digest
+
+**Check the configuration.** Before anything is fetched, run
+
+```bash
+node <checkout>/slack-run.js --check-config --config <working dir>/openloops.config.json
+```
+
+It prints `Config OK.`, or `Config is unusable: …`. On the second, stop and tell the user what it says: the configuration has to be fixed
+before fetching or running a digest. It cannot tell what was already fetched, so do not fetch first and check afterwards.
 
 **Begin the attempt.** A real run starts, before anything is fetched, with
 
