@@ -96,6 +96,7 @@ var quiet = function (edit, cfgExtra) {
 var seed = main([write(base('2026-09-01')), '--config', cfgFile({}), '--ledger', path.join(dir, 'blind.json')]);
 assert.ok(/scope doc/.test(seed), 'precondition: the ledger tracks items');
 var none = quiet(function (i) { i.conversations = []; });
+assert.ok(/READ NOTHING — no conversation was handed over to read. This does not establish that the day was quiet. Treat the empty list below as unknown rather than clear./.test(none), 'the exact wording');
 assert.ok(/READ NOTHING/.test(none) && !/Genuinely/.test(none), 'no conversations handed over: ' + none.split(String.fromCharCode(10)).slice(0, 4).join(' | '));
 var noneKey = quiet(function (i) { delete i.conversations; });
 assert.ok(/READ NOTHING/.test(noneKey) && !/Genuinely/.test(noneKey), 'no conversations key at all');

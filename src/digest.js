@@ -523,7 +523,7 @@ function renderBrief(s) {
   } else if (s.unread0) {
     p('READ NOTHING — ' + (s.read.skipped ? s.read.skipped + ' conversation' + (s.read.skipped === 1 ? ' was' : 's were') +
       ' skipped by your channel settings and none was read.' : 'no conversation was handed over to read.') +
-      ' This is not a quiet day. Treat the empty list below as unknown rather than clear.');
+      ' This does not establish that the day was quiet. Treat the empty list below as unknown rather than clear.');
   } else if (!s.open.length) {
     p(headline(s.open, b.source));
   }
