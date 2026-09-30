@@ -353,6 +353,17 @@ runner output, unchanged, and say in the notes that the first post was wrong. Ne
 the posted text to fix it. The header is how the next run finds this digest and matches
 replies to it (2026-09-28: a post that lost it was invisible to the next run).
 
+**Then record the baseline**, only when the brief read back correctly:
+
+```bash
+node <checkout>/tools/alerts.js --baseline --ref <the ref in the digest's header> --config <working dir>/openloops.config.json
+```
+
+The run only stages what this digest showed; this makes it the baseline that midday checks compare
+against, because that is now what the reader has seen. If the post failed or the read-back differed,
+do not run it: the next digest stages its own, and a check that finds no baseline skips instead of
+comparing against a list the reader never saw.
+
 Anything else you post under the digest — something that looked wrong, a source you
 fetched again — goes in the same thread, as one message whose first line is exactly
 `OPEN LOOPS NOTES — for <YYYY-MM-DD>`. The next run reads that thread for the reader's

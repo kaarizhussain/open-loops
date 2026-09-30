@@ -2,6 +2,7 @@
 /* Midday alerts: which run this is, consent, and confirming an alert was posted.
  *
  *   node tools/alerts.js --which --config <config>     CHECK <slot> <date> | SKIP — why | OFF — why
+ *   node tools/alerts.js --baseline --ref <ref> --config <config>   the digest is posted and read back: its baseline
  *   node tools/alerts.js --confirm --config <config>   the alert is in the DM: remember it
  *   node tools/alerts.js --consent --config <config>   show the consent question, record nothing
  *   node tools/alerts.js --consent --yes --config <c>  they said yes: alerts on
@@ -10,8 +11,8 @@
  *   node tools/alerts.js --status --config <config>
  *
  * No network, and it reads no Slack: `--which` decides from the clock and one local file, so a
- * run that has nothing to do fetches nothing. It is for the checks task only; the evening digest
- * is another task and never asks. `--now YYYY-MM-DDTHH:MM` (local time) is for tests.
+ * run that has nothing to do fetches nothing. It is for the checks task, except `--baseline`, which
+ * is the evening digest task's, once its digest is posted and read back. `--now YYYY-MM-DDTHH:MM` (local time) is for tests.
  */
 var fs = require('fs');
 var path = require('path');
@@ -66,6 +67,11 @@ function main(argv) {
       (s.baseline ? 'digest of ' + s.baseline.date : 'none yet') + '.'
       : 'Alerts off' + (cfg.alerts && cfg.alerts.offAt ? ' (turned off ' + cfg.alerts.offAt.slice(0, 10) + ').'
         : cfg.alerts && cfg.alerts.offeredAt ? ' (offered ' + cfg.alerts.offeredAt.slice(0, 10) + ', declined).' : '.');
+  }
+  if (has('baseline')) {
+    var b = A.promoteBaseline(dir, flag('ref'));
+    return b ? 'Baseline recorded for the digest of ' + b.date + '.'
+      : 'Nothing staged for that ref: no baseline was written.';
   }
   if (has('confirm')) {
     return A.confirm(dir) ? 'Confirmed: the alert is recorded, and its slot is done.' : 'Nothing pending.';

@@ -26,7 +26,9 @@ This section is the owner's own deployment; someone running their own copy sets 
     closed, a long digest, a run started by hand. So each state file has one writer, and
     neither task reads the other's file in order to write its own:
     - `alerts-baseline.json`, written by the digest only, holds what the digest showed,
-      under a new version at every digest.
+      under a new version at every digest. The run only stages it (`alerts-baseline.next.json`);
+      `tools/alerts.js --baseline --ref <ref>` promotes it once the digest is posted and read
+      back, so the baseline is what the reader was shown, never a digest that failed to post.
     - `alerts.json`, written by the checks only, holds what they alerted and which slots
       ran, tagged with the baseline version they compared against. When that version is no
       longer the baseline's, the alerts it recorded are void and start again. The slots that
@@ -39,7 +41,7 @@ This section is the owner's own deployment; someone running their own copy sets 
       the next check can post the same items again. That is accepted, and the consent text
       says so; do not "fix" it by confirming before the post, which loses alerts instead.
 - Every other agent — Codex included — runs the digest with `--dry`, does not run `--check`
-  or `tools/alerts.js --confirm`, and never posts, until the owner changes this line.
+  or `tools/alerts.js --confirm` or `--baseline`, and never posts, until the owner changes this line.
 - Two setups posting from two ledgers put two numbered lists in one DM, and a reply
   meant for one lands on the other (2026-09-22). Alerts carry no numbers and no reference,
   so they cannot collide that way.

@@ -661,13 +661,14 @@ function main(argv) {
     store.rememberDigest(today, keys);
     store.rememberRef(ref, today, keys, sample.map(function (m) { return m.id; }));
     store.rememberReplies(replies.seen);
-    /* What this digest showed, for the next midday check to compare against, in its own file
-     * that only the digest writes. Written for everyone: it is a small file of keys and levels,
-     * inert until the reader opts in, and it is what lets a check run the same day they say
-     * yes. It must never cost the digest. */
-    // Beside a config only: a run with none has nowhere to keep it, and must not litter the working directory.
+    /* What this digest showed, for the next midday check to compare against. Staged, not
+     * written: nothing has been posted yet, and the baseline is what the reader was shown.
+     * tools/alerts.js --baseline --ref <ref> promotes it once the digest is read back. Kept for
+     * everyone — a small file of keys and levels, inert until they opt in — and it must never
+     * cost the digest. Beside a config only: a run with none has nowhere to keep it, and must
+     * not litter the working directory. */
     if (fs.existsSync(configPath)) {
-      try { alerts.writeBaseline(reportDir, result.open, today); } catch (e) { /* the next digest writes it */ }
+      try { alerts.stageBaseline(reportDir, result.open, today, ref); } catch (e) { /* the next digest stages it */ }
     }
     if (fresh.length) store.remember(fresh);
     if (replies.checked || replies.misses.length) {

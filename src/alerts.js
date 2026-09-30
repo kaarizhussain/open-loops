@@ -74,6 +74,7 @@ function addDays(date, n) {
 
 function file(dir) { return path.join(dir, 'alerts.json'); }                  // the checks task's
 function baselineFile(dir) { return path.join(dir, 'alerts-baseline.json'); }  // the digest's
+function stagedFile(dir) { return path.join(dir, 'alerts-baseline.next.json'); }  // the digest's, until it is posted
 
 /* The other task may have this file open or be renaming over it at this moment. On Windows that
  * fails with EPERM/EBUSY/EACCES instead of waiting, so those are retried briefly. */
@@ -148,9 +149,30 @@ function baselineOf(open, today) {
   return { date: today, items: items };
 }
 
-/* Called by the digest run, after it has posted: what it showed becomes the baseline, under a new
- * version. Anything alerted since is now part of it, and the checks task sees the new version and
- * starts its own record again. This is the only writer of the baseline file, and it touches nothing else. */
+/* What the digest showed, kept aside under the digest's own reference until that digest is posted and
+ * read back. The runner only prints the digest: nothing has reached the reader yet, so the checks
+ * must not compare against it (a post that fails or comes back wrong would move the baseline to a
+ * list the reader never saw, and every check after it would alert on the wrong changes). */
+function stageBaseline(dir, open, today, ref) {
+  var b = baselineOf(open, today);
+  b.ref = ref;
+  writeJson(stagedFile(dir), b);
+}
+
+/* Called once the digest is in the DM and read back: that digest's baseline becomes the baseline, under
+ * a new version. Anything alerted since is now part of it, and the checks task sees the new version and
+ * starts its own record again. Only the digest that was staged can be promoted: a ref that is not the
+ * staged one promotes nothing. This and stageBaseline are the only writers of the baseline files. */
+function promoteBaseline(dir, ref) {
+  var s = readJson(stagedFile(dir));
+  if (!ref || s.ref !== ref || !s.items || typeof s.items !== 'object') return null;
+  var b = { date: s.date, items: s.items, version: crypto.randomBytes(8).toString('hex') };
+  writeJson(baselineFile(dir), b);
+  try { retry(function () { fs.unlinkSync(stagedFile(dir)); }); } catch (e) { /* a leftover is harmless: it is consumed by ref */ }
+  return b;
+}
+
+/* Kept for callers that already know the digest was posted. */
 function writeBaseline(dir, open, today) {
   var b = baselineOf(open, today);
   b.version = crypto.randomBytes(8).toString('hex');
@@ -283,6 +305,7 @@ function confirm(dir, stamp) {
 module.exports = {
   DEFAULT_TIMES: DEFAULT_TIMES, LATE_MINUTES: LATE_MINUTES, MAX_ITEMS: MAX_ITEMS,
   consent: consent, level: level, evaluate: evaluate, decide: decide, render: render,
-  check: check, confirm: confirm, writeBaseline: writeBaseline, baselineOf: baselineOf,
+  check: check, confirm: confirm, writeBaseline: writeBaseline, stageBaseline: stageBaseline,
+  promoteBaseline: promoteBaseline, baselineOf: baselineOf, stagedFile: stagedFile,
   load: load, save: save, file: file, baselineFile: baselineFile, parseNow: parseNow, localParts: localParts, addDays: addDays
 };

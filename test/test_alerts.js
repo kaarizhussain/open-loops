@@ -327,7 +327,13 @@ assert.ok(!fs.existsSync(A.baselineFile(rdir)) && !fs.existsSync(A.file(rdir)), 
 assert.ok(/^SKIP — no digest baseline yet/.test(cli.main(['--which', '--now', '2026-10-01T09:05', '--config', cfgPath])), 'no digest has run yet, so there is nothing to compare with');
 
 // The evening digest writes it.
+/* A digest run only stages its baseline; it is promoted once the digest is posted and read back. */
+var posted = function (t) {
+  return cli.main(['--baseline', '--ref', (t.split(String.fromCharCode(10))[0].match(/ref ([0-9a-f]{4})/) || [])[1], '--config', cfgPath]);
+};
 var digest1 = main([input('2026-09-30'), '--config', cfgPath]);
+assert.ok(!fs.existsSync(A.baselineFile(rdir)), 'the run itself writes no baseline');
+posted(digest1);
 var b = A.load(rdir).baseline;
 assert.strictEqual(b.date, '2026-09-30');
 assert.deepStrictEqual(Object.keys(b.items).map(function (k) { return b.items[k]; }).sort(), [0, 1, 2],
@@ -395,6 +401,7 @@ var alertMsg = me(at(10, 1, 13), [
   'Next check 12:00. Tonight\'s digest will number these; reply there to correct them.'].join('\n'));
 fs.rmSync(ledger); fs.rmSync(A.file(rdir), { force: true }); fs.rmSync(A.baselineFile(rdir));
 var d1 = main([input('2026-09-30'), '--config', cfgPath]);
+posted(d1);
 var refOf = function (t) { return (t.split('\n')[0].match(/· ref ([0-9a-f]{4})$/) || [])[1]; };
 var dm2 = me(at(9, 30, 22), '```\n' + d1 + '\n```') + '\n' + alertMsg;
 // Something alerted before this digest: the digest's baseline already contains it, so the record starts again.
@@ -402,6 +409,7 @@ var st = A.load(rdir); st.alerted = { 'some|key': 3 }; st.pending = { date: '202
 A.save(rdir, st);
 assert.deepStrictEqual(Object.keys(A.load(rdir).alerted), ['some|key'], 'the record is there before the digest');
 var d2 = main([input('2026-10-01', fresh, dm2), '--config', cfgPath]);
+posted(d2);
 var rows = JSON.parse(fs.readFileSync(ledger, 'utf8')).rows;
 assert.ok(rows.length >= 3 && rows.every(function (r) { return !r[L.COL.verdict]; }), 'an alert in the DM rejects nothing: ' + JSON.stringify(rows.map(function (r) { return r[7]; })));
 assert.ok(!/Took your last reply|NOT APPLIED/.test(d2), 'and is not read as a reply at all');
