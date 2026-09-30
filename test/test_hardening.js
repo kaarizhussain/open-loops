@@ -43,6 +43,7 @@ var base = function (today) {
     dm: { channel: 'D0', text: '' }
   };
 };
+var NOT_READ = function (label) { return 'NOT READ — ' + label + ' could not be parsed. Its tracked items remain open but were not verified this run.'; };
 var rowsOf = function (f) { return JSON.parse(fs.readFileSync(f, 'utf8')).rows; };
 var verdicts = function (f) { return rowsOf(f).map(function (r) { return r[7] || ''; }).join(','); };
 
@@ -303,7 +304,8 @@ main([write(base('2026-09-01')), '--ledger', path.join(dir, 'shape-old.json')]);
   var broken;
   try { broken = withOdd([{ ts: 'broken', user: 'U0AAA', text: 'x' }], led); } finally { process.stderr.write = realErr; }
   assert.ok(broken.indexOf('scope doc') > -1, 'the other conversations are still in the digest');
-  assert.ok(broken.indexOf('NOTHING READ IN #odd') > -1, 'the failed one is named in the existing unread warning');
+  assert.ok(broken.indexOf(NOT_READ('#odd')) > -1, 'the failed one is named, in the agreed words');
+  assert.ok(broken.indexOf('NOTHING READ IN #odd') === -1, 'and not also reported as an empty read');
   assert.ok(/#odd was not read: Invalid Slack message/.test(stderrOf.join('')), 'and its reason goes to stderr: ' + stderrOf.join(''));
   assert.ok(broken.indexOf('CLEARED SINCE THE LAST RUN') === -1 || broken.split('CLEARED SINCE THE LAST RUN')[1].indexOf('odd-channel deck') === -1,
     'and what it held is not reported cleared just because it could not be read');
@@ -313,7 +315,7 @@ main([write(base('2026-09-01')), '--ledger', path.join(dir, 'shape-old.json')]);
   var t = base('2026-09-01');
   t.threads = [{ channel: '#halcyon', root: '1788000500.000100', messages: [{ ts: 'nope', user: 'U0AAA', text: 'x' }] }];
   var tout = main([write(t), '--ledger', path.join(dir, 'oddthread.json'), '--dry']);
-  assert.ok(tout.indexOf('scope doc') > -1 && tout.indexOf('NOTHING READ IN #halcyon thread') > -1, 'a bad thread read is named and skipped');
+  assert.ok(tout.indexOf('scope doc') > -1 && tout.indexOf(NOT_READ('#halcyon thread 1788000500.000100')) > -1, 'a bad thread read is named and skipped');
 })();
 
 console.log('hardening: OK');

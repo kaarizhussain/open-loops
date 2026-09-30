@@ -446,6 +446,10 @@ function warnings(s) {
       ' — either nobody has posted there, or the read came back empty. Those look the' +
       ' same from here, and only one of them is fine.');
   }
+  /* A conversation the parser refused. Its items are still tracked and were not checked against it. */
+  (read.failed || []).forEach(function (label) {
+    out.push('NOT READ — ' + label + ' could not be parsed. Its tracked items remain open but were not verified this run.');
+  });
   /* Reads whose copied pagination evidence is missing, unrecognized, or partial.
    * This is source-specific: missing history in one channel cannot make another
    * channel's ledger rows uncertain. */

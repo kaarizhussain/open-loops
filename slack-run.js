@@ -358,7 +358,7 @@ function main(argv) {
    * messages with the same one. Keyed by timestamp alone the second silently replaced the first. A thread read
    * still replaces its own root, because it shares that root's channel. */
   var slot = function (channel, ts) { return channel + String.fromCharCode(0) + ts; };
-  var byId = {}, roots = {}, skipped = 0, skippedThreads = 0, unread = [], orderSuspect = [];
+  var byId = {}, roots = {}, skipped = 0, skippedThreads = 0, unread = [], failed = [], orderSuspect = [];
   var window = cfg.lookbackDays;
   var cut = window ? new Date(new Date(today + 'T00:00:00Z') - window * 864e5).toISOString().slice(0, 10) : null;
   var sourceCoverage = {}, coverageParent = {}, coverageLabel = {};
@@ -388,10 +388,10 @@ function main(argv) {
       });
     } catch (e) {
       /* One conversation the parser refuses is that conversation's problem. It used to throw out of the
-       * whole run, so every other channel went unread too and nothing was posted. It is reported as
-       * unread, with no coverage recorded, so what it held stays not-verified instead of reading as
+       * whole run, so every other channel went unread too and nothing was posted. It is reported by
+       * name, with no coverage recorded, so what it held stays not-verified instead of reading as
        * cleared. The reason goes to stderr: it names a field and a timestamp, never message text. */
-      unread.push(c.channel);
+      failed.push(c.channel);
       process.stderr.write('open-loops: ' + c.channel + ' was not read: ' + e.message + String.fromCharCode(10));
       return;
     }
@@ -429,7 +429,7 @@ function main(argv) {
         tzOffset: cfg.tzOffset, self: cfg.you, selfUid: cfg.selfUid || cfg.selfDm, users: input.users
       });
     } catch (e) {
-      unread.push(t.channel + ' thread ' + t.root);
+      failed.push(t.channel + ' thread ' + t.root);
       process.stderr.write('open-loops: ' + t.channel + ' thread ' + t.root + ' was not read: ' + e.message + String.fromCharCode(10));
       return;
     }
@@ -676,7 +676,7 @@ function main(argv) {
        conversation count was reduced by it — so skipping a thread under-reported how
        much was read, and enough of them printed a negative number of conversations. */
     read: { orderSuspect: orderSuspect, widenedStore: widenedStore, threads: convs.length - skipped, confirmedEmpty: confirmedEmpty,
-            capped: shortRead.length > 0, shortRead: shortRead, unread: unread,
+            capped: shortRead.length > 0, shortRead: shortRead, unread: unread, failed: failed,
             calendarError: calendarError,
             windowStart: cut,
             unfetchedThreads: unfetched.length,
