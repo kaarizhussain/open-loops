@@ -40,7 +40,7 @@ var { coverage, emptyResponse } = require('./src/slack-coverage.js');
 var { fileStore } = require('./src/store.js');
 var identity = require('./src/identity.js');
 var { parseEvents } = require('./src/calendar.js');
-var { settings, loadConfig, scopeProblems } = require('./src/config.js');
+var { settings, loadConfig, scopeProblems, configError } = require('./src/config.js');
 var outbox = require('./src/outbox.js');
 var alerts = require('./src/alerts.js');
 var status = require('./src/status.js');
@@ -300,7 +300,7 @@ function checkConfig(configPath) {
   try { settings(fs, configPath, {}); }
   catch (e) {
     var why = String(e.message).replace(/^Config is incomplete:\s*/, '').split(String.fromCharCode(10)).map(function (x) { return x.trim(); }).filter(Boolean).join('; ');
-    throw new Error('Config is unusable: ' + why.replace(/[.]$/, '') + '. Fix the configuration before fetching or running a digest.');
+    throw configError('Config is unusable: ' + why.replace(/[.]$/, '') + '. Fix the configuration before fetching or running a digest.');
   }
   return 'Config OK.';
 }
@@ -321,7 +321,7 @@ function mainInner(argv) {
    * real file excluded. Only the explicit flag stops the run. */
   var explicit = argv.indexOf('--config');
   if (explicit > -1 && !(argv[explicit + 1] && fs.existsSync(argv[explicit + 1]))) {
-    throw new Error('--config ' + (argv[explicit + 1] || '(no path)') + ' does not exist. Fix the path, or leave --config ' +
+    throw configError('--config ' + (argv[explicit + 1] || '(no path)') + ' does not exist. Fix the path, or leave --config ' +
       'off to use ./openloops.config.json: running without the file you meant would read channels it excludes.');
   }
 
@@ -902,7 +902,7 @@ if (require.main === module) {
   } catch (e) {
     queueCrash(process.argv.slice(2), e);
     console.error('open-loops: ' + e.message);
-    process.exit(1);
+    process.exit(e && e.exitCode || 1);    // 3: the configuration cannot be used · 4: the ledger cannot be read · 1: anything else
   }
 }
 

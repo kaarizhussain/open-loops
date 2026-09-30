@@ -81,7 +81,7 @@ BAD.forEach(function (c) {
   writeCfg(c[0]);
   assert.throws(function () { settings(fs, cfgPath, {}); }, function (e) { return e.message.indexOf(c[1]) > -1; }, 'settings refuses ' + c[1]);
   var r = run('slack-run.js', ['--check-config', '--config', cfgPath]);
-  assert.strictEqual(r.status, 1, c[1]);
+  assert.strictEqual(r.status, 3, c[1] + ' (3: the configuration cannot be used)');
   assert.strictEqual(r.stderr.trim(), 'open-loops: Config is unusable: ' + c[1] + '. Fix the configuration before fetching or running a digest.');
   assert.ok(!/Nothing was fetched/.test(r.stderr), 'the checker does not claim to know what was fetched');
 });
@@ -97,7 +97,7 @@ assert.strictEqual(inScope('#hr-private', { exclude: ['hr-*'] }), false, 'a trai
 // A run input's own scope is held to the same rule, and a config that cannot be read at all is also "unusable".
 writeCfg({ include: ['#ops'] });
 var noFile = run('slack-run.js', ['--check-config', '--config', path.join(cfgDir, 'missing.json')]);
-assert.strictEqual(noFile.status, 1);
+assert.strictEqual(noFile.status, 3, 'a config that cannot be found is unusable: 3');
 var skillText = fs.readFileSync(path.join(ROOT, 'skills', 'open-loops', 'SKILL.md'), 'utf8').split(String.fromCharCode(13)).join('');
 var running = skillText.slice(skillText.indexOf('## Running the digest'));
 assert.ok(running.indexOf('--check-config') > -1 && running.indexOf('--check-config') < running.indexOf('**Fetch.** Each in-scope channel'), 'SKILL.md checks the configuration before fetching');

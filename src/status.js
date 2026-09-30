@@ -72,9 +72,10 @@ function cleanAttempt(o) {
   var inSet = function (v, set) { return set.indexOf(v) > -1 ? v : undefined; };
   var facts = ['posted', 'rejected', 'not_attempted', 'unknown'];
   return { value: { id: o.id, date: o.date, startedAt: o.startedAt, outcome: o.outcome,
-    cause: inSet(o.cause, ['details', 'verify', 'fetch', 'build', 'post']) || null, endedAt: validIso(o.endedAt) ? o.endedAt : undefined,
+    cause: inSet(o.cause, ['details', 'verify', 'fetch', 'build', 'post', 'config', 'ledger']) || null,
+    fetched: typeof o.fetched === 'boolean' ? o.fetched : undefined, endedAt: validIso(o.endedAt) ? o.endedAt : undefined,
     brief: inSet(o.brief, facts), details: inSet(o.details, facts), verified: o.verified === true,
-    ref: REF.test(o.ref) ? o.ref : null, notice: inSet(o.notice, ['none', 'pending', 'posted', 'rejected', 'unknown']) }, dropped: 0 };
+    ref: REF.test(o.ref) ? o.ref : null, notice: inSet(o.notice, ['none', 'pending', 'posted', 'rejected', 'unknown', 'not_attempted']) }, dropped: 0 };
 }
 function cleanNote(o) {
   return isObj(o) && typeof o.file === 'string' && /^status\.json\.damaged-[0-9T-]+-[0-9a-f]{8}(?:-\d+)?$/.test(o.file)
@@ -287,7 +288,8 @@ function stage(dir, o) {
  * everything else is `unknown`. */
 var BRIEF = ['posted', 'rejected', 'not_attempted', 'unknown'], DETAILS = BRIEF;
 var NOT_A_FACT = ['not_posted', 'na', 'absent', 'not_found'];
-var FAILED = ['', 'fetch', 'build', 'post', 'verify'];
+var FAILED = ['', 'config', 'ledger', 'fetch', 'build', 'post', 'verify'];
+var STOPPED_BEFORE_POSTING = ['config', 'ledger', 'fetch', 'build'];
 
 function begin(dir, today, now) {
   if (today != null && !validDate(today)) throw new Error('--today must be a real date like 2026-09-30, got "' + today + '". Nothing was recorded.');
@@ -307,7 +309,7 @@ function classify(f) {
   }
   if (f.details === 'posted') return { outcome: 'unknown' };
   // A refused post was a post attempt, whatever stage the assistant named.
-  return { outcome: 'not_delivered', cause: f.brief === 'not_attempted' && (f.failed === 'fetch' || f.failed === 'build') ? f.failed : 'post' };
+  return { outcome: 'not_delivered', cause: f.brief === 'not_attempted' && STOPPED_BEFORE_POSTING.indexOf(f.failed) > -1 ? f.failed : 'post' };
 }
 
 function lastDelivered(d) {
@@ -316,10 +318,21 @@ function lastDelivered(d) {
 }
 var RETRY = 'To try again now, tell your assistant "run Open Loops". That posts a fresh digest for today.';
 var EMPTY = 'An empty DM today does not mean nothing is outstanding.';
+var NO_RETRY = 'Running it again will not help until ';
 
 /* The notice, stage by stage, saying only what is true at that stage. `where` is where it is posted. */
 function notice(a, delivered) {
   var d = a.date, last = lastDelivered(delivered), t;
+  if (a.outcome === 'not_delivered' && (a.cause === 'config' || a.cause === 'ledger')) {
+    /* What was fetched is what the run recorded, never inferred from the stage: a configuration found unusable after Slack was read did fetch. */
+    var why = a.cause === 'ledger'
+      ? 'Slack was fetched, but the ledger file can\'t be read, so today\'s digest was not built. Nothing was posted, and the ledger was left exactly as it is. ' +
+        NO_RETRY + 'the ledger is restored — tell your assistant "check the Open Loops ledger".'
+      : (a.fetched ? 'Slack was fetched, but Open Loops\' configuration can\'t be used, so today\'s digest was not built. Nothing was posted. '
+                   : 'Open Loops\' configuration can\'t be used, so nothing was fetched and nothing was posted. ') +
+        NO_RETRY + 'the configuration is fixed — tell your assistant "fix the Open Loops configuration".';
+    return { where: 'dm', text: ['OPEN LOOPS NOT RUN — for ' + d, why + ' ' + EMPTY, last].join('\n') };
+  }
   if (a.outcome === 'not_delivered') {
     var what = a.cause === 'fetch' ? 'Open Loops could not fetch Slack for today\'s digest, so nothing was checked and nothing was posted.'
       : a.cause === 'build' ? 'Slack was fetched, but processing failed, so today\'s digest was not built. Nothing was posted.'
@@ -354,14 +367,19 @@ function end(dir, o, now) {
   if (BRIEF.indexOf(f.brief) < 0) throw new Error('--brief must be one of ' + BRIEF.join(', '));
   if (DETAILS.indexOf(f.details) < 0) throw new Error('--details must be one of ' + DETAILS.join(', '));
   if (FAILED.indexOf(f.failed) < 0) throw new Error('--failed must be one of ' + FAILED.filter(Boolean).join(', '));
-  if (f.brief === 'not_attempted' && f.failed !== 'fetch' && f.failed !== 'build') {
-    throw new Error('--brief not_attempted only fits a run that stopped before posting (--failed fetch or build); a post that was tried and did not land is rejected or unknown');
+  if (f.brief === 'not_attempted' && STOPPED_BEFORE_POSTING.indexOf(f.failed) < 0) {
+    throw new Error('--brief not_attempted only fits a run that stopped before posting (--failed ' + STOPPED_BEFORE_POSTING.join(', ') + '); a post that was tried and did not land is rejected or unknown');
+  }
+  if (f.failed === 'config' && o.fetched !== 'yes' && o.fetched !== 'no') {
+    throw new Error('--failed config needs --fetched yes|no: whether Slack had already been fetched when the configuration was found unusable. Nothing was recorded.');
   }
   var c = classify(f), at = (now || new Date()).toISOString();
   if (o.ref != null && o.ref !== '' && !REF.test(o.ref)) throw new Error('--ref must be the four-character reference in the digest\'s header, got "' + o.ref + '". Nothing was recorded.');
   if (c.outcome === 'delivered' && !o.ref) throw new Error('A delivered digest needs --ref, the four-character reference in its header. Nothing was recorded.');
   a.outcome = c.outcome; a.cause = c.cause || null; a.endedAt = at;
   a.brief = f.brief; a.details = f.details; a.verified = f.verified; a.ref = o.ref || null;
+  if (c.cause === 'config') a.fetched = o.fetched === 'yes';
+  if (c.cause === 'ledger') a.fetched = true;    // the ledger is read only after Slack was fetched
   if (c.outcome === 'delivered') {
     var st = readJson(stagedFile(dir)), ok = o.ref && st.ref === o.ref;
     s.delivered = { date: a.date, at: at, ref: o.ref || null,
@@ -384,7 +402,7 @@ function noticeResult(dir, id, result) {
   var s = load(dir), a = s.attempt;
   if (!a || a.id !== id) throw new Error('no attempt ' + id + ' is open');
   if (a.notice !== 'pending') throw new Error('attempt ' + id + ' has no notice waiting on a result');
-  if (['posted', 'rejected', 'unknown'].indexOf(result) < 0) throw new Error('--notice-result must be posted (Slack returned a timestamp), rejected (Slack explicitly refused it) or unknown');
+  if (['posted', 'rejected', 'unknown', 'not_attempted'].indexOf(result) < 0) throw new Error('--notice-result must be posted (Slack returned a timestamp), rejected (Slack explicitly refused it), not_attempted (no DM to post it in could be found) or unknown');
   a.notice = result;
   save(dir, s);
 }
@@ -417,7 +435,8 @@ function attemptLine(a, delivered) {
   var when = stamp(a.startedAt);
   if (a.outcome === 'delivered') return delivered && a.endedAt && a.endedAt === delivered.at ? 'the same one' : when + ' — delivered';
   var note = { pending: 'A notice was generated but not confirmed posted.', posted: 'A notice was posted to your DM.',
-               rejected: 'Slack rejected the notice, so it was not posted.', unknown: 'Whether the notice posted is unknown.' }[a.notice] || '';
+               rejected: 'Slack rejected the notice, so it was not posted.', unknown: 'Whether the notice posted is unknown.',
+               not_attempted: 'No notice was posted: your own DM could not be found to post it in.' }[a.notice] || '';
   var ref = a.ref ? ' (ref ' + a.ref + ')' : '';
   var body = a.outcome === 'started'
     ? 'started; no completion recorded. It may still be running or may have been interrupted; its delivery outcome is unknown.'
@@ -427,6 +446,8 @@ function attemptLine(a, delivered) {
         ? (a.cause === 'details' ? 'partly delivered' + ref + ': the brief posted, but the full details are unavailable.'
           : (a.details === 'posted' ? 'brief and details posted' : 'the brief posted and the full details are unavailable') +
             ' (brief not verified)' + ref + ': it did not read back as expected, so it may be malformed, and replies to it may not be recognised.')
+        : a.cause === 'ledger' ? 'Slack was fetched, but the ledger file can\'t be read. Nothing was posted.'
+        : a.cause === 'config' ? (a.fetched === true ? 'Slack was fetched, but the configuration can\'t be used. Nothing was posted.' : a.fetched === false ? 'the configuration can\'t be used. Nothing was fetched or posted.' : 'the configuration can\'t be used. Nothing was posted.')
         : a.cause === 'fetch' ? 'Slack could not be fetched. Nothing was posted.'
         : a.cause === 'build' ? 'Slack was fetched, but processing failed. Nothing was posted.'
         : 'the digest was built, but posting failed. Nothing was posted.';

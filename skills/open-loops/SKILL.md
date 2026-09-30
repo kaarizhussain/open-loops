@@ -255,23 +255,29 @@ node <checkout>/tools/report.js --consent --yes --config <working dir>/openloops
 
 ## Running the digest
 
+**Begin the attempt.** A real run starts, before anything else — before the configuration is checked, so that a configuration that cannot be
+used is still recorded — with
+
+```bash
+node <checkout>/tools/status.js --begin --today <date> --config <working dir>/openloops.config.json
+```
+
+which prints `ATTEMPT <id>` and `STARTED <epoch seconds>`: keep both for "End the attempt", below. It never reads the configuration, so it works
+when the configuration is what is broken. A preview (`--dry`) adds `--dry` and gets `ATTEMPT PREVIEW`; carry that through unchanged, and
+nothing is recorded or posted for it.
+
 **Check the configuration.** Before anything is fetched, run
 
 ```bash
 node <checkout>/slack-run.js --check-config --config <working dir>/openloops.config.json
 ```
 
-It prints `Config OK.`, or `Config is unusable: …`. On the second, stop and tell the user what it says: the configuration has to be fixed
-before fetching or running a digest. It cannot tell what was already fetched, so do not fetch first and check afterwards.
-
-**Begin the attempt.** A real run starts, before anything is fetched, with
-
-```bash
-node <checkout>/tools/status.js --begin --today <date> --config <working dir>/openloops.config.json
-```
-
-which prints `ATTEMPT <id>` and `STARTED <epoch seconds>`: keep both for "End the attempt", below. A preview (`--dry`) adds `--dry` and
-gets `ATTEMPT PREVIEW`; carry that through unchanged, and nothing is recorded or posted for it.
+It prints `Config OK.`, or `Config is unusable: …` and exits with code 3. On the second, nothing has been fetched: end the attempt with
+`--brief not_attempted --details not_attempted --verified no --failed config --fetched no` (see "End the attempt"), post the notice it prints
+to their own DM, and stop. A configuration that cannot be used cannot say where their DM is, so post to the user id
+`slack_read_user_profile()` returns, which is their own DM (see Setup). If you cannot find it, or the post fails, the failure is still
+recorded: say what happened to the notice with `--notice-result`, below, and tell the user in your reply that the configuration has to be
+fixed. Do not fetch first and check afterwards.
 
 **Fetch.** Each in-scope channel:
 
@@ -499,11 +505,17 @@ node <checkout>/tools/status.js --end --attempt <id> --brief <b> --details <d> -
 
 - `--brief` and `--details` are `posted` only when Slack returned a timestamp for that post or you found and positively
   identified the message; `rejected` only when Slack explicitly refused it; `not_attempted` when the run stopped before trying
-  (for the brief, only with `--failed fetch` or `build`); and `unknown` in every other case. There is no word for "not
+  (for the brief, only with `--failed config`, `ledger`, `fetch` or `build`); and `unknown` in every other case. There is no word for "not
   there": a timeout, an error that does not say, no answer, and a DM read that does not show the message are all `unknown`.
 - `--verified yes` only if the brief — after a repost, the replacement; the original malformed post no longer counts — read back correctly, above. The details are not read back, so it says nothing about them.
-- `--failed` says where it stopped: `fetch` (Slack could not be read, so no digest was built), `build` (Slack was
-  fetched but the runner failed or refused), `post`, or `verify`. Leave it off when nothing failed.
+- `--failed` says where it stopped: `config` (the configuration cannot be used), `ledger` (the runner could not read the ledger),
+  `fetch` (Slack could not be read, so no digest was built), `build` (Slack was fetched but the runner failed or refused for any other
+  reason), `post`, or `verify`. Leave it off when nothing failed. `config` also needs `--fetched yes|no` — whether Slack had already been
+  fetched when the configuration was found unusable: `no` when `--check-config` failed, `yes` when the runner itself exited 3 after the fetch.
+  The notice says nothing was fetched only when you said so. The runner's exit code says which: 3 is the configuration, 4 is the
+  ledger (Slack had been fetched, so use `--failed ledger`), anything else is `--failed build`.
+- **Never move aside, delete, recreate or repair a ledger you cannot read.** Report the error and stop: the ledger holds every correction the
+  user has made, and only they decide what happens to it.
 - `--ref` is the reference in the digest's header (four hex characters, copied from it), whenever a digest was built. A delivered
   digest needs it; without it, or with a malformed one, the command refuses and records nothing.
 - **If a post's outcome is uncertain, do not post again.** An explicit refusal from Slack means `rejected`. Anything else —
@@ -525,8 +537,9 @@ brief's thread. Then tell it what Slack answered, and only what Slack answered:
 node <checkout>/tools/status.js --notice-result <posted|rejected|unknown> --attempt <id> --config <working dir>/openloops.config.json
 ```
 
-`posted` only if Slack returned a timestamp; `rejected` only if Slack explicitly refused it; anything else, including a
-Slack that cannot be reached, is `unknown`. Do not keep trying. The notice says only what stage failed; it does not diagnose, and you never edit
+`posted` only if Slack returned a timestamp; `rejected` only if Slack explicitly refused it; `not_attempted` if you could not find their own DM and
+posted nothing; anything else, including a Slack that cannot be reached, is `unknown`. Do not keep trying. The failure itself is already
+recorded before any notice is posted, so a notice that cannot be posted never loses it. The notice says only what stage failed; it does not diagnose, and you never edit
 it. A preview posts no notice. The scheduler marking a run "succeeded" only means the session ended; it says nothing
 about whether a digest posted, which is what this record is for.
 

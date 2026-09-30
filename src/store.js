@@ -24,6 +24,9 @@ var retry = require('./busy.js').retry;
 
 var EMPTY = { rows: [], digests: {}, refs: {}, refsSince: null, seen: [], learned: [], audit: { checked: 0, missed: [], asked: {}, quiet: 0, found: 0 } };
 
+/* A ledger that cannot be used carries exit code 4: it was read after Slack was fetched, and only its owner can repair it. */
+function ledgerError(msg) { var e = new Error(msg); e.exitCode = 4; return e; }
+
 function load(file) {
   try {
     var raw = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));   // a byte-order mark is an editor's, not damage
@@ -54,7 +57,7 @@ function load(file) {
     // Missing is the normal first run. Corrupt is not, and losing the verdicts in it
     // would silently un-reject everything someone has already marked wrong.
     if (e.code === 'ENOENT') return JSON.parse(JSON.stringify(EMPTY));
-    throw new Error('Ledger at ' + file + ' could not be read (' + e.message +
+    throw ledgerError('Ledger at ' + file + ' could not be read (' + e.message +
       '). Move it aside to start fresh — deleting it loses every verdict recorded so far.');
   }
 }
@@ -69,7 +72,7 @@ function fileStore(file, sopts) {
     /* A midday check never writes the ledger, so it must not make a salt either: one made in memory would differ at the next check. */
     if (sopts && sopts.noSalt) return null;
     var held = (state.rows || []).some(function (r) { return /^[0-9a-f]{64}$/.test(L.cell(r[L.COL.who_id])); });
-    if (held) throw new Error('Ledger at ' + file + ' holds person identifiers but no identity salt. Restore the file it was copied from, or move it aside: a new salt would detach every person from their corrections.');
+    if (held) throw ledgerError('Ledger at ' + file + ' holds person identifiers but no identity salt. Restore the file it was copied from, or move it aside: a new salt would detach every person from their corrections.');
     state.identitySalt = require('crypto').randomBytes(16).toString('hex');
     return state.identitySalt;
   };

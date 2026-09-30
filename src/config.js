@@ -68,13 +68,16 @@ function merge() {
 /* A missing config file is fine — the defaults are a working configuration for anyone
  * who passes their address on the run. A malformed one is not: silently falling back
  * to defaults would quietly read channels somebody had excluded. */
+/* Every way the configuration can be unusable carries exit code 3, so the caller can tell it from a ledger (4) or a crash (1). */
+function configError(msg) { var e = new Error(msg); e.exitCode = 3; return e; }
+
 function loadConfig(fs, path) {
   if (!path) return {};
   try {
     return JSON.parse(fs.readFileSync(path, 'utf8').replace(/^\uFEFF/, ''));   // Windows editors and PowerShell 5.1 add a byte-order mark
   } catch (e) {
     if (e.code === 'ENOENT') return {};
-    throw new Error('Config at ' + path + ' could not be read (' + e.message +
+    throw configError('Config at ' + path + ' could not be read (' + e.message +
       '). Fix it rather than deleting it — falling back to defaults would read ' +
       'channels you have excluded.');
   }
@@ -133,9 +136,9 @@ function settings(fs, configPath, run) {
       'New York in summer, -300 in winter, 60 for London in summer. Got ' +
       JSON.stringify(s.tzOffset));
   }
-  if (missing.length) throw new Error('Config is incomplete:\n  ' + missing.join('\n  '));
+  if (missing.length) throw configError('Config is incomplete:\n  ' + missing.join('\n  '));
   s.you = String(s.you).toLowerCase();
   return s;
 }
 
-module.exports = { DEFAULTS: DEFAULTS, merge: merge, loadConfig: loadConfig, settings: settings, scopeProblems: scopeProblems };
+module.exports = { configError: configError, DEFAULTS: DEFAULTS, merge: merge, loadConfig: loadConfig, settings: settings, scopeProblems: scopeProblems };
