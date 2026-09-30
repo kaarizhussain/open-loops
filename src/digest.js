@@ -382,7 +382,11 @@ function prep(b) {
      * connector's display format moving — src/slack.js parses a presentation format
      * nobody documents or promises to keep — and that failure is total and silent, so
      * every channel comes back empty at once and the digest looks like a quiet week. */
-    blind: !b.messages.length && read.threads > 0 && read.confirmedEmpty !== read.threads
+    blind: !b.messages.length && read.threads > 0 && read.confirmedEmpty !== read.threads,
+    /* Or nothing was handed over at all, or scope skipped all of it. A run that read no
+     * conversation cannot say the list is empty either; `threads` is a number only on the
+     * Slack path, so a mailbox digest never lands here. */
+    unread0: !b.messages.length && read.threads === 0
   };
   s.top = ranked.slice(0, TODAY_N);
   s.also = ranked.slice(TODAY_N, TODAY_N + ALSO_N);
@@ -511,6 +515,10 @@ function renderBrief(s) {
       ' handed over and no message could be parsed out of any of them. This is not a' +
       ' quiet day. Until it is fixed this digest can say nothing about what is' +
       ' outstanding, so treat the empty list below as unknown rather than clear.');
+  } else if (s.unread0) {
+    p('READ NOTHING — ' + (s.read.skipped ? s.read.skipped + ' conversation' + (s.read.skipped === 1 ? ' was' : 's were') +
+      ' skipped by your channel settings and none was read.' : 'no conversation was handed over to read.') +
+      ' This is not a quiet day. Treat the empty list below as unknown rather than clear.');
   } else if (!s.open.length) {
     p(headline(s.open, b.source));
   }

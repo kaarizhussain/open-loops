@@ -88,4 +88,19 @@ assert.ok(readsHalcyon({ channels: { exclude: ['#halcyon'] } }).indexOf('scope d
 assert.ok(readsHalcyon({ channels: { only: ['#vector-freight'] } }).indexOf('scope doc') === -1, "'only' is still accepted");
 assert.ok(readsHalcyon({ channels: { include: [], exclude: [] } }).indexOf('scope doc') > -1, 'and an empty scope reads everything');
 
+/* ---- 3. Nothing read is never "Nothing outstanding. Genuinely" ---- */
+var quiet = function (edit, cfgExtra) {
+  var i = base('2026-09-02'); edit(i);
+  return main([write(i), '--config', cfgFile(cfgExtra || {}), '--ledger', path.join(dir, 'blind.json')]);
+};
+var seed = main([write(base('2026-09-01')), '--config', cfgFile({}), '--ledger', path.join(dir, 'blind.json')]);
+assert.ok(/scope doc/.test(seed), 'precondition: the ledger tracks items');
+var none = quiet(function (i) { i.conversations = []; });
+assert.ok(/READ NOTHING/.test(none) && !/Genuinely/.test(none), 'no conversations handed over: ' + none.split(String.fromCharCode(10)).slice(0, 4).join(' | '));
+var noneKey = quiet(function (i) { delete i.conversations; });
+assert.ok(/READ NOTHING/.test(noneKey) && !/Genuinely/.test(noneKey), 'no conversations key at all');
+var scoped = quiet(function () {}, { channels: { include: ['#does-not-exist'] } });
+assert.ok(/READ NOTHING/.test(scoped) && !/Genuinely/.test(scoped) && /skipped/.test(scoped.split(String.fromCharCode(10)).slice(0, 4).join(' ')),
+  'every conversation skipped by scope says so: ' + scoped.split(String.fromCharCode(10)).slice(0, 4).join(' | '));
+
 console.log('hardening: OK');
