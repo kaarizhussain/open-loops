@@ -27,8 +27,12 @@ npx skills add kaarizhussain/open-loops
 
 It reads your address and DM channel straight off the Slack connector, shows you the
 channels it would read so you can strike the ones it should not, asks who you support,
-writes the config, runs it once, and offers to schedule it daily. Nothing below is
-needed unless you want to know what it did.
+writes the config, tells you in a few lines what it will read and where the data goes,
+and runs it once, posting the digest to your DM and showing you the same brief in the
+chat. After you have seen it, it explains how to correct items, offers to schedule it
+daily, and asks once whether to send diagnostic reports, which stay off unless you say
+yes. Midday alerts are not part of setup; ask for them when you want them. Nothing
+below is needed unless you want to know what it did.
 
 **The long way**, and what the skill is doing on your behalf: copy
 `openloops.config.example.json` to `openloops.config.json` and put your address in it.

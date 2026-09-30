@@ -59,7 +59,7 @@ The run's input can turn text storage off but never on; only the config decides 
 **Diagnostic reports** are separate and off unless they said yes in Setup. When on,
 `tools/report.js` — the one file with a network call — sends the developer a fixed set of
 fields: an ID, versions, the date, and a code location or the kind of item corrected.
-Never message text, names or paths. Setup step 5 has the exact wording; use it.
+Never message text, names or paths. The last question in Setup has the exact wording; use it.
 
 With midday alerts on, each check reads the same channels and calendar again, through the same
 connectors, so the host assistant sees that text at every check, and an alert is posted to their
@@ -75,9 +75,23 @@ sitting in a file; for most of them it is close to free.
 
 ## Setup — first run only
 
-Do not interview them for things the connector already knows.
+Do not interview them for things the connector already knows. The first run asks for three
+things — Slack if it is not connected, which channels, who they support — then tells them
+what will be read and runs the first digest. Only after they have seen it do you explain
+corrections, offer the schedule and ask the diagnostics question. Nothing else is asked,
+and midday alerts are not offered here (they are available when someone asks; see
+"Offering midday alerts").
 
-**1. Find out who they are.**
+**1. Prerequisites.** `git` and `node` on their machine, checked now (see "Working directory").
+Then the Slack connector: if no Slack tools are available, say, in these words, and stop until
+they tell you it is done:
+
+> Open Loops reads Slack through Claude's Slack connector, and it isn't connected. Connect it
+> in Claude's connector settings — I can't do that step for you — then tell me when it's done.
+
+Do not ask about the calendar: use it if it is connected, run without it if not.
+
+**2. Find out who they are.**
 
 ```
 slack_read_user_profile()          → their email and user id
@@ -91,7 +105,7 @@ their own messages when Slack omits an email from the banner, and it does that w
 the token lacks `users:read.email`. Get it wrong and everything they promised is listed
 as something they are waiting on.
 
-**2. Show them what would be read, and ask what should not be.**
+**3. Show them what would be read, and ask what should not be.**
 
 ```
 slack_list_user_channels(types="public_channel,private_channel")
@@ -104,12 +118,12 @@ contain no commitments. **Do not include `im` in the types.** Direct messages ar
 sensitive thing in a workspace and the least likely to hold a tracked commitment; add
 them only if the user asks for them by name.
 
-**3. Ask one question, not five: who do they support?**
+**4. Ask one question, not five: who do they support?**
 
 Nobody is the common answer and the default — they are reading their own work. If they
 support one or more executives, take names, and addresses if they have them.
 
-**4. Write `openloops.config.json`:**
+**5. Write `openloops.config.json`:**
 
 ```json
 {
@@ -136,8 +150,55 @@ A tier such as `key_account` or `investor` sets the weight; the label is what th
 digest prints. It lives in the config — the run's input can override an entry for a
 one-off, but a tier only in the input is gone the next day.
 
-**5. Ask about diagnostic reports.** Once, now, in these words — the default is no, and
-nothing is sent until they say yes:
+**6. Tell them what happens to their data, then fetch — no question in between.** Their channel
+choice is the consent; this is the explanation, and it is said before any message history is
+read (the profile and channel list in steps 2 and 3 are not message history). Say it in these
+words, with the real facts for their setup — their `lookbackDays` if the config sets one, no
+calendar line if `useCalendar` is false, and the real working directory:
+
+> Before I read message history, here is where your data goes:
+>
+> - I'll read the last 21 days of the channels you picked, plus your calendar if it's connected.
+>   Nothing else, and no direct messages.
+> - I read them through your Slack and calendar connectors, so that text passes through me and
+>   stays in this conversation's history.
+> - A local program finds the commitments. It makes no network calls and uses no AI judgement.
+> - The digest is posted to your own Slack DM. Nothing is posted anywhere else. Nothing is sent to
+>   the developer: diagnostic reports are a separate question I'll ask after your first digest,
+>   and they stay off unless you say yes.
+> - On your computer, Open Loops keeps a ledger (including the sentence each commitment was found
+>   in) and each run's input and output files, which hold the fetched message text, in
+>   `~/open-loops-data`. Deleting that folder removes those local files only. It does not delete
+>   your Slack messages, this conversation's history, or any copy held by the providers that run
+>   your assistant or Slack.
+> - If you'd rather the ledger not keep those sentences, say so and I'll turn that off. That
+>   changes the ledger only: fetched text can still remain in the run files and in this
+>   conversation's history.
+>
+> Running your first digest now.
+
+Then go straight on to step 7; do not wait for a reply. If they did say to stop keeping the
+sentences — now or in answer to the notice — set `"storeText": false` in the config before the
+run. If they ask where the data goes in more detail, "Where their data goes" has it.
+
+**7. Run the first digest** (see "Running the digest") and post it as that section says. When
+the brief has read back correctly, **also show that same brief in this chat, verbatim**, in a
+code block, and then one line: "That's your first digest. It's in your Slack DM, with the full
+detail in the thread under it." Show the brief only, never the details or notes, and never
+reword it. Showing it in the chat is for this first interactive run; a scheduled run posts
+to Slack only. If the run fails, say what broke and stop here: there is nothing yet to
+correct or schedule.
+
+**8. Explain how to correct it, once,** now that they have seen a digest, in a few lines — the
+replies in "How they correct it" (`3 7`, `k 1 4`, `miss b`), that rejected items stop appearing,
+and that how accurate it is for them is not known yet, because that number comes from their
+corrections.
+
+**9. Then offer the daily schedule** (see "Scheduling it"). If
+they say no, say they can ask any time and go on to step 10.
+
+**10. Ask about diagnostic reports.** Once, last — after the schedule question, whether they
+said yes or no to it — in these words. The default is no, and nothing is sent until they say yes:
 
 > **Diagnostic reports — off unless you say yes.**
 >
@@ -178,8 +239,6 @@ node <checkout>/tools/report.js --consent --yes --config <working dir>/openloops
 
 (`--consent` without `--yes` prints this question and records nothing.) On a no, write nothing — no `diagnostics` key is the same as off. Never write the
 `diagnostics` record by hand; only `--consent` makes one.
-
-**6. Run it once** (below) so they see output immediately, then offer to schedule it.
 
 ## Running the digest
 
@@ -474,16 +533,27 @@ Working directory: <working dir>   config: <working dir>/openloops.config.json
 Connector responses are immutable: fetch more and run again, never edit fetched text.
 ```
 
-Tell them two things: scheduled tasks only fire while the app is open, and it is worth
-running the task manually once so the Slack tool approvals get stored on it. Otherwise
-the first automatic run stalls on a permission prompt with nobody watching.
+Tell them two things. Scheduled tasks only fire while the app is open. And Slack tool approvals
+are stored on the task only when a run uses the tools, so without a test run the first
+automatic run may stall on a permission prompt with nobody watching.
+
+**Never run that test silently.** A manual run of the task is a real digest: it posts a second
+digest for today to their DM, and the ledger replaces the first run's record with it. Say so, and
+ask before running it:
+
+> To save the Slack approvals on the new task, I can run it once now. That posts a second digest
+> for today to your DM. Run it now, or skip it and approve the permission prompts yourself the
+> first time it runs on its own?
+
+Run it only on a yes. On a skip, tell them the first scheduled run may wait for their approval.
 
 ### Offering midday alerts
 
-Once, and only in a conversation with them: after they have seen a successful manual digest
-and the daily schedule exists, and only when the config has no `alerts` entry. Never from a
-scheduled run — a scheduled run follows "Running the digest" or "Midday check" and nothing else,
-which is why this text lives here. Ask in these words:
+Only when they ask for midday alerts, or ask whether there is something between digests. Never
+offer them on your own — not in Setup, not after a digest, not from a scheduled run. A scheduled
+run follows "Running the digest" or "Midday check" and nothing else, which is why this text lives
+here. The daily schedule should exist first; if it does not, say so and offer it instead. Ask in
+these words:
 
 > **Midday alerts — off unless you say yes.**
 >
@@ -558,9 +628,9 @@ Connector responses are immutable: fetch more and run again, never edit fetched 
 ```
 
 Tell them to run it once by hand so the Slack tool approvals stored on the task cover it; an
-unapproved tool stalls an unattended run. On a **no**, run
-`node <checkout>/tools/alerts.js --decline --config …` and do not offer again; they can still ask
-for alerts later, which is a request rather than an offer.
+unapproved tool stalls an unattended run. Say that a check posts an alert only if something
+matches at that moment, and otherwise posts nothing. On a **no**, run
+`node <checkout>/tools/alerts.js --decline --config …`; alerts stay off unless they ask again.
 
 **Turning alerts off** when they ask: run `node <checkout>/tools/alerts.js --off --config …`,
 then pause or delete the "Open Loops checks" task (a paused task starts nothing). If they only
@@ -593,8 +663,8 @@ asked, and nothing in the daily run asks them. Only when they ask for it, run
 show them its output unchanged, and only on a yes run it again with `--yes`.
 
 To stop diagnostic reports, set `"diagnostics": false` in the config. The next run
-discards anything not yet sent, and turning them on again means asking the question in
-Setup step 5 again, which gives a new ID. `node <checkout>/tools/report.js --show` lists
+discards anything not yet sent, and turning them on again means asking the diagnostics
+question again, which gives a new ID. `node <checkout>/tools/report.js --show` lists
 what is queued and what has been sent.
 
 ## How they correct it
