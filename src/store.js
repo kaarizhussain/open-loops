@@ -26,6 +26,13 @@ var EMPTY = { rows: [], digests: {}, refs: {}, refsSince: null, seen: [], learne
 function load(file) {
   try {
     var raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+    /* Valid JSON is not a ledger. Every file this store writes has a rows list of lists, so
+     * anything else ([], {}, a misspelled key) was written by something else, or damaged.
+     * Reading it as empty made the next flush overwrite it and lose every verdict. */
+    if (!raw || typeof raw !== 'object' || !Array.isArray(raw.rows) ||
+        !raw.rows.every(function (r) { return Array.isArray(r); })) {
+      throw new Error('it is JSON but not a ledger: "rows" must be a list of rows');
+    }
     return {
       rows: Array.isArray(raw.rows) ? raw.rows : [],
       digests: raw.digests && typeof raw.digests === 'object' ? raw.digests : {},

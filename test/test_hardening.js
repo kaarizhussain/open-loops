@@ -103,4 +103,18 @@ var scoped = quiet(function () {}, { channels: { include: ['#does-not-exist'] } 
 assert.ok(/READ NOTHING/.test(scoped) && !/Genuinely/.test(scoped) && /skipped/.test(scoped.split(String.fromCharCode(10)).slice(0, 4).join(' ')),
   'every conversation skipped by scope says so: ' + scoped.split(String.fromCharCode(10)).slice(0, 4).join(' | '));
 
+/* ---- 4. A ledger that parses but is the wrong shape is refused, not treated as empty ---- */
+['[]', '{}', '""', 'null', '{"Rows":[]}', '{"rows":{"a":1}}', '{"rows":[null]}', '{"rows":["x"]}'].forEach(function (raw) {
+  var f = path.join(dir, 'shape' + (n++) + '.json');
+  fs.writeFileSync(f, raw);
+  assert.throws(function () { main([write(base('2026-09-01')), '--ledger', f]); }, /Ledger at .* could not be read/,
+    'wrong-shape ledger ' + raw + ' must stop the run');
+  assert.strictEqual(fs.readFileSync(f, 'utf8'), raw, 'and the file is left exactly as it was: ' + raw);
+});
+var okLedger = path.join(dir, 'shape-ok.json');
+main([write(base('2026-09-01')), '--ledger', okLedger]);
+main([write(base('2026-09-02')), '--ledger', okLedger]);
+fs.writeFileSync(path.join(dir, 'shape-old.json'), JSON.stringify({ rows: [] }));
+main([write(base('2026-09-01')), '--ledger', path.join(dir, 'shape-old.json')]);
+
 console.log('hardening: OK');
