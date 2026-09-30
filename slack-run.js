@@ -645,7 +645,12 @@ function main(argv) {
           unfetchedThreads: unfetched.length,
           skipped: skipped + skippedThreads, windowDays: window };
   /* After a gap only: the last delivered digest, and the days the recorded schedule expected one. */
-  var prevGap = fs.existsSync(configPath) ? status.gap(reportDir, today) : null;
+  var prevGap = null;
+  try { prevGap = fs.existsSync(configPath) ? status.gap(reportDir, today) : null; } catch (e) { /* the status record must never cost the digest */ }
+  /* Whether the search for the earlier digest (to re-apply its corrections) reached an answer: tools/dm-lookup.js prints the value.
+   * Absent means the input predates it, and nothing is claimed. Anything but found / searched_none is a search that did not finish. */
+  var lookup = input.dmLookup == null || input.dmLookup === 'found' || input.dmLookup === 'searched_none' ? null
+    : input.dmLookup === 'cannot_page' ? 'cannot_page' : 'failed';
 
   var keys = digest.digestOrder(result.open, today);
 
@@ -721,7 +726,7 @@ function main(argv) {
     muted: muted, mutes: L.suggestMutes(rows).filter(function (s) { return !already[s.phrase]; }),
     learnedNow: fresh, learnedAll: learned,
     spotCheck: sample, recall: score, dark: result.dark, ignoredReplies: replies.ignored,
-    replyKey: replyKey, gapLine: status.gapLine(prevGap),
+    replyKey: replyKey, gapLine: status.gapLine(prevGap), dmLookup: lookup,
     /* Conversations skipped, not threads. One counter served both, and only the
        conversation count was reduced by it — so skipping a thread under-reported how
        much was read, and enough of them printed a negative number of conversations. */
@@ -836,4 +841,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { queueCrash: queueCrash, main: main, marksFromDm: marksFromDm, inScope: inScope, nameMatches: nameMatches };
+module.exports = { queueCrash: queueCrash, main: main, marksFromDm: marksFromDm, inScope: inScope, nameMatches: nameMatches, DIGEST_HEADER: DIGEST_HEADER };

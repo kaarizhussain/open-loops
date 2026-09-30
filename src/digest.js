@@ -400,6 +400,12 @@ function prep(b) {
  * them above the list is the report the brief exists to replace. */
 function warnings(s) {
   var b = s.b, read = s.read, out = [];
+  /* The earlier digest could not be found, so the corrections typed under it were not read. Said outright: a run that
+   * cannot tell a first run from a search that gave out would otherwise look like one. */
+  if (b.dmLookup) {
+    out.push('CORRECTIONS NOT CHECKED — the earlier digest could not be located within the available DM history' +
+      (b.dmLookup === 'cannot_page' ? ' (this connector cannot page it)' : '') + '. Earlier corrections may not have been reapplied.');
+  }
   /* The calendar response could not be read at all. Two of the seven signals live in the
    * gap between messages and meetings, so both are off for this run — and "0 meetings"
    * would otherwise read as a quiet diary. */

@@ -479,7 +479,7 @@ var inDigest = skill.slice(skill.indexOf('## Running the digest'), skill.indexOf
 var inCheck = skill.slice(skill.indexOf('## Midday check'), skill.indexOf('## Scheduling it'));
 assert.ok(!/Midday alerts — off unless/.test(inDigest + inCheck), 'a scheduled run never reads the question');
 assert.ok(skill.indexOf('Midday alerts — off unless') > skill.indexOf('## Scheduling it'));
-assert.ok(/limit=15/.test(skill), 'the DM read is wider when alerts are on');
+assert.ok(skill.indexOf('tools/dm-lookup.js') > -1 && !/limit=15/.test(skill), 'the digest lookup pages on until it finds a digest, so alerts posted between digests cannot push it out (a wider fixed read was the old, insufficient answer)');
 
 /* ------------------------------ the schedule ------------------------------ */
 var offer = skill.slice(skill.indexOf('### Offering midday alerts'), skill.indexOf('## Changing it, or stopping it'));

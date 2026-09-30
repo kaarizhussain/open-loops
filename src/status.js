@@ -23,24 +23,130 @@ var MAX_NAMES = 12;
 function file(dir) { return path.join(dir, 'status.json'); }
 function stagedFile(dir) { return path.join(dir, 'status.staged.json'); }
 
-// A missing or torn file reads as "nothing there", never as half a record.
-function readJson(f) {
-  try { var s = JSON.parse(retry(function () { return fs.readFileSync(f, 'utf8'); })); return s && typeof s === 'object' ? s : {}; }
-  catch (e) { return {}; }
-}
 function writeJson(f, o) {
   var tmp = f + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(o, null, 1));
   retry(function () { fs.renameSync(tmp, f); });
 }
 
-function load(dir) {
-  var s = readJson(file(dir));
-  return { schedule: s.schedule && typeof s.schedule === 'object' ? s.schedule : null,
-           attempt: s.attempt && typeof s.attempt === 'object' ? s.attempt : null,
-           delivered: s.delivered && typeof s.delivered === 'object' ? s.delivered : null };
+// The staged file is the runner's and may be absent or torn: that reads as nothing there.
+function readJson(f) {
+  try { var s = JSON.parse(retry(function () { return fs.readFileSync(f, 'utf8'); })); return s && typeof s === 'object' ? s : {}; }
+  catch (e) { return {}; }
 }
-function save(dir, s) { writeJson(file(dir), { schedule: s.schedule, attempt: s.attempt, delivered: s.delivered }); }
+
+var REF = /^[0-9a-f]{4}$/, ID = /^[0-9a-f]{8}$/, DATE = /^\d{4}-\d{2}-\d{2}$/;
+function validDate(s) {
+  if (typeof s !== 'string' || !DATE.test(s)) return false;
+  var d = new Date(s + 'T00:00:00Z');
+  return !isNaN(d) && d.toISOString().slice(0, 10) === s;
+}
+function validIso(s) { return typeof s === 'string' && !isNaN(Date.parse(s)); }
+function isObj(o) { return !!o && typeof o === 'object' && !Array.isArray(o); }
+function num(x) { return typeof x === 'number' && isFinite(x) ? x : null; }
+function strs(a, n) { return Array.isArray(a) ? a.filter(function (x) { return typeof x === 'string'; }).slice(0, n) : []; }
+
+/* Each record is checked on its own and kept only if it is whole and valid. A record that is not is dropped whole;
+ * nothing is repaired by guessing. `dropped` counts entries thrown out of an otherwise valid record. */
+var OUTCOMES = ['started', 'delivered', 'partial', 'not_delivered', 'unknown'];
+function cleanSchedule(o) {
+  if (!isObj(o) || typeof o.taskId !== 'string' || !o.taskId || typeof o.cron !== 'string' || !validDate(o.since)) return null;
+  var state = o.state == null ? 'active' : o.state;
+  if (['active', 'paused', 'deleted'].indexOf(state) < 0) return null;
+  var off = [], dropped = 0;
+  (Array.isArray(o.off) ? o.off : o.off == null ? [] : (dropped++, [])).forEach(function (x) {
+    if (isObj(x) && validDate(x.from) && (x.to === null || validDate(x.to))) off.push({ from: x.from, to: x.to }); else dropped++;
+  });
+  var out = { taskId: o.taskId, cron: o.cron, since: o.since, state: state, off: off };
+  if (validDate(o.deletedAt)) out.deletedAt = o.deletedAt;
+  return { value: out, dropped: dropped };
+}
+function cleanDelivered(o) {
+  if (!isObj(o) || !validDate(o.date) || !validIso(o.at) || !(o.ref === null || o.ref === undefined || REF.test(o.ref))) return null;
+  var r = isObj(o.read) && ['complete', 'incomplete', 'nothing', 'unknown'].indexOf(o.read.state) > -1 ? o.read : { state: 'unknown', why: [] };
+  return { value: { date: o.date, at: o.at, ref: o.ref || null, read: { state: r.state, why: strs(r.why, 6) }, channels: strs(o.channels, 12),
+    conversations: num(o.conversations), messages: num(o.messages), meetings: num(o.meetings), windowDays: num(o.windowDays) }, dropped: 0 };
+}
+function cleanAttempt(o) {
+  if (!isObj(o) || !ID.test(o.id) || !validDate(o.date) || !validIso(o.startedAt) || OUTCOMES.indexOf(o.outcome) < 0) return null;
+  var inSet = function (v, set) { return set.indexOf(v) > -1 ? v : undefined; };
+  var facts = ['posted', 'rejected', 'not_attempted', 'unknown'];
+  return { value: { id: o.id, date: o.date, startedAt: o.startedAt, outcome: o.outcome,
+    cause: inSet(o.cause, ['details', 'verify', 'fetch', 'build', 'post']) || null, endedAt: validIso(o.endedAt) ? o.endedAt : undefined,
+    brief: inSet(o.brief, facts), details: inSet(o.details, facts), verified: o.verified === true,
+    ref: REF.test(o.ref) ? o.ref : null, notice: inSet(o.notice, ['none', 'pending', 'posted', 'rejected', 'unknown']) }, dropped: 0 };
+}
+function cleanNote(o) {
+  return isObj(o) && typeof o.file === 'string' && /^status\.json\.damaged-[0-9T-]+-[0-9a-f]{8}(?:-\d+)?$/.test(o.file)
+    ? { file: o.file, recovered: strs(o.recovered, 3), lost: strs(o.lost, 3) } : null;
+}
+var SECTIONS = [['schedule', 'schedule', cleanSchedule], ['delivered', 'last delivered digest', cleanDelivered], ['attempt', 'last attempt', cleanAttempt]];
+
+/* The one balanced {...} that follows "key": — or null when it does not close. A truncated record never does, and is
+ * not completed by guessing what the rest might have said. */
+function extractObject(text, key) {
+  var m = new RegExp('"' + key + '"\\s*:\\s*\\{').exec(text);
+  if (!m) return null;
+  var depth = 0, inStr = false, esc = false;
+  for (var i = m.index + m[0].length - 1; i < text.length; i++) {
+    var c = text[i];
+    if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; continue; }
+    if (c === '"') inStr = true;
+    else if (c === '{') depth++;
+    else if (c === '}' && --depth === 0) return text.slice(m.index + m[0].length - 1, i + 1);
+  }
+  return null;
+}
+
+/* The record as it can be trusted. Missing file: empty, not damaged. Anything else that is not whole — unreadable JSON,
+ * a truncated file, a record that fails its checks — is `damaged`, with what was recovered and what was not. Reading
+ * never writes; the damaged file is preserved by save() before anything replaces it. */
+function load(dir) {
+  var text = null;
+  try { text = retry(function () { return fs.readFileSync(file(dir), 'utf8'); }); }
+  catch (e) { if (e.code !== 'ENOENT') text = ''; }
+  var out = { schedule: null, attempt: null, delivered: null, note: null, damaged: null };
+  if (text === null) return out;
+  var root = null;
+  try { var parsed = JSON.parse(text); if (isObj(parsed)) root = parsed; } catch (e) { root = null; }
+  var recovered = [], lost = [], damaged = root === null;
+  SECTIONS.forEach(function (sec) {
+    var raw = null;
+    if (root) raw = root[sec[0]];
+    else { var piece = extractObject(text, sec[0]); try { raw = piece === null ? undefined : JSON.parse(piece); } catch (e) { raw = undefined; } }
+    if (raw === undefined && root) raw = null;
+    if (raw === null) { if (!root) lost.push(sec[1]); return; }
+    var c = raw === undefined ? null : sec[2](raw);
+    if (!c) { lost.push(sec[1]); damaged = true; return; }
+    out[sec[0]] = c.value; recovered.push(sec[1]);
+    if (c.dropped) damaged = true;
+  });
+  if (root) out.note = cleanNote(root.note);
+  if (damaged) out.damaged = { recovered: recovered, lost: lost };
+  return out;
+}
+
+/* The damaged file, kept whole under a name that cannot collide with an earlier one. */
+function preserve(dir, now) {
+  var d = now || new Date(), stamp = localDate(d).split('-').join('') + 'T' + pad(d.getHours()) + pad(d.getMinutes());
+  for (var i = 0; i < 20; i++) {
+    var name = 'status.json.damaged-' + stamp + '-' + crypto.randomBytes(4).toString('hex');
+    try { fs.copyFileSync(file(dir), path.join(dir, name), fs.constants.COPYFILE_EXCL); return name; }
+    catch (e) { if (e.code !== 'EEXIST') throw e; }
+  }
+  throw new Error('could not find an unused name to preserve the damaged status record under');
+}
+
+/* Every write goes through here. A record that was damaged when read is preserved first, then replaced by what was
+ * recovered, with a note saying so. */
+function save(dir, s, now) {
+  var note = s.note || null;
+  if (s.damaged) note = { file: preserve(dir, now), recovered: s.damaged.recovered, lost: s.damaged.lost };
+  writeJson(file(dir), { schedule: s.schedule, attempt: s.attempt, delivered: s.delivered, note: note });
+}
+
+/* Brings a damaged record into a whole one (preserving the original) and returns it. */
+function repair(dir, now) { var s = load(dir); if (s.damaged) save(dir, s, now); return load(dir); }
 
 /* ------------------------------------------------------------------ dates */
 
@@ -123,6 +229,9 @@ function setScheduleState(dir, state, now) {
  * and today, on the schedule's days, only after the schedule began, and never while the task was paused. Only after a gap; with no
  * recorded schedule, or one this cannot read, there are no expected days and so no gap. */
 function gap(dir, today) {
+  try { return gapOf(dir, today); } catch (e) { return null; }   // the record must never cost a digest
+}
+function gapOf(dir, today) {
   var s = load(dir);
   if (!s.delivered || !s.delivered.date || !s.schedule || s.schedule.state === 'deleted') return null;
   var days = cronDays(s.schedule.cron), prev = s.delivered.date, off = Array.isArray(s.schedule.off) ? s.schedule.off : [];
@@ -181,6 +290,7 @@ var NOT_A_FACT = ['not_posted', 'na', 'absent', 'not_found'];
 var FAILED = ['', 'fetch', 'build', 'post', 'verify'];
 
 function begin(dir, today, now) {
+  if (today != null && !validDate(today)) throw new Error('--today must be a real date like 2026-09-30, got "' + today + '". Nothing was recorded.');
   var s = load(dir), id = crypto.randomBytes(4).toString('hex');
   s.attempt = { id: id, date: today || localDate(now || new Date()), startedAt: (now || new Date()).toISOString(), outcome: 'started' };
   save(dir, s);
@@ -248,6 +358,8 @@ function end(dir, o, now) {
     throw new Error('--brief not_attempted only fits a run that stopped before posting (--failed fetch or build); a post that was tried and did not land is rejected or unknown');
   }
   var c = classify(f), at = (now || new Date()).toISOString();
+  if (o.ref != null && o.ref !== '' && !REF.test(o.ref)) throw new Error('--ref must be the four-character reference in the digest\'s header, got "' + o.ref + '". Nothing was recorded.');
+  if (c.outcome === 'delivered' && !o.ref) throw new Error('A delivered digest needs --ref, the four-character reference in its header. Nothing was recorded.');
   a.outcome = c.outcome; a.cause = c.cause || null; a.endedAt = at;
   a.brief = f.brief; a.details = f.details; a.verified = f.verified; a.ref = o.ref || null;
   if (c.outcome === 'delivered') {
@@ -257,7 +369,8 @@ function end(dir, o, now) {
       channels: ok ? st.channels || [] : [], conversations: ok ? st.conversations : null,
       messages: ok ? st.messages : null, meetings: ok ? st.meetings : null, windowDays: ok ? st.windowDays : null };
     a.notice = 'none';
-    save(dir, s);
+    s.note = null;
+    save(dir, s, now);
     return { outcome: 'delivered', done: false, notice: null };
   }
   var n = notice(a, s.delivered);
@@ -330,6 +443,10 @@ function view(dir, cfg, sched, now, scope) {
   };
   out.push('OPEN LOOPS — status · ' + DOW[now.getDay()] + ' ' + today);
   out.push('');
+  if (s.note) {
+    L('Status record', 'damaged: kept as ' + s.note.file + '.\nRecovered: ' + (s.note.recovered.length ? s.note.recovered.join(', ') : 'nothing') + '.' +
+      (s.note.lost.length && s.note.recovered.length ? ' Not recovered: ' + s.note.lost.join(', ') + '.' : ''));
+  }
   var dv = s.delivered;
   if (dv) {
     L('Last delivered digest', stamp(dv.at) + ' · ref ' + dv.ref + '\nbrief and details posted; brief verified\n' + readLine(dv));
@@ -368,7 +485,7 @@ function view(dir, cfg, sched, now, scope) {
 }
 
 module.exports = {
-  load: load, begin: begin, end: end, noticeResult: noticeResult, classify: classify, notice: notice,
+  load: load, repair: repair, validDate: validDate, begin: begin, end: end, noticeResult: noticeResult, classify: classify, notice: notice,
   setSchedule: setSchedule, setScheduleState: setScheduleState, gap: gap, gapLine: gapLine, cronDays: cronDays, describeCron: describeCron,
   readFacts: readFacts, stage: stage, view: view, parseNow: parseNow, localDate: localDate,
   file: file, stagedFile: stagedFile

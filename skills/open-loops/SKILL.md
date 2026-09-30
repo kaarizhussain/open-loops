@@ -303,9 +303,8 @@ Unknown or incomplete coverage preserves unverified commitments from that source
 Other sources resolve normally, and explicit completion evidence still counts.
 Commitments outside the lookback window age out without being reported as completed.
 
-**Self-DM reads are not coverage reads and are never paged.** Keep the short lookup below
-(five messages, or fifteen with midday alerts on) and the two correction reads exactly as
-described.
+**Self-DM reads are not coverage reads and are not input.** The lookup below pages the DM only as far as it takes to find the
+last digest, and the two correction reads are exactly as described.
 
 Any message containing a line like `Thread: 2 replies (latest: …)` is a thread root
 whose replies are **not** in the channel read. Fetch each one — a promise made inside a
@@ -331,8 +330,22 @@ and retyping them was most of every input file and where the copying errors were
 slack_read_channel(channel_id=<selfDm>, limit=5, response_format="detailed")
 ```
 
-Use `limit=15` when the config has `alerts` on: alerts posted between digests would
-otherwise push the last digest out of a five-message read.
+Failure notices, alerts and notes are messages too, so the newest five can all be something else. Do not stop there: read
+on, newest first, following the cursor, until you reach a digest dated before today. For each page, write the connector's
+response, verbatim, to a file as `{"text": …, "pagination_info": …}` and run
+
+```bash
+node <checkout>/tools/dm-lookup.js --page <that file> --number <page number, from 1> --today <date> --config <working dir>/openloops.config.json
+```
+
+It prints `FOUND ts=… date=… ref=…` (the digest to start from: stop), `NEXT` (read the next page, using the cursor in
+`pagination_info`, and run it again with the next number), or one of `NONE`, `CAPPED` and `UNKNOWN`, which end the search, each
+with a `dmLookup:` line to copy into the input as `dmLookup`. `NONE` means the whole DM history was read and holds no
+earlier digest, which is what a first run looks like, and nothing is wrong. `CAPPED` (ten pages, none found, more remains),
+`UNKNOWN` (the connector gave no pagination evidence, so whether more history exists cannot be told) and a read that
+failed (`dm-lookup.js --failed` prints its `dmLookup: failed` line) all mean the earlier digest could not be located. The
+digest then says so; it is never treated as a first run. Always pass `dmLookup`, and say in your summary when it is not
+`found` or `searched_none`.
 
 Only to find the digests — messages whose text begins with ` ```OPEN LOOPS — for ` — and
 note each one's `Message TS`, the date in its header, and the `D…` id the read printed.
@@ -350,8 +363,8 @@ On a re-run, also `slack_read_thread` each digest dated today.
 The thread reads — each digest, its details, and any replies typed under it — are
 `dmThread`: a list, one entry per thread read, each with its digest's `Message TS` as
 `root`. The channel read — replies typed straight into the DM since, and on a re-run
-today's digest itself — is `dm`; it is often empty, and that is fine. If none of the
-messages is a digest dated before today (the first run, or a busy DM), pass the
+today's digest itself — is `dm`; it is often empty, and that is fine. If the
+lookup ended `NONE`, `CAPPED`, `UNKNOWN` or failed, pass the first page of the
 lookup read as `dm`, add the thread of any digest dated today to `dmThread`, and
 otherwise leave `dmThread` out.
 
@@ -386,7 +399,8 @@ nothing.
   "threads":       [ { "channel": "#name", "root": "<parent Message TS>", "pages": [ { "text": "<verbatim>", "pagination_info": "<verbatim>" } ] } ],
   "events":        <the list_events response>,
   "dmThread":      [ { "root": "<digest Message TS>", "text": "<verbatim thread read under it>" } ],
-  "dm":            { "channel": "<selfDm>", "text": "<verbatim read since that digest>" }
+  "dm":            { "channel": "<selfDm>", "text": "<verbatim read since that digest>" },
+  "dmLookup":      "<found | searched_none | capped | cannot_page | failed — from tools/dm-lookup.js>"
 }
 ```
 
@@ -421,11 +435,13 @@ newer. It must open with exactly one code fence, and the first line inside that 
 must equal the first line of the runner's output character for character. The runner's
 output is the authority; don't check it against a remembered format. If it differs — a
 dropped header, a doubled fence — and you know the first post landed, post the brief and its details again from the saved
-runner output, unchanged, and say in the notes that the first post was wrong. Never edit
-the posted text to fix it. The header is how the next run finds this digest and matches
+runner output, unchanged, and say in the notes that the first post was wrong and stays in the DM. Never edit
+the posted text to fix it. **Then read the replacement back**, by its own timestamp, with the same check: from here on the
+replacement is the brief. Record what actually happened to it — posted, rejected or unknown — and if its outcome is
+uncertain, do not post a third time. The header is how the next run finds this digest and matches
 replies to it (2026-09-28: a post that lost it was invisible to the next run).
 
-**Then record the baseline**, only when the brief read back correctly:
+**Then record the baseline**, only when the brief read back correctly (after a repost, the replacement):
 
 ```bash
 node <checkout>/tools/alerts.js --baseline --ref <the ref in the digest's header> --config <working dir>/openloops.config.json
@@ -467,10 +483,11 @@ node <checkout>/tools/status.js --end --attempt <id> --brief <b> --details <d> -
   identified the message; `rejected` only when Slack explicitly refused it; `not_attempted` when the run stopped before trying
   (for the brief, only with `--failed fetch` or `build`); and `unknown` in every other case. There is no word for "not
   there": a timeout, an error that does not say, no answer, and a DM read that does not show the message are all `unknown`.
-- `--verified yes` only if the brief read back correctly, above. The details are not read back, so it says nothing about them.
+- `--verified yes` only if the brief — after a repost, the replacement; the original malformed post no longer counts — read back correctly, above. The details are not read back, so it says nothing about them.
 - `--failed` says where it stopped: `fetch` (Slack could not be read, so no digest was built), `build` (Slack was
   fetched but the runner failed or refused), `post`, or `verify`. Leave it off when nothing failed.
-- `--ref` is the reference in the digest's header, whenever a digest was built.
+- `--ref` is the reference in the digest's header (four hex characters, copied from it), whenever a digest was built. A delivered
+  digest needs it; without it, or with a malformed one, the command refuses and records nothing.
 - **If a post's outcome is uncertain, do not post again.** An explicit refusal from Slack means `rejected`. Anything else —
   a timeout, an error that does not say, no answer — is uncertain, and the latest few DM messages cannot settle it. To try to
   settle it, read the DM from the attempt's start (`slack_read_channel` with `oldest` set to the `STARTED` value, following

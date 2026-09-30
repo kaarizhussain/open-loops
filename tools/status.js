@@ -71,6 +71,7 @@ function main(argv, err) {
   }
   if (has('show')) {
     var cfg = loadConfig(fs, configPath);
+    S.repair(dir, now);   // a damaged record is preserved and its recoverable parts kept, so the status can say so
     var sched = has('paused') ? { paused: true } : flag('next') ? { next: flag('next') } : null;
     /* What the scheduler says is what the task is: record a pause or a resume the reader made in the app, so the days it
      * was off are not counted as missed. Nothing is recorded when the scheduler could not be read. */

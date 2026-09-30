@@ -62,7 +62,7 @@ var d2 = tmp(); var c2 = path.join(d2, 'c.json'); fs.writeFileSync(c2, '{}');
   assert.strictEqual(S.gap(d2, '2026-10-20'), null, 'a schedule this cannot read expects nothing, so nothing is missed');
 })();
 var d3 = tmp(); // delivered, never a schedule recorded (an existing install): no gap line
-(function () { var id = S.begin(d3, '2026-09-01'); S.end(d3, { id: id, brief: 'posted', details: 'posted', verified: true }); assert.strictEqual(S.gap(d3, '2026-10-20'), null); })();
+(function () { var id = S.begin(d3, '2026-09-01'); S.end(d3, { id: id, brief: 'posted', details: 'posted', verified: true, ref: 'dddd' }); assert.strictEqual(S.gap(d3, '2026-10-20'), null); })();
 
 /* ------------------------------ paused days are not missed days ------------------------------ */
 var dp = tmp();
