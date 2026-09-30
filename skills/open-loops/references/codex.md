@@ -67,7 +67,9 @@ and data directory. Omit the calendar sentence when it is disabled or unavailabl
 > unless you separately opt in to reports. Deleting the data directory removes local
 > files only, not Slack messages, conversation history or provider-held copies.
 > You can turn off sentence storage in the ledger; run files and conversation history
-> can still contain fetched text. Running your first digest now.
+> can still contain fetched text. With `storeText: false` the ledger also keeps a
+> salted one-way identifier of who said each item, only so that two people's identical
+> sentences stay apart. Running your first digest now.
 
 Do not add another confirmation after the channel choice and notice. Follow the
 repository's owner deployment restriction below: a preview must be described as a
@@ -75,6 +77,8 @@ preview, and its notice must not promise Slack delivery. By default the ledger
 contains message text. `storeText:false` scrubs existing row text, learned phrases
 and the rerun snapshot on a real run, but not raw inputs or backups. Do not claim
 all data stays outside Codex.
+The identity salt stays in the ledger with these identifiers. They are pseudonymous,
+not anonymous: someone with that file and candidate addresses can test guesses.
 
 Use a separate data directory and ledger while trying Codex alongside Claude. Never
 run two schedulers writing the same ledger. If migrating, stop the old schedule before

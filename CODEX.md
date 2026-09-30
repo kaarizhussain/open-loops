@@ -45,6 +45,10 @@ digest. Local files and conversation history can contain fetched text. Deleting
 your data directory removes local files only, not Slack messages, conversation
 history or provider-held copies. Turning off sentence storage affects the ledger;
 raw run files and backups are not scrubbed.
+With `storeText:false`, the ledger still keeps a salted one-way identifier of who
+said each item so identical commitments from different people remain separate.
+The salt stays in the ledger. These identifiers are pseudonymous, not anonymous;
+someone holding the file and candidate addresses can test guesses.
 
 In this repository owner's deployment, Claude owns the live digest and ledger.
 Codex previews only and does not post or create a second schedule for that setup.
