@@ -230,4 +230,19 @@ main([write(base('2026-09-01')), '--ledger', path.join(dir, 'shape-old.json')]);
   try { assert.throws(function () { store.writeLedger([]); }, /ENOSPC/); } finally { fs.renameSync = real; }
 })();
 
+/* ---- 9. A mistyped --config stops the run; an absent default config is still fine ---- */
+(function () {
+  var withExclusion = cfgFile({ channels: { exclude: ['#halcyon'] } });
+  var typo = path.join(dir, 'openloops.confg.json');
+  var run = function (cfgPath) {
+    var a = [write(base('2026-09-01')), '--ledger', path.join(dir, 'typo' + (n++) + '.json'), '--dry'];
+    return main(cfgPath ? a.concat(['--config', cfgPath]) : a);
+  };
+  assert.throws(function () { run(typo); }, /--config .*does not exist/, 'a config path that is not there stops the run, it does not read everything');
+  assert.throws(function () { main([write(base('2026-09-01')), '--dry', '--config']); }, /--config/, '--config with no path stops too');
+  assert.throws(function () { main(['--report', '--config', typo]); }, /does not exist/, 'and so does --report');
+  assert.ok(run(withExclusion).indexOf('scope doc') === -1, 'a real config still applies its exclusion');
+  assert.ok(run(null).indexOf('scope doc') > -1, 'no --config at all is the documented default: nothing to load, nothing to stop');
+})();
+
 console.log('hardening: OK');

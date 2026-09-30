@@ -37,9 +37,11 @@ var input=path.join(dir,'input.json'),ledger=path.join(dir,'ledger.json');
 var raw={ts:'1789725600.000001',user:'U123',text:'I will send the secret contract tomorrow.'};
 var base={self:'ea@example.com',today:'2026-09-20',spotCheck:0,
  users:{U123:{email:'alice@client.com'}},conversations:[{channel:'#work',messages:[raw]}]};
+// An empty config file: "no settings", and not a cwd config leaking in. A --config path that does not exist now stops the run.
+var emptyCfg=path.join(dir,'empty.json'); fs.writeFileSync(emptyCfg,'{}');
 function run(data,extra) {
   fs.writeFileSync(input,JSON.stringify(data));
-  return main([input,'--ledger',ledger,'--config',path.join(dir,'absent.json')].concat(extra||[]));
+  return main([input,'--ledger',ledger,'--config',emptyCfg].concat(extra||[]));
 }
 run(base);
 var initial=fs.readFileSync(ledger,'utf8');

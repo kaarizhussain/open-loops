@@ -294,6 +294,14 @@ function main(argv) {
     return i > -1 && argv[i + 1] ? argv[i + 1] : fallback;
   };
   var configPath = flag('config', 'openloops.config.json');
+  /* An absent DEFAULT config is fine: the defaults are a working setup. A path somebody typed is not —
+   * a config that is not there read as "no exclusions and no mutes", so a typo listed the channels the
+   * real file excluded. Only the explicit flag stops the run. */
+  var explicit = argv.indexOf('--config');
+  if (explicit > -1 && !(argv[explicit + 1] && fs.existsSync(argv[explicit + 1]))) {
+    throw new Error('--config ' + (argv[explicit + 1] || '(no path)') + ' does not exist. Fix the path, or leave --config ' +
+      'off to use ./openloops.config.json: running without the file you meant would read channels it excludes.');
+  }
 
   if (argv[0] === '--report') {
     var rc = settings(fs, configPath, { you: 'report@localhost' });
