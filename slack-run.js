@@ -56,7 +56,7 @@ var GENERATED_HEADER = /^\s*(?:```)?\s*OPEN LOOPS (?:DETAILS|NOTES|ALERT) — /;
 /* A digest's own lines, wherever they turn up. A digest posted without its header (2026-09-28)
  * is not recognised as one, and its numbered lines — " 1  11d late …" — read as a reply
  * rejecting those items. Recognised by what it says rather than by what it opens with. */
-var DIGEST_BODY = /^TODAY — highest priority\s*$|^Reply {2}3 7 not real/m;
+var DIGEST_BODY = /^TODAY — highest priority\s*$|^Reply {2}3 7 not real|^Every open item with the sentence it came from, who said it/m;
 
 /* Names match exactly, or by prefix with a trailing star: "deals-*". Deliberately not
  * a general pattern language — a scope rule nobody can read at a glance is a scope
