@@ -470,10 +470,16 @@ function parseMarks(text, max) {
      * confused: "3" is always a rejection, "c" is always a miss. */
     if (/^\s*(m|miss|missed)\b/i.test(line)) {
       answered = true;
-      (line.replace(/^\s*\w+/, '').match(/\b[a-z]\b/gi) || []).forEach(function (c) {
-        var L = c.toLowerCase();
-        if (!seenLetter[L]) { seenLetter[L] = 1; missed.push(L); }
-      });
+      /* Letters are read only as a run straight after the keyword ("miss b d", "miss b and d"). Every standalone letter in the line
+       * used to count, so "miss none, a clean sample" named a miss and lowered the recall. A lone "a" or "I" followed by prose is a word. */
+      var toks = line.replace(/^\s*\w+/, '').split(/[\s,;:]+/).filter(Boolean), run = [], ti = 0;
+      for (; ti < toks.length; ti++) {
+        var tk = toks[ti].replace(/[.!?]+$/, '');
+        if (/^(and|&)$/i.test(tk)) continue;
+        if (/^[a-z]$/i.test(tk)) run.push(tk.toLowerCase()); else break;
+      }
+      if (ti < toks.length && run.length === 1 && (run[0] === 'a' || run[0] === 'i')) run = [];
+      run.forEach(function (L) { if (!seenLetter[L]) { seenLetter[L] = 1; missed.push(L); } });
       return;
     }
     /* A line led by k / knew / already means "real, but I knew" — the difference
@@ -502,7 +508,9 @@ function parseMarks(text, max) {
      * pattern. A missed correction costs a retype, and the item still sitting there
      * tomorrow is the reminder. So: lead with the number, as the digest asks. Anything
      * else is recorded and reported rather than acted on. */
-    if (!/^\s*#?\d/.test(body)) { ignored.push(line.trim()); return; }
+    /* The lead has to BE a mark: a standalone number in range. "3pm call with Dana moved to 4" starts with a digit and is not one. */
+    var lead = body.match(/^\s*#?(\d+)(?![\d\-\/:a-z]|\.\d)/i);
+    if (!lead || +lead[1] < 1 || +lead[1] > max) { ignored.push(line.trim()); return; }
 
     nums.forEach(function (n) {
       if (seen[n]) return;

@@ -51,7 +51,7 @@ function parseMessages(messages, opts) {
       body: body,
       attach: !!(files && files.length)
     };
-  }).filter(function (m) { return m.body; })
+  }).filter(function (m) { return m.body && !slack.SYSTEM.test(m.body); })   // the text path drops join/leave notices too
     .sort(function (a, b) { return Number(a.id) - Number(b.id); });
 }
 

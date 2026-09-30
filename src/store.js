@@ -26,7 +26,7 @@ var EMPTY = { rows: [], digests: {}, refs: {}, refsSince: null, seen: [], learne
 
 function load(file) {
   try {
-    var raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+    var raw = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));   // a byte-order mark is an editor's, not damage
     /* Valid JSON is not a ledger. Every file this store writes has a rows list of lists, so
      * anything else ([], {}, a misspelled key) was written by something else, or damaged.
      * Reading it as empty made the next flush overwrite it and lose every verdict. */

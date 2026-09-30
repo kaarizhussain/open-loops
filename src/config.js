@@ -71,7 +71,7 @@ function merge() {
 function loadConfig(fs, path) {
   if (!path) return {};
   try {
-    return JSON.parse(fs.readFileSync(path, 'utf8'));
+    return JSON.parse(fs.readFileSync(path, 'utf8').replace(/^\uFEFF/, ''));   // Windows editors and PowerShell 5.1 add a byte-order mark
   } catch (e) {
     if (e.code === 'ENOENT') return {};
     throw new Error('Config at ' + path + ' could not be read (' + e.message +

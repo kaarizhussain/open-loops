@@ -57,7 +57,8 @@ function cleanText(s) {
     .replace(/<#C[A-Z0-9]+\|([^>]+)>/g, '#$1')         // <#C123|general> → #general
     .replace(/<(?:https?|mailto):[^|>]+\|([^>]+)>/g, '$1')  // labelled link → its label
     .replace(/<((?:https?|mailto):[^>]+)>/g, '$1')     // bare link → the url
-    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    // &amp; last: decoded first, "&amp;lt;" (a user typing the literal text "&lt;") became "<".
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
@@ -122,7 +123,9 @@ function parseChannel(text, opts) {
      * but stamp() ran first and threw on the missing value — so a connector format change
      * that lost the "Message TS" line crashed the run instead of reaching READ NOTHING,
      * which exists for exactly that case. */
-    var tsOk = !!cur.ts && isFinite(parseFloat(cur.ts));
+    /* Finite is not enough: a value past the range of a date (about 8.6e15 ms) is finite and still throws in stamp(). */
+    var tsOk = !!cur.ts && isFinite(parseFloat(cur.ts)) &&
+      !isNaN(new Date(Math.floor(parseFloat(cur.ts) * 1000) + (opts.tzOffset || 0) * 60000).getTime());
     // Drop empties and Slack's own housekeeping notices.
     if (tsOk && body && !SYSTEM.test(body)) {
       out.push({
@@ -173,7 +176,9 @@ function parseChannel(text, opts) {
     // to begin "From:" cannot rewrite who sent the message.
     var f = !cur.uid && line.match(FROM_LINE);
     if (f) { cur.name = f[1]; cur.email = (f[2] || '').toLowerCase(); cur.uid = f[3]; return; }
-    if (TIME_LINE.test(line)) return;                 // the localised date, unparsed
+    /* The connector's own Time line sits in the header block of a thread read, before "Message TS". A line that starts "Time:" in what
+     * somebody typed comes after it, and is text: "Time: 3pm Thursday works, I'll send the deck then" is a commitment. */
+    if (!cur.ts && TIME_LINE.test(line)) return;      // the localised date, unparsed
 
     var t = line.match(TS_LINE);
     if (t && !cur.ts) { cur.ts = t[1]; return; }
@@ -209,5 +214,5 @@ function parseChannel(text, opts) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { parseChannel: parseChannel, cleanText: cleanText, stamp: stamp };
+  module.exports = { parseChannel: parseChannel, cleanText: cleanText, stamp: stamp, SYSTEM: SYSTEM };
 }
