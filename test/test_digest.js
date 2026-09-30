@@ -222,7 +222,7 @@ assert.strictEqual(detailRows(uncapped), result.open.length,
   'with no cap asked for, every item still prints — the Slack ceiling is the runner\'s problem');
 assert.ok(detailRows(cappedFx) < detailRows(uncapped), 'a cap actually shortens the list');
 assert.ok(/… and \d+ more in this pile/.test(cappedFx), 'the trim is announced with a count');
-var heldTotal = (parts(cappedFx).details.match(/… and (\d+) more/g) || [])
+var heldTotal = (parts(cappedFx).details.match(/… and (\d+) more in this pile/g) || [])
   .reduce(function (n, s) { return n + parseInt(s.match(/\d+/)[0], 10); }, 0);
 assert.strictEqual(detailRows(cappedFx) + heldTotal, result.open.length,
   'shown plus held equals the true total, so the count can be trusted');

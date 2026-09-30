@@ -172,7 +172,7 @@ function digestOrder(open, today) {
  * printed where a name goes, so a promise of your own to nobody in particular says so. */
 function move(l, nm) {
   var who = nm(l.who) || (l.rel ? l.rel.label : null);
-  if (who && who.indexOf('@') > -1) who = callName(who, l);
+  if (who && who.indexOf('@') > -1) who = callName(who, l, nm);
   var q = '"' + shortenBody(l.what, 60) + '"';
   if (l.type === 'unprepped_meeting') return 'Send an agenda — ' + l.subject;
   if (l.type === 'no_followup') return 'Send a recap to ' + (who || 'them');
@@ -218,20 +218,28 @@ function nameBook(messages, items) {
     var n = named[a] && named[a].toLowerCase();
     if (n) (holders[n] = holders[n] || {})[a] = 1;
   });
-  return function (who) {
+  var book = function (who) {
     if (!who) return null;
     var a = String(who).toLowerCase();
     if (a.indexOf('@') < 0) return String(who);       // already a name: "Sarah", "you"
     var n = named[a];
     return n && Object.keys(holders[n.toLowerCase()] || {}).length === 1 ? n : String(who);
   };
+  /* Two people who share a first name. The book hands back the full address for each, and the short forms below reduced that to the
+   * part before the @ — "Chase sam" for both Sams — so the one thing the address was kept for was thrown away. */
+  book.collides = function (who) {
+    var a = String(who || '').toLowerCase(), n = named[a];
+    return !!n && Object.keys(holders[n.toLowerCase()] || {}).length > 1;
+  };
+  return book;
 }
 
 /* Someone with no usable first name, in a word. The company for a role address — "People
  * team" for hr@ — and otherwise the part before the @: "Chase j.mercer" says who, where
  * "Chase Partner" reads as a person called Partner. The full address is in the details
  * either way. */
-function callName(addr, l) {
+function callName(addr, l, nm) {
+  if (nm && nm.collides && nm.collides(addr)) return String(addr);   // two of the same first name: the address is the name
   var local = String(addr).split('@')[0];
   return ROLE.test(local) && l.rel && String(addr).toLowerCase() === String(l.who || '').toLowerCase()
     ? l.rel.label : local;
@@ -256,7 +264,7 @@ function lead(l, nm) {
  * The person goes in the line because there is no evidence line under it to carry them. */
 function compact(l, nm) {
   var type = l.openType || l.type, who = nm(l.who);
-  if (who && who.indexOf('@') > -1) who = callName(who, l);
+  if (who && who.indexOf('@') > -1) who = callName(who, l, nm);
   var q = '"' + shortenBody(l.what, 54) + '"';
   if (QUIET[type]) return shortenBody(l.what + ' — ' + l.subject, 64);
   if (type === 'awaiting_reply') return 'You asked' + (who ? ' ' + who : '') + ': ' + q;
@@ -279,7 +287,7 @@ function evidence(l, nm) {
   var out = [];
   if (l.dueFrom) {
     var from = nm(l.dueFrom.from);
-    if (from && from.indexOf('@') > -1) from = callName(l.dueFrom.from, l);
+    if (from && from.indexOf('@') > -1) from = callName(l.dueFrom.from, l, nm);
     out.push(l.dueFrom.same
       ? '"' + shortenBody(l.dueFrom.text, 40).replace(/[.!]$/, '') + '"'
       : 'date from ' + (from || 'them') + '\'s "' + duePhrase(l.dueFrom.text) + '"');
@@ -554,7 +562,10 @@ function renderBrief(s) {
       ' skipped by your channel settings and none was read.' : 'no conversation was handed over to read.') +
       ' This does not establish that the day was quiet. Treat the empty list below as unknown rather than clear.');
   } else if (!s.open.length) {
-    p(readShort ? 'Nothing found in what was read — but the read was INCOMPLETE. Do not treat this as clear.' : headline(s.open, b.source));
+    var unverified = ((b.ledger && b.ledger.unknown) || []).length;
+    p(readShort ? 'Nothing found in what was read — but the read was INCOMPLETE. Do not treat this as clear.'
+      : unverified ? 'Nothing found in what was read — but ' + unverified + (unverified === 1 ? ' item' : ' items') + ' could not be verified. Do not treat this as clear.'
+      : headline(s.open, b.source));
   }
   /* Say the reply landed. Correcting something and seeing no acknowledgement is how
    * a reader learns the correction does not matter, and then they stop sending them. */
@@ -684,7 +695,7 @@ function renderDetails(s) {
     /* Never a silent trim. */
     if (held > 0) {
       p('      … and ' + held + ' more in this pile, ranked below these. ' +
-        'Raise `listCap` to see them.');
+        'They remain tracked but are not shown in this digest.');
     }
     p('');
   });
@@ -697,6 +708,7 @@ function renderDetails(s) {
     unknown.slice(0, perPile || 10).forEach(function (g) {
       p('  ' + (g.what || '(text not kept)') + (g.who ? '  — ' + g.who : ''));
     });
+    if (unknown.length > (perPile || 10)) p('  … and ' + (unknown.length - (perPile || 10)) + ' more.');
     p('');
   }
   if (b.ledger && b.ledger.gone.length) {
@@ -738,6 +750,7 @@ function renderDetails(s) {
           : ': ' + l.closedBy));
       }
     });
+    if (r.closed.length > (perPile || 10)) p('    … and ' + (r.closed.length - (perPile || 10)) + ' more.');
     p('');
   }
 
