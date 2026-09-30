@@ -12,7 +12,8 @@
  *   node tools/status.js --schedule <taskId> "<cron>" --config <config>    the digest task, as the scheduler has it
  *   node tools/status.js --schedule-state paused|resumed|deleted --config <config>   the digest task was paused, resumed or deleted
  *   node tools/status.js --task --config <config>                           the recorded digest task id, or NONE
- *   node tools/status.js --show [--next <ISO> | --paused] --config <config>  the status, for "is it working?"
+ *   node tools/status.js --show [--read-only] [--next <ISO> | --paused] --config <config>  the status, for "is it working?"
+ *        --read-only never repairs files or refreshes schedule state
  *
  * No network and no Slack. `--dry` is a preview: it records nothing, so it has no failure to report.
  * `--now YYYY-MM-DDTHH:MM` (local time) is for tests.
@@ -33,6 +34,10 @@ function main(argv, err) {
   var dir = path.dirname(path.resolve(configPath));
   var now = S.parseNow(flag('now') || '');
   err = err || function () {};
+  if (has('read-only') && (!has('show') && !has('task') ||
+      ['begin', 'end', 'notice-result', 'schedule', 'schedule-state'].some(has))) {
+    throw new Error('--read-only is only supported with --show or --task');
+  }
 
   if (has('begin')) {
     if (has('dry')) return PREVIEW + '\nATTEMPT PREVIEW';
@@ -71,12 +76,12 @@ function main(argv, err) {
   }
   if (has('show')) {
     var cfg = loadConfig(fs, configPath);
-    S.repair(dir, now);   // a damaged record is preserved and its recoverable parts kept, so the status can say so
+    if (!has('read-only')) S.repair(dir, now);
     var sched = has('paused') ? { paused: true } : flag('next') ? { next: flag('next') } : null;
     /* What the scheduler says is what the task is: record a pause or a resume the reader made in the app, so the days it
      * was off are not counted as missed. Nothing is recorded when the scheduler could not be read. */
-    if (sched && S.load(dir).schedule) S.setScheduleState(dir, sched.paused ? 'paused' : 'resumed', now);
-    return S.view(dir, cfg, sched, now, { alerts: !!alerts.consent(cfg), diagnostics: !!diag.consent(cfg) });
+    if (!has('read-only') && sched && S.load(dir).schedule) S.setScheduleState(dir, sched.paused ? 'paused' : 'resumed', now);
+    return S.view(dir, cfg, sched, now, { alerts: !!alerts.consent(cfg), diagnostics: !!diag.consent(cfg), readOnly: has('read-only') });
   }
   throw new Error('usage: see the top of tools/status.js');
 }

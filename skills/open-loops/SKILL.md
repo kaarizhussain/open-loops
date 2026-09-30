@@ -215,9 +215,12 @@ said yes or no to it — in these words. The default is no, and nothing is sent 
 > a private database only the developer can read — never posted publicly, no account
 > needed.
 >
-> A report contains only: a random ID created now, the Open Loops version, your Node
-> version and operating system, the date, and either where in the code a run failed or
-> which kind of item you corrected and how old it was.
+> A report contains random installation and report IDs, a report-format identifier,
+> the Open Loops version, whether Claude or Codex ran it, your Node major version and
+> operating system, and the date. A failure report also contains the failed step, a
+> generic error class such as TypeError (never its message), and up to three Open Loops
+> code locations. Correction reports contain the item kind and age and how many items
+> were listed, or spot-check sample and miss counts.
 >
 > It never contains message text, names, email addresses, channel names, Slack IDs, file
 > paths, error messages, your config or your ledger.

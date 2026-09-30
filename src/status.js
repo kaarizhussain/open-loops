@@ -443,7 +443,9 @@ function view(dir, cfg, sched, now, scope) {
   };
   out.push('OPEN LOOPS — status · ' + DOW[now.getDay()] + ' ' + today);
   out.push('');
-  if (s.note) {
+  if (s.damaged && scope && scope.readOnly) {
+    L('Status record', 'Status record is damaged. Read-only mode left it unchanged; displayed history includes only validated records.');
+  } else if (s.note) {
     L('Status record', 'damaged: kept as ' + s.note.file + '.\nRecovered: ' + (s.note.recovered.length ? s.note.recovered.join(', ') : 'nothing') + '.' +
       (s.note.lost.length && s.note.recovered.length ? ' Not recovered: ' + s.note.lost.join(', ') + '.' : ''));
   }

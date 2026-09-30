@@ -83,7 +83,9 @@ switching writers; preserve the existing ledger so corrections are retained.
 Run the first digest before asking about scheduling or diagnostic reports. Keep
 diagnostic reports and midday alerts off for a new setup until explicitly requested
 and consented to; do not reset an existing configuration's choices. Do not offer
-midday alerts on your own initiative.
+midday alerts on your own initiative. Midday checks currently have a Claude
+workflow only. If asked to enable them in Codex, explain this limitation; do not
+record consent, create a check automation or reuse Claude's scheduling steps.
 
 ## Fetch and run
 
@@ -282,7 +284,7 @@ When asked what Open Loops tracks or whether it ran, show the tool's status in t
 Codex chat, not Slack:
 
 ```text
-node "<checkout>/tools/status.js" --show --config "<config>"
+node "<checkout>/tools/status.js" --show --read-only --config "<config>"
 ```
 
 The owner's shared Claude setup uses this read-only form: do not pass `--next` or
@@ -292,7 +294,9 @@ that Codex cannot verify the Claude scheduler here, so its next run is unknown.
 For a setup whose real writer is Codex, inspect the recorded task id (`--task`) and
 the actual Codex automation. Pass `--next <ISO>` only if the scheduler supplies a
 confirmed next-run timestamp, or `--paused` if it confirms the automation is paused.
-Those options also refresh recorded schedule state. Otherwise omit both and leave
+With `--read-only`, those facts affect only the displayed status; they never refresh
+recorded schedule state or repair a damaged file. Use `--schedule-state` explicitly
+after confirmed changes in a Codex-owned setup. Otherwise omit both and leave
 the next run unknown; do not calculate it from the saved recurrence or assume a
 Claude schedule applies. Missing status history means no delivery has been verified
 by status tracking yet, not that no digest has ever arrived.

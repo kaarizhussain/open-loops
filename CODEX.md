@@ -33,7 +33,8 @@ The brief goes to your own Slack DM and is echoed in the Codex chat after delive
 is verified. Full details stay in the Slack thread. Codex explains how to correct
 items, then offers a daily schedule at your preferred local time. The optional
 diagnostic reports question comes last, after your first digest, whether or not
-you schedule it. Midday alerts are available when you ask; setup does not offer them.
+you schedule it. Midday checks currently have a Claude workflow only; Codex does
+not offer or enable them.
 
 Before reading message history, Codex validates the saved config. Channel patterns
 must be exact names or end in a single `*`; malformed patterns stop the run rather
@@ -63,6 +64,9 @@ was closed and a run never started, Open Loops cannot send a warning at that tim
 To change timing, pause or stop, ask Codex. It updates the existing automation only
 when requested. Stopping keeps the ledger. In the owner's Claude setup, Codex can
 read local status but cannot verify or change the Claude schedule.
+Codex uses `tools/status.js --show --read-only`, which leaves both damaged records
+and schedule state unchanged. The regular `--show` command can repair a damaged
+file and update schedule state from supplied scheduler facts.
 
 ## Connector input
 
@@ -87,7 +91,8 @@ Slack records in `messages`, without generating Claude-specific response banners
 
 Each work conversation and thread uses `pages`, with the exact requested `oldest` and
 each page's separate `pagination_info`. A page takes either verbatim `text` or structured
-`messages`. The self-DM reads remain unpaged and take either `text` or `messages`.
+`messages`. The self-DM lookup is paged; its two correction reads use the unpaged
+input form and take either `text` or `messages`.
 The structured fields are documented in the Codex workflow. Map actual connector
 fields without changing their values. Malformed conversations are reported separately;
 Codex stops before a real run when a source is incomplete or unreadable. Config,

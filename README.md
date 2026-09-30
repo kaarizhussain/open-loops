@@ -341,7 +341,8 @@ preferred local time. Installation alone does not create a schedule. Local sched
 runs need the computer awake and the app running.
 
 The optional diagnostics question comes last, after the first digest and your
-schedule choice. Midday alerts remain off unless you ask and opt in.
+schedule choice. Midday checks currently have a Claude workflow only; Codex does
+not offer or enable them.
 
 **Alongside Claude:** use separate data directories and ledgers while comparing the
 two hosts. Stop the old schedule before migrating to a shared ledger; two schedulers
