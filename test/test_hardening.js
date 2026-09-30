@@ -339,4 +339,71 @@ main([write(base('2026-09-01')), '--ledger', path.join(dir, 'shape-old.json')]);
   assert.strictEqual(plain, again, 'a run with no collisions is deterministic');
 })();
 
+/* ---- 13. Message and thread identities are channel-aware and stable ---- */
+(function () {
+  var loops = require('../src/loops.js');
+  var NL = String.fromCharCode(10);
+  var asked = function (f) { var a = JSON.parse(fs.readFileSync(f, 'utf8')).audit.asked; return [].concat.apply([], Object.keys(a).map(function (d) { return a[d]; })); };
+  var T = at(2026, 8, 25, 11);
+  var chat = function (channel, body) { return { channel: channel, members: [], text: me(T, body) }; };
+  var QUIET_A = 'Notes from the planning sync, nothing to do here today';
+  var QUIET_B = 'Lunch at the usual place, see everyone at noon';
+
+  // The same message keeps its identity whether or not another channel with the same timestamp was fetched.
+  var both = base('2026-09-01'); both.spotCheck = 5;
+  both.conversations = [chat('#alpha', QUIET_A), chat('#beta', QUIET_B)];
+  var ledBoth = path.join(dir, 'id-both.json');
+  main([write(both), '--ledger', ledBoth]);
+  var alone = base('2026-09-01'); alone.spotCheck = 5;
+  alone.conversations = [chat('#beta', QUIET_B)];
+  var ledAlone = path.join(dir, 'id-alone.json');
+  main([write(alone), '--ledger', ledAlone]);
+  var idsBoth = asked(ledBoth), idsAlone = asked(ledAlone);
+  assert.strictEqual(idsBoth.length, 2);
+  assert.strictEqual(idsAlone.length, 1);
+  assert.ok(idsBoth.some(function (x) { return x.indexOf('#alpha') > -1; }) && idsBoth.some(function (x) { return x.indexOf('#beta') > -1; }), 'each id names its own channel: ' + idsBoth);
+  assert.ok(idsBoth.indexOf(idsAlone[0]) > -1, "#beta's message has the same id with and without #alpha: " + idsBoth + ' vs ' + idsAlone);
+  assert.ok(idsAlone[0].indexOf(T) === 0 && idsAlone[0].indexOf('#beta') > -1, 'and the id carries the original timestamp and the channel: ' + idsAlone[0]);
+
+  // A thread identity carries its channel to the detector, but the ledger key keeps its historical form.
+  var legacy = loops.loopKey({ type: 'owed_to_us', threadId: T, said: '2026-08-25', what: 'x' });
+  var qualified = loops.loopKey({ type: 'owed_to_us', threadId: T + '@#alpha', said: '2026-08-25', what: 'x' });
+  assert.strictEqual(qualified, legacy, 'a channel-qualified thread id maps to the key every existing ledger row already has');
+  assert.notStrictEqual(loops.loopKey({ type: 'owed_to_us', threadId: '#alpha', said: '2026-08-25', what: 'x' }), legacy);
+
+  // Equal thread-root timestamps in two channels are two threads: one cannot close the other's commitment.
+  var users = { U0LENA: { email: 'lena@vectorfreight.com', name: 'Lena Borg' } };
+  var root = '1788000000.000100', promiseTs = '1788000100.000100', laterTs = '1788000200.000100';
+  var mk = function (alphaThread, betaThread) {
+    var i = base('2026-09-01'); i.conversations = []; i.users = users;
+    i.threads = [
+      { channel: '#alpha', root: root, messages: alphaThread },
+      { channel: '#beta', root: root, messages: betaThread }
+    ];
+    return i;
+  };
+  var promise = { ts: promiseTs, thread_ts: root, user: 'U0LENA', text: "We'll send the revised contract Friday." };
+  var head = { ts: root, thread_ts: root, user: 'U0LENA', text: 'Thread about the contract' };
+  var delivery = { ts: laterTs, thread_ts: root, user: 'U0LENA', text: 'Attached the revised contract.' };
+  var led13 = path.join(dir, 'id-threads.json');
+  var out13 = main([write(mk([head, promise], [head, delivery])), '--ledger', led13]);
+  assert.ok(out13.indexOf('revised contract Friday') > -1, "#beta's delivery does not close #alpha's promise");
+  assert.ok((out13.split('CLOSED ITSELF')[1] || '').indexOf('revised contract Friday') === -1, 'and it is not listed as closed');
+  // Control: the delivery in the SAME thread does close it, so the test is able to see a close.
+  var out13b = main([write(mk([head, promise, delivery], [head])), '--ledger', path.join(dir, 'id-threads2.json'), '--dry']);
+  assert.ok(out13b.indexOf('CLOSED ITSELF') > -1 || out13b.indexOf('revised contract Friday') === -1, 'control: a delivery in its own thread closes it');
+
+  // Existing corrections still apply: the ledger key for that thread item is the bare-root form, and a verdict on it holds.
+  var rows13 = JSON.parse(fs.readFileSync(led13, 'utf8')).rows;
+  var row = rows13.filter(function (r) { return /revised contract/.test(r[6] || ''); })[0];
+  assert.ok(row, 'precondition: the thread item is tracked');
+  assert.strictEqual(row[0].split('|')[1], root, 'its key holds the bare thread root, as every existing ledger row does: ' + row[0]);
+  var led = JSON.parse(fs.readFileSync(led13, 'utf8'));
+  led.rows.forEach(function (r) { if (r[0] === row[0]) r[7] = 'x'; });
+  fs.writeFileSync(led13, JSON.stringify(led));
+  var nextDay = mk([head, promise], [head, delivery]); nextDay.today = '2026-09-02';
+  var after = main([write(nextDay), '--ledger', led13, '--dry']);
+  assert.ok(after.indexOf('revised contract Friday') === -1, 'a verdict recorded before this change still hides the item after it');
+})();
+
 console.log('hardening: OK');

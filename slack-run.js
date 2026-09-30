@@ -355,8 +355,19 @@ function main(argv) {
   /* Every conversation becomes messages in the shape loops.js already takes. The
    * channel name stands in for a subject line, which Slack does not have. */
   /* A Slack timestamp is unique within a channel, not across the workspace, so two channels can hold different
-   * messages with the same one. Keyed by timestamp alone the second silently replaced the first. A thread read
-   * still replaces its own root, because it shares that root's channel. */
+   * messages with the same one, and two can have a thread with the same root. Every message is therefore
+   * identified by its timestamp AND its channel, always — never only when a collision happens to be in this
+   * run's input, which would change a message's identity whenever another channel was or was not fetched:
+   *   id        <ts>@<channel>          the message; ts keeps the original Slack timestamp
+   *   threadId  <root ts>@<channel>     a thread; a channel's own stream is already named by its channel
+   * A thread read still replaces its own root because it shares that root's channel. The ledger key for a
+   * thread item keeps its historical form (loopKey drops the @channel): ledger rows store no channel to
+   * migrate from, and existing keys carry verdicts and digest memos. */
+  var tag = function (m, channel) {
+    m.ts = m.id;
+    m.id = m.ts + '@' + channel;
+    if (!m.stream) m.threadId = m.threadId + '@' + channel;
+  };
   var slot = function (channel, ts) { return channel + String.fromCharCode(0) + ts; };
   var byId = {}, roots = {}, skipped = 0, skippedThreads = 0, unread = [], failed = [], orderSuspect = [];
   var window = cfg.lookbackDays;
@@ -406,8 +417,10 @@ function main(argv) {
       else unread.push(c.channel);
     }
     got.forEach(function (m) {
-      byId[slot(c.channel, m.id)] = m;
-      if (m.hasThread) roots[slot(c.channel, m.id)] = c.channel;   // has replies a channel read omits
+      var ts = m.id;
+      tag(m, c.channel);
+      byId[m.id] = m;
+      if (m.hasThread) roots[slot(c.channel, ts)] = c.channel;   // has replies a channel read omits
     });
   });
 
@@ -433,7 +446,7 @@ function main(argv) {
       process.stderr.write('open-loops: ' + t.channel + ' thread ' + t.root + ' was not read: ' + e.message + String.fromCharCode(10));
       return;
     }
-    repliesRead.forEach(function (m) { byId[slot(t.channel, m.id)] = m; });
+    repliesRead.forEach(function (m) { tag(m, t.channel); byId[m.id] = m; });
     if (repliesRead.suspect) orderSuspect.push(t.channel + ' thread ' + t.root);
     var read = recordCoverage(t, t.root, repliesRead, t.channel,
       t.channel + ' thread ' + t.root);
@@ -441,20 +454,8 @@ function main(argv) {
     if (!repliesRead.length) unread.push(t.channel + ' thread ' + t.root);
   });
 
-  /* Everything downstream — the detector's held and closing ids, the ledger's message ids, spot-check
-   * sampling — identifies a message by its id, and a bare timestamp is only unique within a channel.
-   * Where two channels share one, the later channel (by name, so the order they were handed over in does
-   * not matter) gets a distinct id: the timestamp with a rank appended, which no real Slack timestamp
-   * (six decimal places) can equal. Without this a silent message in one channel was never sampled
-   * because a flagged message in another had the same timestamp. Ids that do not collide are untouched. */
-  var byTs = {};
-  Object.keys(byId).forEach(function (k) { (byTs[byId[k].id] = byTs[byId[k].id] || []).push(byId[k]); });
-  Object.keys(byTs).forEach(function (ts) {
-    byTs[ts].sort(function (a, b) { return a.subject < b.subject ? -1 : a.subject > b.subject ? 1 : 0; })
-      .forEach(function (m, i) { if (i) m.id = ts + (i < 10 ? '0' : '') + i; });
-  });
   var messages = Object.keys(byId).map(function (k) { return byId[k]; })
-    .sort(function (a, b) { return parseFloat(a.id) - parseFloat(b.id); });
+    .sort(function (a, b) { return parseFloat(a.ts) - parseFloat(b.ts) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0); });
 
   // Coverage comes from fetch evidence, never from a phrase in a Slack message or
   // from the date of the oldest message that happened to be returned.

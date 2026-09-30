@@ -1245,9 +1245,15 @@ function fnv(s) {
   return ('0000000' + h.toString(16)).slice(-8);
 }
 
+/* The key is the ledger's row id and what a reply's number resolves to. A Slack thread reaches the detector
+ * as "<root ts>@<channel>" so two channels' threads can never merge, but its key keeps the bare root ts every
+ * existing row was written with: rows store no channel, so they cannot be migrated, and a changed key would
+ * bring back everything already marked wrong. Two threads with the same root in different channels share a
+ * key only if they also hold an identical sentence on the same day. */
 function loopKey(l) {
   if (l.eventId) return l.type + '|' + l.eventId;
-  return [l.type, l.threadId, l.said, fnv(String(l.what || ''))].join('|');
+  var thread = /^(\d+\.\d+)@/.exec(String(l.threadId));
+  return [l.type, thread ? thread[1] : l.threadId, l.said, fnv(String(l.what || ''))].join('|');
 }
 
 var OWNER = {
