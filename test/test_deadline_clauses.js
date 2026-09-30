@@ -49,12 +49,25 @@ assert.strictEqual(dueBoth("Thursday at 5pm, I'll send it; Dana is in tomorrow."
 ['Dana arrives tomorrow, I\'ll send it.',              // a date, but about Dana
  'Thursday works for Dana, I\'ll send it.',            // might be the deadline; cannot be told from Dana's availability
  'Tomorrow I\'ll be out but I\'ll send it Thursday.',  // two commitment clauses, two dates
- 'I\'ll, uh, send it Friday.',                          // a bare cue split from its verb phrase by a parenthetical
  'Dana is in Friday, I\'ll send it; Sam is out tomorrow.'].forEach(function (t) {
   var a = detect(t, 'out', TODAY), b = detect(t.replace(/\bI'll\b/g, "We'll"), 'in', TODAY);
   assert.strictEqual(a.length, 1, t); assert.strictEqual(b.length, 1, t);
   assert.strictEqual(a[0].due, null, 'left undated rather than guessed (outgoing): ' + t + ' -> ' + a[0].due);
   assert.strictEqual(b[0].due, null, 'left undated rather than guessed (incoming): ' + t + ' -> ' + b[0].due);
+});
+
+/* ------------------------------ a spoken filler is not a clause ------------------------------ */
+// "I'll, uh, send it Friday" is one commitment with one date. The filler made a bare cue clause that could not be tied to Friday.
+assert.strictEqual(dueBoth("I'll, uh, send it Friday."), '2026-09-25');
+assert.strictEqual(dueBoth("I'll — um — send it Friday."), '2026-09-25');
+assert.strictEqual(dueBoth("I'll, you know, send it Friday; Dana is out tomorrow."), '2026-09-25', 'and the incidental date beside it still does not win');
+assert.strictEqual(dueBoth("I'll, uh, send it Friday, I'm out tomorrow."), '2026-09-25');
+assert.strictEqual(dueBoth("By Thursday, I'll, uh, send it; Dana arrives tomorrow."), '2026-09-24');
+assert.strictEqual(dueBoth("By Thursday, uh, I'll send it; Dana arrives tomorrow."), '2026-09-24', 'a filler clause does not come between a deadline and its commitment');
+// The filler does not rescue a genuinely ambiguous sentence.
+['Dana arrives tomorrow, uh, I\'ll send it.', 'Thursday works for Dana, um, I\'ll send it.'].forEach(function (t) {
+  assert.strictEqual(detect(t, 'out', TODAY)[0].due, null, t);
+  assert.strictEqual(detect(t.replace(/\bI'll\b/g, "We'll"), 'in', TODAY)[0].due, null, t);
 });
 
 /* ------------------------------ everything with one clause reads as before ------------------------------ */

@@ -160,6 +160,11 @@ var DATE_ONLY = new RegExp('^(?:(?:the\\s+)?(?:deadline|due date)\\s+(?:is\\s+)?
   WD + ',?\\s+' + MON + '\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s+\\d{4})?|' + WD + '(?:\\s+(?:at|by)\\s+\\d{1,2}(?::\\d\\d)?\\s*(?:am|pm)?)?(?:\\s+(?:next|this)\\s+week)?|' +
   MON + '\\s+\\d{1,2}(?:st|nd|rd|th)?|the\\s+\\d{1,2}(?:st|nd|rd|th)|tomorrow|today|eod|eow|end of (?:the\\s+)?(?:day|week)|week)(?:\\s+(?:eod|at the latest))?[.!]?$', 'i');
 
+/* A spoken filler between commas or dashes (", uh,", " — um — ") is not a clause: "I'll, uh, send it Friday" is one commitment with one date. */
+var FILLER_WORD = '(?:uh+|um+|er+m?|hmm+|you know|i mean)';
+var FILLER_AFTER_CUE = new RegExp('\\b(i[\'’]?ll|i will|we[\'’]?ll|we will|i[\'’]?m going to)\\s*(?:,|\\s[—–-]+)\\s*' + FILLER_WORD + '\\s*(?:,|[—–-]+)\\s*', 'gi');
+var FILLER_ONLY = new RegExp('^' + FILLER_WORD + '$', 'i');
+
 /* The deadline of one commitment sentence.
  *
  * parseDue alone reads the whole sentence and lets a word like "tomorrow" win over the weekday the promise is actually made for:
@@ -171,9 +176,9 @@ var DATE_ONLY = new RegExp('^(?:(?:the\\s+)?(?:deadline|due date)\\s+(?:is\\s+)?
  *      clauses disagree. An undated item ranks by age; a wrong date ranks by the wrong urgency.
  * A sentence with one clause is read exactly as before. Direction does not matter: a promise made to you is dated the same way. */
 function dueOfPromise(s, from) {
-  var t = String(s);
+  var t = String(s).replace(FILLER_AFTER_CUE, '$1 ');   // a filler glued to the cue does not split the cue from its verb
   DATE_COMMA.forEach(function (rx) { t = t.replace(rx, '$1\u0001$2'); });
-  var cl = t.split(CLAUSE_SPLIT).map(function (c) { return c.replace(/\u0001/g, ',').trim(); }).filter(Boolean);
+  var cl = t.split(CLAUSE_SPLIT).map(function (c) { return c.replace(/\u0001/g, ',').trim(); }).filter(function (c) { return c && !FILLER_ONLY.test(c); });
   if (cl.length < 2) return parseDue(s, from);
   var cues = [];
   cl.forEach(function (c, i) { if (COMMIT.test(c)) cues.push(i); });
