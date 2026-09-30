@@ -28,6 +28,10 @@ Anyone pointing this at a workspace they do not personally own is right to ask, 
 should be answerable without reading the source.
 
 **The detector runs locally.** There are no network calls in `src/` or `slack-run.js`.
+The one file that makes any is `tools/report.js`, and only if you opt in to diagnostic
+reports at setup: a fixed set of fields — a random ID, versions, the date, and where a run
+failed or which kind of item you corrected — never message text, names, paths or error
+messages. `"diagnostics": false` in the config stops it and discards anything unsent.
 Claude or Codex retrieves messages through your connected Slack and calendar tools
 and posts the digest to your own DM. Those connector responses are also processed
 by the host assistant; local detection does not mean the data never leaves your machine.

@@ -1,0 +1,21 @@
+{
+  "name": "open-loops-reports",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  // Workers Logs are on by default for a new Worker and would keep request metadata.
+  // Every part is off, explicitly. Never turn it on, and never `wrangler tail` this Worker:
+  // a live tail streams request headers, the IP address included.
+  "observability": {
+    "enabled": false,
+    "logs": { "enabled": false, "invocation_logs": false },
+    "traces": { "enabled": false }
+  },
+  "triggers": { "crons": ["17 13 * * *"] },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "open-loops-reports", "database_id": "SET-AT-DEPLOY" }
+  ]
+  // Secret, set with `npx wrangler secret put GITHUB_TOKEN`: a fine-grained token with
+  // Contents: read and write on kaarizhussain/open-loops-reports only (to send a dispatch).
+}

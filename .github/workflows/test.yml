@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'   # node:sqlite, for the report-worker suite
       # No install step: the detector has no dependencies, and keeping it that way is
       # the point. If this ever needs `npm ci`, something was added that should not
       # have been.

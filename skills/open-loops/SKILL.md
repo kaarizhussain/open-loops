@@ -56,6 +56,11 @@ message text from the ledger and its rollback snapshot. It does not scrub the in
 output files, backups, the assistant's conversation history, or what is posted to Slack.
 The run's input can turn text storage off but never on; only the config decides that.
 
+**Diagnostic reports** are separate and off unless they said yes in Setup. When on,
+`tools/report.js` — the one file with a network call — sends the developer a fixed set of
+fields: an ID, versions, the date, and a code location or the kind of item corrected.
+Never message text, names or paths. Setup step 5 has the exact wording; use it.
+
 **It costs less than it sounds like.** Every open item in the digest is re-detected from
 live messages on each run, so the list still quotes every sentence in full. The single
 thing lost is the *cleared since the last run* section, which reads from the ledger and
@@ -126,7 +131,50 @@ A tier such as `key_account` or `investor` sets the weight; the label is what th
 digest prints. It lives in the config — the run's input can override an entry for a
 one-off, but a tier only in the input is gone the next day.
 
-**5. Run it once** (below) so they see output immediately, then offer to schedule it.
+**5. Ask about diagnostic reports.** Once, now, in these words — the default is no, and
+nothing is sent until they say yes:
+
+> **Diagnostic reports — off unless you say yes.**
+>
+> Open Loops can send its developer a small report automatically when a scheduled run
+> fails, or when you mark an item wrong or answer a spot check with a miss. Reports go to
+> a private database only the developer can read — never posted publicly, no account
+> needed.
+>
+> A report contains only: a random ID created now, the Open Loops version, your Node
+> version and operating system, the date, and either where in the code a run failed or
+> which kind of item you corrected and how old it was.
+>
+> It never contains message text, names, email addresses, channel names, Slack IDs, file
+> paths, error messages, your config or your ledger.
+>
+> Cloudflare, which runs the report server, receives your IP address to deliver each
+> report. The server is set to keep no request logs, and your IP address is not saved
+> with reports; Cloudflare's own handling of network traffic falls under its privacy
+> policy. Reports are deleted after 90 days.
+>
+> Reports are sent without asking each time. Every report sent is listed in
+> `reports-sent.log` in your Open Loops folder.
+>
+> To stop, set `"diagnostics": false` in your config. Reports not yet sent are then
+> discarded and never sent. Turning reports back on means answering this question
+> again, with a new ID.
+>
+> If your employer restricts sharing information about workspace tools, check before
+> saying yes.
+>
+> **Send diagnostic reports?** yes / **no**
+
+Only on a yes:
+
+```bash
+node <checkout>/tools/report.js --consent --config <working dir>/openloops.config.json
+```
+
+On a no, write nothing — no `diagnostics` key is the same as off. Never write the
+`diagnostics` record by hand; only `--consent` makes one.
+
+**6. Run it once** (below) so they see output immediately, then offer to schedule it.
 
 ## Running the digest
 
@@ -316,6 +364,19 @@ cannot tell it apart from a quiet day. The exceptions: if one channel read fails
 continue with the others and note which is missing at the end of the message; if the
 calendar fails, run without it and say so.
 
+**Last, every run, pass or fail:**
+
+```bash
+node <checkout>/tools/report.js --send --config <working dir>/openloops.config.json
+```
+
+If the run failed, add `--failed <stage>`, naming where: `pull`, `fetch_slack`,
+`fetch_calendar`, `runner`, `post` or `readback`. Pass nothing else — the tool builds
+the report itself from fixed fields, and a crash inside the runner has already queued its
+own. With diagnostics off it sends nothing and discards anything queued. It never changes
+the digest, and its output is not posted anywhere; a report that cannot be sent waits for
+the next run.
+
 ## Scheduling it
 
 Offer this after the first successful run, not before — nobody wants a daily message
@@ -355,6 +416,11 @@ To stop the daily message, delete the scheduled task. The ledger stays where it 
 picking it up again later resumes rather than restarts. To remove it altogether, delete
 the working directory. That is all of it.
 
+To stop diagnostic reports, set `"diagnostics": false` in the config. The next run
+discards anything not yet sent, and turning them on again means asking the question in
+Setup step 5 again, which gives a new ID. `node <checkout>/tools/report.js --show` lists
+what is queued and what has been sent.
+
 ## How they correct it
 
 This is the part that makes it improve, and it is worth explaining once. They reply in
@@ -379,6 +445,36 @@ things they rejected, and `storeText: false` does not keep sentences — so with
 rejections still work exactly as before and nothing is ever muted automatically. Say so
 if you offered them that setting on privacy grounds, rather than letting them wait for a
 feature that will not arrive. `mute` in the config still works by hand.
+
+## When a report needs more detail
+
+Automatic reports carry no text, so they show *that* a kind of item misfires, not *why*.
+Only when the reader asks — "send them an example of item 3" — and only with diagnostic
+reports on:
+
+```bash
+node <checkout>/tools/report.js --example 3 --config <working dir>/openloops.config.json
+```
+
+It writes `example-draft.json` in the working directory and prints what would be sent.
+Show them that output unchanged, then say, in these words:
+
+> This is text from your Slack. Email addresses and Slack IDs have been swapped for
+> placeholders, but names, companies and anything confidential in the sentence have
+> **not** been checked. Read it first. You can edit it, send it as it is, or not send it.
+> It's deleted after 90 days.
+>
+> **send / edit / no**
+
+To edit, change `text` in `example-draft.json` and show them the file again. Only on
+**send**:
+
+```bash
+node <checkout>/tools/report.js --send-example --config <working dir>/openloops.config.json
+```
+
+It sends the draft file exactly as it stands. Never offer this unprompted in a scheduled
+run, and never send an example they have not seen.
 
 ## Showing how it has been doing
 

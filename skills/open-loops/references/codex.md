@@ -176,6 +176,11 @@ Numbered corrections and accuracy reports use the same ledger as Claude:
 `3 7` rejects items, `k 1 4` marks already-known items, and `miss b` answers the spot check.
 Run `node "<checkout>/slack-run.js" --report --config "<config>"` for the report.
 
+Diagnostic reports follow SKILL.md: ask Setup step 5's question in its exact words, and
+on a yes run `node "<checkout>/tools/report.js" --consent --host codex --config "<config>"`.
+End every run, pass or fail, with `tools/report.js --send` (plus `--failed <stage>` on a
+failure), and share an example only through "When a report needs more detail".
+
 ## Scheduling in Codex
 
 After a successful manual run, offer a daily schedule; create it only when requested.

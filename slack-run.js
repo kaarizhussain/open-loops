@@ -39,7 +39,10 @@ var { readConversation } = require('./src/slack-json.js');
 var { coverage, emptyResponse } = require('./src/slack-coverage.js');
 var { fileStore } = require('./src/store.js');
 var { parseEvents } = require('./src/calendar.js');
-var { settings } = require('./src/config.js');
+var { settings, loadConfig } = require('./src/config.js');
+var outbox = require('./src/outbox.js');
+var diag = require('./src/diagnostics.js');
+var path = require('path');
 
 var DIGEST_HEADER = /^\s*(?:```)?\s*OPEN LOOPS — for (\d{4}-\d{2}-\d{2})(?:[^\n]*· ref ([0-9a-f]{4})\b)?/;
 /* What a run posts under its own digest, besides the digest: the details (whose
@@ -95,7 +98,7 @@ function inScope(name, scope) {
  * forever, and re-applying it against a later, shorter list marks different items. */
 function marksFromDm(messages, store, rows) {
   var seen = store.seenReplies(), known = {}, marked = 0, wrong = 0, knew = 0, cur = null;
-  var misses = [], checked = 0, ignored = [], counted = {}, foreign = [], dates = [], byRoot = {}, mass = [];
+  var misses = [], checked = 0, ignored = [], rejected = [], spot = [], counted = {}, foreign = [], dates = [], byRoot = {}, mass = [];
   var since = store.refsSince ? store.refsSince() : null;
   seen.forEach(function (id) { known[id] = 1; });
 
@@ -148,6 +151,9 @@ function marksFromDm(messages, store, rows) {
         rows.push(L.placeholderRow(key, forDate));
       }
     });
+    marks.wrong.forEach(function (i) {
+      if (keys[i - 1]) rejected.push({ key: keys[i - 1], on: forDate, listed: keys.length });
+    });
     var w = L.applyMarks(rows, keys, { wrong: marks.wrong });
     var k = L.applyMarks(rows, keys, { knew: marks.knew });
     wrong += w; knew += k; marked += w + k;
@@ -175,6 +181,8 @@ function marksFromDm(messages, store, rows) {
     if (asked.length && marks.answered && !counted[memo.id]) {
       counted[memo.id] = 1;
       checked += asked.length;
+      spot.push({ ref: memo.id, on: forDate, sampled: asked.length,
+                  missed: marks.missed.filter(function (l) { return asked[l.charCodeAt(0) - 97]; }).length });
       marks.missed.forEach(function (letter) {
         var at = letter.charCodeAt(0) - 97;
         if (asked[at]) misses.push({ id: asked[at], on: forDate });
@@ -183,7 +191,7 @@ function marksFromDm(messages, store, rows) {
   });
 
   return { marked: marked, wrong: wrong, knew: knew, seen: seen, misses: misses, checked: checked,
-           ignored: ignored, foreign: foreign, dates: dates, mass: mass };
+           ignored: ignored, foreign: foreign, dates: dates, mass: mass, rejected: rejected, spot: spot };
 }
 
 /* Which numbered list a digest header refers to.
@@ -322,6 +330,8 @@ function main(argv) {
   var allowed = function (name) { return inScope(name, cfg.channels) && inScope(name, input.scope); };
   var widenedStore = input.storeText === true && cfg.storeText === false;
   var self = cfg.you;
+  var reportDir = path.dirname(path.resolve(configPath));
+  outbox.prune(reportDir, cfg);    // diagnostics off: anything still queued is discarded, never sent
   var today = flag('today', input.today || new Date().toISOString().slice(0, 10));
   var store = fileStore(flag('ledger', cfg.ledger));
   store.beginRun(today);    // a second run today starts from before the first
@@ -638,6 +648,7 @@ function main(argv) {
     if (replies.checked || replies.misses.length) {
       store.recordMisses(replies.misses, replies.checked);
     }
+    queueReports(reportDir, cfg, replies, rows);
     if (sample.length) {
       store.rememberAudit(today, sample.map(function (m) { return m.id; }), silent.length, foundToday);
     }
@@ -646,13 +657,45 @@ function main(argv) {
   return text;
 }
 
+/* Diagnostic reports for what the reader just corrected. Queued only; tools/report.js sends.
+ * Metadata only — the signal type, not the sentence; the id is salted, not the ledger key. */
+function queueReports(dir, cfg, replies, rows) {
+  if (!diag.consent(cfg)) return;
+  var firstSeen = {};
+  rows.forEach(function (r) { firstSeen[L.cell(r[L.COL.key])] = L.cell(r[L.COL.first_seen]); });
+  replies.rejected.forEach(function (x) {
+    var seen = firstSeen[x.key], age = seen ? Math.round((new Date(x.on) - new Date(seen)) / 864e5) : 0;
+    outbox.queue(dir, cfg, { kind: 'item_wrong', signal: x.key.split('|')[0],
+      age_days: Math.max(0, Math.min(60, age || 0)), listed: Math.min(99, x.listed) }, [x.key], x.on);
+  });
+  replies.spot.forEach(function (x) {
+    outbox.queue(dir, cfg, { kind: 'item_missed', sampled: Math.min(9, x.sampled),
+      missed: Math.min(9, x.missed) }, [x.ref], x.on);
+  });
+}
+
+/* A crash, as a report: where in our code and the error's class — never its message.
+ * A config that cannot be read has no consent in it, so that crash is not reported. */
+function queueCrash(argv, e) {
+  try {
+    var i = argv.indexOf('--config'), configPath = i > -1 && argv[i + 1] ? argv[i + 1] : 'openloops.config.json';
+    var cfg = loadConfig(fs, configPath);
+    var where = diag.frames(e && e.stack), error = diag.errorClass(e);
+    var today = new Date().toISOString().slice(0, 10);
+    outbox.queue(path.dirname(path.resolve(configPath)), cfg,
+      { kind: 'run_failed', stage: 'runner', error: error, where: where },
+      [today, 'runner', error, where[0] || '-'], today);
+  } catch (ignore) { /* reporting a failure must never become a second one */ }
+}
+
 if (require.main === module) {
   try {
     console.log(main(process.argv.slice(2)));
   } catch (e) {
+    queueCrash(process.argv.slice(2), e);
     console.error('open-loops: ' + e.message);
     process.exit(1);
   }
 }
 
-module.exports = { main: main, marksFromDm: marksFromDm, inScope: inScope, nameMatches: nameMatches };
+module.exports = { queueCrash: queueCrash, main: main, marksFromDm: marksFromDm, inScope: inScope, nameMatches: nameMatches };

@@ -1,0 +1,37 @@
+# Goes in kaarizhussain/open-loops-reports (private) as .github/workflows/alert.yml.
+#
+# The Worker sends a repository_dispatch; this files or updates the issue as
+# github-actions[bot] and assigns the owner. That is what makes GitHub notify: an issue
+# created with the owner's own token notifies nobody.
+name: alert
+on:
+  repository_dispatch:
+    types: [open-loops-alert]
+permissions:
+  issues: write
+jobs:
+  alert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: File or update the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          KEY: ${{ github.event.client_payload.key }}
+          TITLE: ${{ github.event.client_payload.title }}
+          BODY: ${{ github.event.client_payload.body }}
+          LABELS: ${{ github.event.client_payload.labels }}
+          OWNER: kaarizhussain
+        run: |
+          set -euo pipefail
+          [[ "$KEY" =~ ^k-[0-9a-f]{12}$ ]] || { echo "bad key"; exit 1; }
+          [[ "$LABELS" =~ ^[a-z,-]{1,60}$ ]] || { echo "bad labels"; exit 1; }
+          for l in $KEY ${LABELS//,/ }; do gh label create "$l" --force >/dev/null; done
+          n=$(gh issue list --label "$KEY" --state all --limit 1 --json number --jq '.[0].number // empty')
+          if [ -z "$n" ]; then
+            gh issue create --title "$TITLE" --body "$BODY"$'\n\n'"@$OWNER" --label "$KEY,$LABELS" --assignee "$OWNER"
+          else
+            gh issue reopen "$n" >/dev/null 2>&1 || true
+            gh issue edit "$n" --add-label new
+            gh issue comment "$n" --body "$BODY"$'\n\n'"@$OWNER"
+          fi
