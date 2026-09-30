@@ -318,4 +318,25 @@ main([write(base('2026-09-01')), '--ledger', path.join(dir, 'shape-old.json')]);
   assert.ok(tout.indexOf('scope doc') > -1 && tout.indexOf(NOT_READ('#halcyon thread 1788000500.000100')) > -1, 'a bad thread read is named and skipped');
 })();
 
+/* ---- 12. Spot-check sampling tells two channels' messages apart: one flagged, one silent, same ts ---- */
+(function () {
+  var T = at(2026, 8, 25, 11);
+  var i = base('2026-09-01');
+  i.spotCheck = 5;
+  i.conversations = [
+    { channel: '#alpha', members: [], text: me(T, "I'll send the alpha proposal Wednesday.") },
+    { channel: '#beta', members: [], text: me(T, 'Lunch at the usual place, see everyone at noon') }
+  ];
+  var out = main([write(i), '--ledger', path.join(dir, 'samets3.json'), '--dry']);
+  assert.ok(out.indexOf('alpha proposal') > -1, 'precondition: the alpha promise is flagged');
+  var spot = out.split('SPOT CHECK')[1] || '';
+  assert.ok(spot.indexOf('Lunch at the usual place') > -1, 'the silent message in #beta is still sampled, though #alpha flagged one with its timestamp');
+  assert.ok(spot.indexOf('alpha proposal') === -1, 'and the flagged one is not');
+  // Nothing colliding: the id is still the plain timestamp, so ordinary runs are unchanged.
+  var j = base('2026-09-01'); j.spotCheck = 5;
+  var plain = main([write(j), '--ledger', path.join(dir, 'samets4.json'), '--dry']);
+  var again = main([write(j), '--ledger', path.join(dir, 'samets5.json'), '--dry']);
+  assert.strictEqual(plain, again, 'a run with no collisions is deterministic');
+})();
+
 console.log('hardening: OK');

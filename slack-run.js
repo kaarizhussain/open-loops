@@ -441,6 +441,18 @@ function main(argv) {
     if (!repliesRead.length) unread.push(t.channel + ' thread ' + t.root);
   });
 
+  /* Everything downstream — the detector's held and closing ids, the ledger's message ids, spot-check
+   * sampling — identifies a message by its id, and a bare timestamp is only unique within a channel.
+   * Where two channels share one, the later channel (by name, so the order they were handed over in does
+   * not matter) gets a distinct id: the timestamp with a rank appended, which no real Slack timestamp
+   * (six decimal places) can equal. Without this a silent message in one channel was never sampled
+   * because a flagged message in another had the same timestamp. Ids that do not collide are untouched. */
+  var byTs = {};
+  Object.keys(byId).forEach(function (k) { (byTs[byId[k].id] = byTs[byId[k].id] || []).push(byId[k]); });
+  Object.keys(byTs).forEach(function (ts) {
+    byTs[ts].sort(function (a, b) { return a.subject < b.subject ? -1 : a.subject > b.subject ? 1 : 0; })
+      .forEach(function (m, i) { if (i) m.id = ts + (i < 10 ? '0' : '') + i; });
+  });
   var messages = Object.keys(byId).map(function (k) { return byId[k]; })
     .sort(function (a, b) { return parseFloat(a.id) - parseFloat(b.id); });
 
