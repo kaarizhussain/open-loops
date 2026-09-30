@@ -29,8 +29,9 @@ coverage is unavailable. No OpenAI API key is needed: Codex orchestrates local c
 ## First setup
 
 Reuse an existing configuration when the user supplies its path. Otherwise read their
-email and Slack user ID through Slack, list public/private channels (not DMs), and let
-the user choose the channels to read. Ask who they support; the default is nobody.
+email and Slack user ID through Slack, list public/private channels (not DMs), and ask:
+"Which channels should Open Loops track?" Ask "Are you tracking your own work, or
+supporting someone else?" only if they have not already said. The default is nobody.
 Write `openloops.config.json` in the data directory with:
 
 ```json
@@ -50,14 +51,34 @@ with a user ID in `selfDm` still works. Do not assume that a user ID is a DM cha
 Write a nonempty allowlist: an empty include list currently means all supplied channels.
 Other DMs are opt-in by name. On Windows use forward slashes or JSON-escaped backslashes.
 
-By default the ledger contains message text. `storeText:false` scrubs existing row
-text, learned phrases and the rerun snapshot on a real run, but not raw inputs or backups. Explain this
-limit when requested; do not claim all data stays outside Codex. Connector responses
-are processed in the Codex conversation as well as by the local detector.
+Before fetching message history, show this notice, substituting the actual lookback
+and data directory. Omit the calendar sentence when it is disabled or unavailable:
+
+> Before I read message history: I'll read the last 21 days of the channels you chose
+> and post the digest to your own Slack DM. I'll also read your connected calendar
+> from 14 days ago through 7 days ahead. The fetched text is processed in this Codex
+> conversation and saved in local tracking and run files in your data directory.
+> The detector runs locally without AI judgment. Nothing is sent to the developer
+> unless you separately opt in to reports. Deleting the data directory removes local
+> files only, not Slack messages, conversation history or provider-held copies.
+> You can turn off sentence storage in the ledger; run files and conversation history
+> can still contain fetched text. Running your first digest now.
+
+Do not add another confirmation after the channel choice and notice. Follow the
+repository's owner deployment restriction below: a preview must be described as a
+preview, and its notice must not promise Slack delivery. By default the ledger
+contains message text. `storeText:false` scrubs existing row text, learned phrases
+and the rerun snapshot on a real run, but not raw inputs or backups. Do not claim
+all data stays outside Codex.
 
 Use a separate data directory and ledger while trying Codex alongside Claude. Never
 run two schedulers writing the same ledger. If migrating, stop the old schedule before
 switching writers; preserve the existing ledger so corrections are retained.
+
+Run the first digest before asking about scheduling or diagnostic reports. Keep
+diagnostic reports and midday alerts off for a new setup until explicitly requested
+and consented to; do not reset an existing configuration's choices. Do not offer
+midday alerts on your own initiative.
 
 ## Fetch and run
 
@@ -171,13 +192,29 @@ rendered digest and report failure; do not claim it was delivered or retry blind
 After posting, read the brief back by its returned timestamp and apply SKILL.md's "Read
 the brief back" check: exactly one opening fence, and the first line inside it equal to
 the runner output's first line.
+Only after this check succeeds, promote the staged baseline with
+`node "<checkout>/tools/alerts.js" --baseline --ref <ref> --config "<config>"`, using
+the reference from that digest. Never promote a preview or an unverified post. This
+step is for an authorized Codex writer elsewhere; the owner's deployment restriction
+above still forbids Codex from promoting a baseline here.
+
+After verified delivery, echo the runner's brief verbatim in the Codex conversation
+and say "The full details are in its Slack thread." Explain corrections once:
+"Reply in the same Slack DM with `3 7` for items that aren't real commitments, or
+`k 1 4` for items you already knew." Explain `miss b` and plain `miss` only when
+that digest contains a spot check. Do not claim measured accuracy on the first run.
+For a preview, show the brief but do not claim it was delivered or invite replies
+to a digest that was not posted.
 
 Numbered corrections and accuracy reports use the same ledger as Claude:
 `3 7` rejects items, `k 1 4` marks already-known items, and `miss b` answers the spot check.
 Run `node "<checkout>/slack-run.js" --report --config "<config>"` for the report.
 
-Diagnostic reports follow SKILL.md: ask Setup step 5's question in its exact words, and
-on a yes run `node "<checkout>/tools/report.js" --consent --yes --host codex --config "<config>"`.
+After the first verified digest and the schedule choice (including a no), ask the
+diagnostics question last. Print it with
+`node "<checkout>/tools/report.js" --consent --host codex --config "<config>"` and
+show its exact words; this prints the question without recording consent. On a yes,
+run `node "<checkout>/tools/report.js" --consent --yes --host codex --config "<config>"`.
 Someone set up earlier opts in the same way, only when they ask: `--consent` alone prints the
 question and records nothing.
 End every run, pass or fail, with `tools/report.js --send` (plus `--failed <stage>` on a
@@ -186,8 +223,14 @@ failure), and share an example only through "When a report needs more detail".
 ## Scheduling in Codex
 
 After a successful manual run, offer a daily schedule; create it only when requested.
+Ask "Would you like this every day at 18:00 your local time, or another time? Your
+computer needs to be awake and the app running for local scheduled runs." A no
+does not prevent the diagnostics question at the end of setup.
 Use Codex's automation tool and retain the user's timezone and preferred time (18:00
 local is a suggestion). Inspect existing automations before creating a duplicate.
+Do not assume Claude's saved tool approvals transfer to Codex. Check the actual
+Codex permissions and capabilities. Do not silently run another real digest as a
+permission test: explain that it would post a second digest and ask before doing so.
 Default to continuing the current task. If the user explicitly wants a standalone
 project schedule, use the saved local project, with an absolute ledger path outside
 worktrees. Keep the computer awake and the app running for local scheduled work.

@@ -22,6 +22,28 @@ insufficient. The skill checks these capabilities before running. Google Calenda
 is optional and needs its own connection for meeting coverage. Nothing is scheduled
 or posted simply by installing the skill.
 
+## Your first digest
+
+Codex checks the Slack connection, reads your profile, shows your work channels and
+asks which to track. It asks whether you track your own work or support someone
+else, unless you already said. Before reading message history, it explains where
+the fetched text is processed and saved, then runs your first digest.
+
+The brief goes to your own Slack DM and is echoed in the Codex chat after delivery
+is verified. Full details stay in the Slack thread. Codex explains how to correct
+items, then offers a daily schedule at your preferred local time. The optional
+diagnostic reports question comes last, after your first digest, whether or not
+you schedule it. Midday alerts are available when you ask; setup does not offer them.
+
+Google Calendar is optional; connecting it is not required for the first Slack
+digest. Local files and conversation history can contain fetched text. Deleting
+your data directory removes local files only, not Slack messages, conversation
+history or provider-held copies. Turning off sentence storage affects the ledger;
+raw run files and backups are not scrubbed.
+
+In this repository owner's deployment, Claude owns the live digest and ledger.
+Codex previews only and does not post or create a second schedule for that setup.
+
 ## Connector input
 
 The existing Claude `text` format still works. Codex can instead pass structured
@@ -47,8 +69,9 @@ Each work conversation and thread uses `pages`, with the exact requested `oldest
 each page's separate `pagination_info`. A page takes either verbatim `text` or structured
 `messages`. The self-DM reads remain unpaged and take either `text` or `messages`.
 The structured fields are documented in the Codex workflow. Map actual connector
-fields without changing their values. Invalid structured records fail before the ledger
-is written. Config, scope, ranking, rendering, and numbered corrections are shared
+fields without changing their values. Malformed conversations are reported separately;
+Codex stops before a real run when a source is incomplete or unreadable. Config,
+scope, ranking, rendering, and numbered corrections are shared
 across hosts. `selfUid` separates Slack user identity from the posting destination
 `selfDm`; legacy user IDs in `selfDm` remain supported.
 

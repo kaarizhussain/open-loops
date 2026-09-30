@@ -29,7 +29,7 @@ should be answerable without reading the source.
 
 **The detector runs locally.** There are no network calls in `src/` or `slack-run.js`.
 The one file that makes any is `tools/report.js`, and only if you opt in to diagnostic
-reports at setup: a fixed set of fields — a random ID, versions, the date, and where a run
+reports after your first digest: a fixed set of fields — a random ID, versions, the date, and where a run
 failed or which kind of item you corrected — never message text, names, paths or error
 messages. `"diagnostics": false` in the config stops it and discards anything unsent.
 Claude or Codex retrieves messages through your connected Slack and calendar tools
@@ -322,18 +322,24 @@ Google Calendar is optional and needs its own connection for meeting coverage.
 
 **3. Ask Codex to set it up.**
 
-> Use $open-loops to set up my Slack digest. I am an executive assistant supporting
-> Dana. Help me choose the channels to track, then run the first digest.
+> Use $open-loops to set up my Slack digest.
 
-Replace Dana with the executive or executives you support. Setup saves your channel
-allowlist and supported executives in `openloops.config.json`. Codex fetches the
-messages, runs the detector, and posts the brief to your self-DM with the details
-in its thread. Reply with `3 7` to reject items, `k 1 4` for items you already knew,
-or `miss b` to answer the spot check.
+Codex shows your work channels and asks which to track, then asks whether you track
+your own work or support someone else. You can include that information in your
+first request. Setup saves your choices in `openloops.config.json` and explains
+where fetched text is processed and saved before reading message history.
+
+Codex runs the first digest, posts the brief to your self-DM with details in its
+thread, and echoes the verified brief in chat. Reply in Slack with `3 7` to reject
+items or `k 1 4` for items you already knew. If a spot check is included, `miss b`
+answers it. Calendar connection is optional and does not block the first Slack digest.
 
 **4. Schedule it after the first successful run.** Ask Codex to run it daily at your
 preferred local time. Installation alone does not create a schedule. Local scheduled
 runs need the computer awake and the app running.
+
+The optional diagnostics question comes last, after the first digest and your
+schedule choice. Midday alerts remain off unless you ask and opt in.
 
 **Alongside Claude:** use separate data directories and ledgers while comparing the
 two hosts. Stop the old schedule before migrating to a shared ledger; two schedulers
