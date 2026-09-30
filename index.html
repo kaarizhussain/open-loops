@@ -434,6 +434,44 @@ function parseDue(text, from) {
   return null;
 }
 
+/* Clause boundaries for deciding which date belongs to a commitment: ; , a dash, and "but". A comma inside a date ("Friday, June 19",
+ * "June 19, 2026") is part of the date and is not a boundary. */
+var WD = '(?:mon|tues?|wed(?:nes)?|thu(?:rs?)?|fri|sat(?:ur)?|sun)(?:day)?', MON = '(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\\.?';
+var DATE_COMMA = [new RegExp('\\b(' + WD + '),(\\s+' + MON + '\\s+\\d)', 'ig'), new RegExp('\\b(' + MON + '\\s+\\d{1,2}(?:st|nd|rd|th)?),(\\s+\\d{4})', 'ig')];
+var CLAUSE_SPLIT = /\s*[;,]\s*|\s+[—–]\s+|\s+but\s+/i;
+/* A clause that is only a deadline: "By Thursday", "Friday, June 19", "the 15th", "Deadline is Friday", "EOD tomorrow". */
+var DATE_ONLY = new RegExp('^(?:(?:the\\s+)?(?:deadline|due date)\\s+(?:is\\s+)?|(?:by|before|on|until|due|no later than|this|next)\\s+)?(?:eod\\s+|end of day\\s+)?(?:' +
+  WD + ',?\\s+' + MON + '\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s+\\d{4})?|' + WD + '(?:\\s+(?:at|by)\\s+\\d{1,2}(?::\\d\\d)?\\s*(?:am|pm)?)?(?:\\s+(?:next|this)\\s+week)?|' +
+  MON + '\\s+\\d{1,2}(?:st|nd|rd|th)?|the\\s+\\d{1,2}(?:st|nd|rd|th)|tomorrow|today|eod|eow|end of (?:the\\s+)?(?:day|week)|week)(?:\\s+(?:eod|at the latest))?[.!]?$', 'i');
+
+/* The deadline of one commitment sentence.
+ *
+ * parseDue alone reads the whole sentence and lets a word like "tomorrow" win over the weekday the promise is actually made for:
+ * "I'll send it Thursday, I'm traveling tomorrow" was due tomorrow. Here the sentence is cut into clauses and only the clauses about
+ * the commitment lend a date:
+ *   1. the commitment clauses (the ones with a cue) name exactly one date: that is the deadline;
+ *   2. otherwise a clause that is ONLY a deadline, straight before the commitment ("By Thursday, I'll send it"), or straight after it;
+ *   3. otherwise the sentence is left undated if any date is in a clause that cannot be tied to the commitment, or if the commitment
+ *      clauses disagree. An undated item ranks by age; a wrong date ranks by the wrong urgency.
+ * A sentence with one clause is read exactly as before. Direction does not matter: a promise made to you is dated the same way. */
+function dueOfPromise(s, from) {
+  var t = String(s);
+  DATE_COMMA.forEach(function (rx) { t = t.replace(rx, '$1\u0001$2'); });
+  var cl = t.split(CLAUSE_SPLIT).map(function (c) { return c.replace(/\u0001/g, ',').trim(); }).filter(Boolean);
+  if (cl.length < 2) return parseDue(s, from);
+  var cues = [];
+  cl.forEach(function (c, i) { if (COMMIT.test(c)) cues.push(i); });
+  if (!cues.length) return parseDue(s, from);
+  var dates = [];
+  cues.forEach(function (i) { var d = parseDue(cl[i], from); if (d && dates.indexOf(d) < 0) dates.push(d); });
+  if (dates.length === 1) return dates[0];
+  if (dates.length > 1) return null;
+  var first = cues[0];
+  if (first > 0 && DATE_ONLY.test(cl[first - 1])) return parseDue(cl[first - 1], from);
+  if (first < cl.length - 1 && DATE_ONLY.test(cl[first + 1])) return parseDue(cl[first + 1], from);
+  return null;
+}
+
 /* "let me know" is an ask, not a promise — exclude it explicitly.
  *
  * "let's" is allow-listed against verbs rather than opened up, because most of its uses
@@ -892,7 +930,7 @@ function detectLoops(messages, events, opts) {
        * 15th" ends up due tomorrow, because tomorrow appeared in an unrelated
        * sentence further up. Harmless in mail, where a thread is one subject.
        * Not harmless in chat, where the thread is an entire channel. */
-      var due = parseDue(s, m.date), dueFrom = null;
+      var due = dueOfPromise(s, m.date), dueFrom = null;
       for (var k = i - 1; k >= 0 && !due; k--) {
         if (msgs[k].out === m.out) continue;
         // A channel contains unrelated conversations. Inherit only from a related
