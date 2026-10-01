@@ -28,10 +28,10 @@ var localNow = function (mo, d, h, mi) {
   return x.getFullYear() + '-' + p(x.getMonth() + 1) + '-' + p(x.getDate()) + 'T' + p(x.getHours()) + ':' + p(x.getMinutes());
 };
 
-var world = function (cfgExtra) {
+var world = function (cfgExtra, words) {
   var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ol-restore-')), cfg = path.join(dir, 'openloops.config.json'), ledger = path.join(dir, 'ledger.json'), n = 0;
   fs.writeFileSync(cfg, JSON.stringify(Object.assign({ you: ME, selfDm: 'U0EXAMPLE001', tzOffset: 0, spotCheck: 0, ledger: ledger, channels: { include: ['#ops'] } }, cfgExtra || {})));
-  var chat = ['alpha', 'bravo', 'charlie'].map(function (w, i) { return banner(ts(9, 25 + i, 10), 'Please send the ' + w + ' report Thursday Oct 1.'); }).join(NL);
+  var chat = (words || ['alpha', 'bravo', 'charlie']).map(function (w, i) { return banner(ts(9, words ? 28 : 25 + i, words ? 1 + i : 10), 'Please send the ' + w + ' report Thursday Oct 1.'); }).join(NL);
   var w = {
     dir: dir, cfg: cfg, ledger: ledger,
     run: function (today, extra, flags) {
@@ -64,7 +64,7 @@ var dgA = w.run('2026-10-01', { dm: dmOf([[t1, dg1]]), dmThread: [threadOf(t1, d
 assert.strictEqual(w.verdict('alpha'), 'x', 'rejected');
 assert.strictEqual(itemNo(dgA, 'alpha'), null, 'and no longer listed');
 var list1 = w.corr(['--list']);
-var ref = (list1.match(/^ {2}([0-9a-f]{8}) {2}rejected Oct 1 · first seen Sep 30/m) || [])[1];
+var ref = (list1.match(/^ {2}([0-9a-f]{8}) {2}rejection recorded Oct 1 · first seen Sep 30/m) || [])[1];
 assert.ok(ref, 'the list names it by a reference, with when it was rejected and how old it is: ' + list1);
 assert.ok(/"Please send the alpha report Thursday Oct 1\."/.test(list1), 'and shows the sentence');
 
@@ -73,7 +73,7 @@ var asked = w.corr(['--restore', ref, '--now', localNow(10, 1, 19)]);
 assert.ok(new RegExp('^Restore requested for ' + ref + ' \\(request [0-9a-f]{8}\\)\\. It is queued: your next digest will say whether it came back\\.$').test(asked), asked);
 assert.ok(!/restored|came back\.$/i.test(asked.replace(/^Restore requested.*queued: your next digest will say whether it came back\./, '')), 'and promises nothing else');
 assert.strictEqual(w.verdict('alpha'), 'x', 'a request changes nothing: only the digest writes the ledger');
-assert.ok(/pending: the next digest will apply it/.test(w.corr(['--list'])), 'it is listed as pending');
+assert.ok(/pending: waiting for the next digest to process it/.test(w.corr(['--list'])), 'it is listed as pending');
 
 // Run B (same day, 19:30): the ledger is rolled back, the old reply is read again, and the restore applies.
 var tB = ts(10, 1, 19, 30);
@@ -195,7 +195,7 @@ assert.strictEqual(g.data().restoreLog[g.requests()[0].id].state, 'refused');
 /* ============================== 5. storeText: false — no sentences, and restoring by a digest's item number ============================== */
 var t = rejected({ storeText: false });
 var listT = t.corr(['--list']);
-assert.ok(new RegExp('^ {2}' + t.ref + ' {2}rejected Oct 1 · first seen Sep 30 · owed_by_us \\(the ledger keeps no sentences\\)$', 'm').test(listT) || /\(the ledger keeps no sentences\)/.test(listT), listT);
+assert.ok(new RegExp('^ {2}' + t.ref + ' {2}rejection recorded Oct 1 · first seen Sep 30 · owed_by_us \\(the ledger keeps no sentences\\)$', 'm').test(listT) || /\(the ledger keeps no sentences\)/.test(listT), listT);
 assert.ok(!/alpha/.test(listT) && t.data().rows.every(function (r) { return !r[L.COL.what]; }), 'no sentence is stored or shown');
 var byItem = t.ask(['--restore-item', t.n1, '--digest', refOf(t.dg1)]);
 assert.ok(/^Restore requested for [0-9a-f]{4}#\d+ \(request [0-9a-f]{8}\)\. It is queued: your next digest will say whether it came back\.$/.test(byItem) || /^Restore requested for /.test(byItem), byItem);
@@ -222,8 +222,25 @@ assert.ok(REPEAT.test(a2d2), 'without confirmation it is carried again, as a rep
 assert.ok(!ACK.test(a2d2), 'and not as if it were news');
 var a2d3 = a2.run('2026-10-03');
 assert.ok(REPEAT.test(a2d3), 'and again');
-assert.ok(!REPEAT.test(a2.run('2026-10-04')), 'but not for ever: it stops after ' + R.MAX_ACK + ' carriages');
+// There is no cap: neither attempts nor repetitions are a confirmation. Seven unconfirmed digests in, it is still carried.
+var carried = [];
+['2026-10-04', '2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08'].forEach(function (d) {
+  var out = a2.run(d);
+  assert.ok(REPEAT.test(out), d + ': still carried after ' + (carried.length + 3) + ' unconfirmed digests');
+  carried.push(refOf(out));
+});
 assert.strictEqual(a2.rowByKey()[L.COL.verdict], '', 'repeating a note never applies a restore twice');
+assert.strictEqual(a2.data().restoreLog[a2.requests()[0].id].acked, false, 'and it is not recorded as acknowledged');
+// What ends it is confirmed delivery of a digest that carried it — not necessarily the latest one.
+delivered(a2, carried[1]);
+assert.ok(!REPEAT.test(a2.run('2026-10-09')), 'confirmed: an earlier carrier was the last delivered digest, so it stops');
+assert.ok(!REPEAT.test(a2.run('2026-10-10')), 'and stays stopped');
+assert.strictEqual(a2.data().restoreLog[a2.requests()[0].id].acked, true);
+// A delivery that did not carry it confirms nothing.
+var a5 = ackWorld();
+a5.run('2026-10-02');
+delivered(a5, 'ffff');
+assert.ok(REPEAT.test(a5.run('2026-10-03')), 'a delivered digest that did not carry the note is not its confirmation');
 // Confirmed after being carried twice: it ends there.
 var a3 = ackWorld();
 a3.run('2026-10-02');
@@ -266,7 +283,8 @@ assert.ok(s.run('2026-10-04').indexOf('NOT RESTORED — 1234 is the start of mor
 // A restores.json that cannot be read is left alone by the tool and ignored by the digest.
 var dmg = rejected();
 fs.writeFileSync(path.join(dmg.dir, 'restores.json'), '{ not json');
-assert.throws(function () { dmg.ask(['--restore', dmg.ref]); }, /restores\.json could not be read, so nothing was queued and the file was left as it is/);
+assert.throws(function () { dmg.ask(['--restore', dmg.ref]); }, /restores\.json could not be read, so nothing was queued\. The file was preserved\. Ask your assistant to inspect it before trying again\./);
+assert.ok(!/remove|delete/i.test((function () { try { dmg.ask(['--restore', dmg.ref]); } catch (e) { return e.message; } })()), 'and it does not suggest deleting the queued requests');
 assert.strictEqual(fs.readFileSync(path.join(dmg.dir, 'restores.json'), 'utf8'), '{ not json', 'the damaged file is untouched');
 assert.doesNotThrow(function () { dmg.runB(); }, 'and the digest still runs');
 assert.ok(/restores\.json could not be read/.test(dmg.corr(['--list'])));
@@ -280,5 +298,53 @@ var checkOut = c.run('2026-10-01', { dm: dmOf([[c.t1, c.dg1]]), dmThread: [threa
 assert.strictEqual(fs.readFileSync(c.ledger, 'utf8'), before, 'a check never writes the ledger, with a restore waiting');
 assert.ok(/^NO ALERT/.test(checkOut) && !/alpha/.test(checkOut), 'and the item is not alerted as if it were back: ' + checkOut.slice(0, 200));
 assert.strictEqual(c.rowByKey()[L.COL.verdict], 'x', 'the request waits for the digest');
+
+/* ============================== 9. what is said about the restored item follows what the digest actually shows ============================== */
+var MANY = 'alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec romeo sierra tango'.split(' ');
+var restoreNumbered = function (pickN) {
+  var x = world({}, MANY);
+  x.dg1 = x.run('2026-09-30'); x.t1 = ts(9, 30, 22);
+  x.dgA = x.run('2026-10-01', { dm: dmOf([[x.t1, x.dg1]]) }); x.tA = ts(10, 1, 18);          // today's list, before anything is rejected
+  var keysA = x.data().refs[refOf(x.dgA)].keys, n = pickN(keysA.length), Rn = banner(ts(10, 1, 20), String(n));
+  x.key = keysA[n - 1];
+  var threadA = [threadOf(x.tA, x.dgA, [Rn])];
+  x.dgB1 = x.run('2026-10-02', { dm: dmOf([[x.t1, x.dg1], [x.tA, x.dgA]]), dmThread: threadA }); x.tB1 = ts(10, 2, 10);   // the rejection is applied
+  assert.strictEqual(x.data().rows.filter(function (r) { return r[L.COL.key] === x.key; })[0][L.COL.verdict], 'x', 'rejected item ' + n);
+  var st = x.data(); x.ref = Object.keys(st.restoreRefs).filter(function (r) { return st.restoreRefs[r].key === x.key; })[0];
+  x.corr(['--restore', x.ref, '--now', localNow(10, 2, 12)]);
+  x.dgB = x.run('2026-10-02', { dm: dmOf([[x.t1, x.dg1], [x.tA, x.dgA], [x.tB1, x.dgB1]]), dmThread: threadA });          // a same-day re-run applies the restore
+  x.nB = x.data().refs[refOf(x.dgB)].keys.indexOf(x.key) + 1;
+  x.printed = function (text, k) { return new RegExp('^ ?' + k + ' {2}', 'm').test(text); };
+  return x;
+};
+// The item ranks first: it is on the page, and the digest says where.
+var shownR = restoreNumbered(function () { return 1; });
+assert.ok(shownR.nB >= 1 && shownR.printed(shownR.dgB, shownR.nB), 'item ' + shownR.nB + ' is printed in the digest');
+assert.ok(shownR.dgB.indexOf('Restored 1 item you had rejected — it is back as item ' + shownR.nB + ' and keeps its original age (first seen Sep 30).') > -1, shownR.dgB.split(NL).slice(0, 8).join(' / '));
+// Shown only in the details (the head of its pile, but not in the brief): it counts as shown.
+var SPLIT = require('../src/digest.js').SPLIT, detailsOnly = null;
+for (var up = 1; up < MANY.length - 1 && !detailsOnly; up++) {
+  var dw = restoreNumbered(function (len) { return Math.min(up, len); }), parts = dw.dgB.split(SPLIT);
+  if (dw.nB >= 1 && !dw.printed(parts[0], dw.nB) && dw.printed(parts.slice(1).join(SPLIT), dw.nB)) detailsOnly = dw;
+}
+assert.ok(detailsOnly, 'some restored item is printed in the details and not in the brief');
+assert.ok(detailsOnly.dgB.indexOf('it is back as item ' + detailsOnly.nB + ' and keeps its original age (first seen Sep 30).') > -1, 'an item shown in the details is shown: ' + detailsOnly.dgB.split(NL).slice(0, 6).join(' / '));
+// The item ranks last of twenty: this digest holds it back, and does not say it is back as item N.
+/* Where a restored item ranks depends on the day's ordering, so look for one that lands past the cap rather than assume it. */
+var trimmed = null;
+for (var back = 0; back < MANY.length - 1 && !trimmed; back++) {      // the last-ranked item of today's list, then the one before it, ...
+  var tryWorld = restoreNumbered(function (len) { return len - back; });
+  if (tryWorld.nB >= 13) trimmed = tryWorld;
+}
+assert.ok(trimmed, 'some item lands past the cap of twelve');
+assert.ok(trimmed.nB >= 13, 'it ranks past the cap: ' + trimmed.nB);
+assert.ok(!trimmed.printed(trimmed.dgB, trimmed.nB), 'and it is not printed in the digest');
+assert.ok(trimmed.dgB.indexOf('Restore applied — it keeps its original age (first seen Sep 30), but it is not shown in this digest. It remains tracked.') > -1, trimmed.dgB.split(NL).slice(0, 8).join(' / '));
+assert.ok(!/back as item/.test(trimmed.dgB), 'no "back as item" for an item the digest does not show');
+assert.ok(!new RegExp('item ' + trimmed.nB + '\\b').test(trimmed.dgB.split(NL).filter(function (l) { return /Restore/.test(l); }).join(' ')), 'and no hidden item number is given');
+assert.strictEqual(trimmed.data().rows.filter(function (r) { return r[L.COL.key] === trimmed.key; })[0][L.COL.verdict], '', 'it is restored all the same');
+// Repeated, unconfirmed, it keeps the same shape.
+var again2 = trimmed.run('2026-10-03');
+assert.ok(again2.indexOf('Restored earlier — the digest that said so may not have reached you. It keeps its original age (first seen Sep 30), but it is not shown in this digest. It remains tracked.') > -1, again2.split(NL).slice(0, 8).join(' / '));
 
 console.log('restore: OK');

@@ -27,7 +27,7 @@ var retry = require('./busy.js').retry;
 var L = require('./ledger.js');
 
 var REF = /^[0-9a-f]{4,16}$/, DIGEST_REF = /^[0-9a-f]{4}$/, ID = /^[0-9a-f]{8}$/;
-var MAX_ACK = 3;          // an acknowledgement is repeated at most this many times when no digest that carried it is confirmed delivered
+var KEEP_CARRIERS = 50;   // the references of the digests that carried a note, kept so a confirmation of any of them is recognised
 var KEEP_LOG_DAYS = 120, KEEP_REF_DAYS = 365, KEEP_HASHES = 400;
 
 function file(dir) { return path.join(dir, 'restores.json'); }
@@ -62,7 +62,7 @@ function writeRequests(dir, requests) {
  * waiting is the same request. Finished requests the ledger has logged are dropped after a month. */
 function addRequest(dir, target, log, now) {
   var cur = loadRequests(dir);
-  if (cur.damaged) throw new Error('restores.json could not be read, so nothing was queued and the file was left as it is. Fix or remove it, then ask again.');
+  if (cur.damaged) throw new Error('restores.json could not be read, so nothing was queued. The file was preserved. Ask your assistant to inspect it before trying again.');
   var same = function (r) { return target.ref ? r.ref === target.ref : r.digest && r.digest.ref === target.digest.ref && r.digest.n === target.digest.n; };
   var waiting = cur.requests.filter(function (r) { return same(r) && !log[r.id]; })[0];
   if (waiting) return { id: waiting.id, existing: true };
@@ -112,7 +112,7 @@ function resolve(req, st, store) {
 
 function entry(state, over) {
   return Object.assign({ state: state, reason: null, key: null, ref: null, requestedAt: null, on: null, firstSeen: null,
-    shown: 0, shownIn: null, acked: false, superseded: false }, over || {});
+    shown: 0, shownIn: null, shownRefs: [], acked: false, superseded: false }, over || {});
 }
 
 /* Before replies are read: refuse what cannot point at anything, and say which items are fenced. `active` is what has to be settled once the
@@ -157,16 +157,17 @@ function settle(o) {
 
 /* What the digest says about requests, and the bookkeeping that makes it say so until it is known to have arrived. A digest that carried a note
  * and was then confirmed delivered ends it. One that was not (the post failed, or its confirmation did) leaves it, and the note is carried again,
- * worded as a repeat, at most MAX_ACK times. */
+ * worded as a repeat. There is no cap: neither a number of attempts nor a number of repetitions is a confirmation, so only the confirmation ends it. */
 function notes(o) {
   var st = o.store.restoreState(), out = [];
   Object.keys(st.log).sort(function (a, b) { return String(st.log[a].on).localeCompare(String(st.log[b].on)) || a.localeCompare(b); }).forEach(function (id) {
     var e = st.log[id];
     if (e.acked) return;
-    if (e.shownIn && o.deliveredRef && e.shownIn === o.deliveredRef) { e.acked = true; return; }
-    if (e.shown >= MAX_ACK) { e.acked = true; return; }
+    // Confirmed delivered: the last delivered digest is one that carried this note, the latest or an earlier one.
+    if (o.deliveredRef && (e.shownRefs || []).concat(e.shownIn ? [e.shownIn] : []).indexOf(o.deliveredRef) > -1) { e.acked = true; return; }
     var repeat = e.shown > 0;
     e.shown++; e.shownIn = o.ref;
+    e.shownRefs = (e.shownRefs || []).filter(function (r) { return r !== o.ref; }).concat([o.ref]).slice(-KEEP_CARRIERS);
     out.push({ kind: e.state, reason: e.reason, ref: e.ref, firstSeen: e.firstSeen, superseded: e.superseded, repeat: repeat,
       n: e.key ? o.keys.indexOf(e.key) + 1 || null : null });
   });
@@ -184,4 +185,4 @@ function prune(store, today) {
 function hashOf(text) { return crypto.createHash('sha1').update(String(text || '').trim()).digest('hex').slice(0, 12); }
 
 module.exports = { REF: REF, DIGEST_REF: DIGEST_REF, file: file, loadRequests: loadRequests, addRequest: addRequest, mintRefs: mintRefs, resolve: resolve,
-  begin: begin, settle: settle, notes: notes, prune: prune, hashOf: hashOf, refOf: refOf, MAX_ACK: MAX_ACK };
+  begin: begin, settle: settle, notes: notes, prune: prune, hashOf: hashOf, refOf: refOf };

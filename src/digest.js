@@ -552,6 +552,18 @@ function counts(s) {
 }
 
 /* The brief — the message itself. What do I need to do. */
+/* The item numbers this digest actually prints: the brief's TODAY and ALSO OPEN, and the head of each pile in the details. Said about a restored
+ * item only when it is in here. */
+function shownNumbers(s) {
+  var shown = {}, perPile = s.b.listCap === undefined ? 0 : s.b.listCap;
+  s.top.concat(s.also).forEach(function (l) { shown[l.n] = 1; });
+  OWNER_ORDER.forEach(function (key) {
+    var items = s.ranked.filter(function (l) { return l.owner === key; });
+    (perPile ? items.slice(0, perPile) : items).forEach(function (l) { shown[l.n] = 1; });
+  });
+  return shown;
+}
+
 function renderBrief(s) {
   var L = [], p = function (x) { L.push(x == null ? '' : x); };
   var b = s.b, nm = s.nm, today = s.today;
@@ -601,6 +613,7 @@ function renderBrief(s) {
       '". Reply with just the number, like "3", to reject one.');
   });
   /* Rejected items put back, or not (src/restore.js). Said until a digest that carried it is known to have arrived. */
+  var shownN = (b.restoreNotes || []).length ? shownNumbers(s) : {};
   (b.restoreNotes || []).slice(0, 4).forEach(function (x) {
     var seen = x.firstSeen ? ' (first seen ' + MONTH[+x.firstSeen.slice(5, 7) - 1] + ' ' + (+x.firstSeen.slice(8, 10)) + ')' : '';
     if (x.kind === 'refused') {
@@ -614,6 +627,7 @@ function renderBrief(s) {
     }
     var lead = x.repeat ? 'Restored earlier — the digest that said so may not have reached you. ' : '';
     if (x.superseded) p(lead + 'You restored an item and then rejected it again, so it stays hidden.');
+    else if (x.n && !shownN[x.n]) p(x.repeat ? lead + 'It keeps its original age' + seen + ', but it is not shown in this digest. It remains tracked.' : 'Restore applied — it keeps its original age' + seen + ', but it is not shown in this digest. It remains tracked.');
     else if (x.n) p(x.repeat ? lead + 'It is back as item ' + x.n + ' and keeps its original age' + seen + '.' : 'Restored 1 item you had rejected — it is back as item ' + x.n + ' and keeps its original age' + seen + '.');
     else p(lead + 'Restore applied to its record' + seen + ', but the commitment is not in what was read today, so it is not listed. That does not mean it is resolved — it will be listed if it shows up in a read.');
   });

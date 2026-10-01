@@ -57,7 +57,7 @@ function main(argv) {
       var ref = R.refOf(st.refs, r[L.COL.key]);
       if (!ref) { unnamed++; return; }
       var text = r[L.COL.what];
-      out.push('  ' + ref + '  rejected ' + md(st.refs[ref].on) + ' · first seen ' + md(r[L.COL.first_seen]) + ' · ' + (text ? '"' + String(text).slice(0, 80) + '"' : r[L.COL.type] + ' (the ledger keeps no sentences)'));
+      out.push('  ' + ref + '  rejection recorded ' + md(st.refs[ref].on) + ' · first seen ' + md(r[L.COL.first_seen]) + ' · ' + (text ? '"' + String(text).slice(0, 80) + '"' : r[L.COL.type] + ' (the ledger keeps no sentences)'));
     });
     var lines = ['HIDDEN AS WRONG — ' + out.length];
     if (out.length) lines = lines.concat(out);
@@ -68,7 +68,7 @@ function main(argv) {
       lines.push('', 'RESTORE REQUESTS');
       reqs.requests.forEach(function (r) {
         var e = st.log[r.id], what = r.ref || 'item ' + r.digest.n + ' of digest ' + r.digest.ref;
-        var state = !e ? 'pending: the next digest will apply it' :
+        var state = !e ? 'pending: waiting for the next digest to process it' :
           e.state === 'refused' ? 'refused: ' + (WHY[e.reason] || e.reason) :
           e.superseded ? 'applied ' + md(e.on) + ', then you rejected it again, so it stays hidden' : 'applied ' + md(e.on);
         lines.push('  ' + r.id + '  ' + what + '  requested ' + md(dayOf(r.requestedAt)) + '  ' + state);
