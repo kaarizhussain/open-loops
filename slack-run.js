@@ -103,7 +103,7 @@ function inScope(name, scope) {
  * forever, and re-applying it against a later, shorter list marks different items. */
 function marksFromDm(messages, store, rows) {
   var seen = store.seenReplies(), known = {}, marked = 0, wrong = 0, knew = 0, cur = null;
-  var misses = [], checked = 0, ignored = [], unread = [], rangesWrong = [], rangesKnew = [], rejected = [], spot = [], counted = {}, foreign = [], dates = [], byRoot = {}, mass = [], applied = [], orphans = [];
+  var misses = [], checked = 0, ignored = [], unread = [], badRange = [], rangesWrong = [], rangesKnew = [], rejected = [], spot = [], counted = {}, foreign = [], dates = [], byRoot = {}, mass = [], applied = [], orphans = [];
   var since = store.refsSince ? store.refsSince() : null;
   seen.forEach(function (id) { known[id] = 1; });
 
@@ -171,7 +171,7 @@ function marksFromDm(messages, store, rows) {
      * the same evening instead of retyping it all week. */
     ignored = ignored.concat(marks.ignored || []);
     /* Lines that looked like a correction but could not be read as one ("all", "1/3", a range that runs past the list): reported, never applied. */
-    unread = unread.concat(marks.unread || []);
+    unread = unread.concat(marks.unread || []); badRange = badRange.concat(marks.badRange || []);
     rangesWrong = rangesWrong.concat(marks.ranges.wrong); rangesKnew = rangesKnew.concat(marks.ranges.knew);
 
     /* A reply that names no misses still counts everything asked as checked-and-clean,
@@ -203,7 +203,7 @@ function marksFromDm(messages, store, rows) {
   });
 
   return { marked: marked, wrong: wrong, knew: knew, seen: seen, misses: misses, checked: checked,
-           ignored: ignored, unread: unread, rangesWrong: rangesWrong, rangesKnew: rangesKnew, foreign: foreign, dates: dates, mass: mass, rejected: rejected, spot: spot, applied: applied, orphaned: orphans };
+           ignored: ignored, unread: unread, badRange: badRange, rangesWrong: rangesWrong, rangesKnew: rangesKnew, foreign: foreign, dates: dates, mass: mass, rejected: rejected, spot: spot, applied: applied, orphaned: orphans };
 }
 
 /* Which numbered list a digest header refers to.
@@ -793,7 +793,7 @@ function mainInner(argv) {
     principals: cfg.supporting,
     muted: muted, mutes: L.suggestMutes(rows).filter(function (s) { return !already[s.phrase]; }),
     learnedNow: fresh, learnedAll: learned,
-    spotCheck: sample, recall: score, dark: result.dark, ignoredReplies: replies.ignored, unreadReplies: replies.unread, markedRanges: { wrong: replies.rangesWrong, knew: replies.rangesKnew },
+    spotCheck: sample, recall: score, dark: result.dark, ignoredReplies: replies.ignored, unreadReplies: replies.unread, unreadRangeReplies: replies.badRange, markedRanges: { wrong: replies.rangesWrong, knew: replies.rangesKnew },
     replyKey: replyKey, gapLine: status.gapLine(prevGap), dmLookup: lookup, unmatchedReplies: unmatchedReplies, ownerUnknown: ownerUnknown, inertReplies: inertReplies, dmUnreadable: dmUnreadable,
     /* Conversations skipped, not threads. One counter served both, and only the
        conversation count was reduced by it — so skipping a thread under-reported how

@@ -805,9 +805,11 @@ k 1 4      those are real, but I already knew
 miss b     the spot check found something it walked past
 ```
 
-A run of numbers can be written as a range, `1-3` or `1 to 3`, and means every item in it. `all` is not supported, on purpose. A reply that
+A run of numbers can be written as a range, `1-3` or `1 to 3`, and means every item in it, but only on a line that is nothing but numbers and ranges (after an optional `k`): inside a sentence, as in
+"4 to 6 weeks for the rollout", it is conversation, and nothing on that line is applied. `all` is not supported, on purpose. A reply that
 looks like a correction but cannot be read as one (`all`, `1/3`, a range that runs backwards or past the end of the list) is reported in
-the next brief as *NOT READ AS A CORRECTION* and applies nothing, including the other numbers on its line. A reply that would reject most of the
+the next brief as *NOT READ AS A CORRECTION* and applies nothing, including the other numbers on its line (a bad range says so: "Nothing on that
+line was applied."). A reply that would reject most of the
 list at once is not applied either, however it is written.
 
 Rejections stop appearing. `k` keeps the item but stops it counting as something the

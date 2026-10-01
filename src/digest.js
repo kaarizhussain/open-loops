@@ -603,8 +603,8 @@ function renderBrief(s) {
   /* Lines that look like a correction and could not be read as one: "all", "1/3", a range that is reversed or runs past the list. Nothing on
    * such a line was applied, and the reader is told, so they do not wait for a change that was never made. */
   (b.unreadReplies || []).slice(0, 3).forEach(function (line) {
-    p('NOT READ AS A CORRECTION — "' + String(line).slice(0, 56) +
-      '". Reply with the numbers that are not real, like "3 7", or a range like "1-3".');
+    p('NOT READ AS A CORRECTION — "' + String(line).slice(0, 56) + '".' + ((b.unreadRangeReplies || []).indexOf(line) > -1 ? ' Nothing on that line was applied.' : '') +
+      ' Reply with the numbers that are not real, like "3 7", or a range like "1-3".');
   });
   var w = warnings(s).length;
   if (w) p(w + (w === 1 ? ' read warning' : ' read warnings') + ' — in the thread.');

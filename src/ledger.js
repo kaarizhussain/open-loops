@@ -476,6 +476,10 @@ function recall(found, quiet, checked, missed) {
 var RANGE_SEP = '(?:\\s*[-–—]\\s*|\\s+(?:to|through|thru)\\s+)';
 var STAND_ALONE = '(?![\\d\\-\\/:a-z]|\\.\\d)(?!\\s*[-–—\\/]\\s*\\d)';
 var TOKEN = new RegExp('(?<![\\d\\-\\/:]|\\d\\.)#?(\\d+)(?:' + RANGE_SEP + '#?(\\d+))?' + STAND_ALONE, 'gi');
+/* A range is read only when the WHOLE line is correction syntax: marks and ranges, separated by spaces, commas, "and" or &, after an optional label
+ * (k / knew / known / already, which the caller has already taken off). "4 to 6 weeks for the rollout" leads with a range and is conversation. */
+var ITEM = '#?\\d+(?:' + RANGE_SEP + '#?\\d+)?';
+var WHOLE_LINE = new RegExp('^\\s*' + ITEM + '(?:(?:\\s*[,;&]\\s*|\\s+and\\s+|\\s+)' + ITEM + ')*\\s*[.!]*\\s*$', 'i');
 var LEAD = new RegExp('^\\s*#?(\\d+)(?:' + RANGE_SEP + '#?(\\d+))?' + STAND_ALONE, 'i');
 /* "all" and "everything" are not supported, on purpose: rejecting a whole list is what a paste looks like. They are reported, not applied. */
 var EVERYTHING = /^\s*(?:(?:reject|delete|remove|drop|clear|mark)\s+)?(?:all(?:\s+of\s+(?:them|these|it))?|everything)(?:\s+(?:is\s+)?(?:wrong|not real|false))?\s*[.!]*\s*$/i;
@@ -489,7 +493,7 @@ function unsupportedShape(line, max) {
 }
 
 function parseMarks(text, max) {
-  var wrong = [], knew = [], missed = [], ignored = [], unread = [], rangesWrong = [], rangesKnew = [], seen = {}, seenLetter = {};
+  var wrong = [], knew = [], missed = [], ignored = [], unread = [], badRange = [], rangesWrong = [], rangesKnew = [], seen = {}, seenLetter = {};
   /* Whether the spot check was answered at all, which is not the same as whether it
    * named a miss. A bare `miss` means "none of these" and is the answer that makes the
    * clean ones count; no miss line at all means they did not look, and counting the
@@ -524,14 +528,21 @@ function parseMarks(text, max) {
      * "3pm", "2x", "5min" — and "1-3pm" is a time range, so neither end of it is read. A date or a fraction ("9/30", "2026-08-25") is digits joined
      * by separators and is not read either, nor is a chain ("1-3-5"). */
     /* `any`: a single number was named. Only that is reported when the line does not lead with it; a range in a note ("see pages 2-5") was never reported. */
-    var tokens = [], bad = false, any = false, m;
+    var tokens = [], bad = false, any = false, sawRange = false, m;
     TOKEN.lastIndex = 0;
     while ((m = TOKEN.exec(body))) {
       var a = Number(m[1]), b = m[2] === undefined ? a : Number(m[2]);
       if (m[2] === undefined) { if (a >= 1 && a <= max) { tokens.push([a, a]); any = true; } continue; }
+      sawRange = true;
       /* A range is checked against the list BEFORE it is expanded, so "1-999999999" allocates nothing. A reversed one, or one that runs past the
        * list, is not clamped to something that looks right: it is not read at all. */
       if (a >= 1 && a <= b && b <= max) tokens.push([a, b]); else if (max) bad = true;    // with no list there is nothing to be out of range of
+    }
+    /* A range inside a line that is anything more than marks and ranges is part of a sentence: nothing on that line is read, not the range and
+     * not the numbers beside it, and it is not reported either. */
+    if (sawRange && !WHOLE_LINE.test(body)) {
+      if (max && unsupportedShape(line, max)) unread.push(line.trim());    // "1 - 3 - 5" is numbers only, and cannot be read
+      return;
     }
     if (!tokens.length && !bad) {
       /* Nothing here names an item, but the line may still be a correction that cannot be read: "all", or numbers that are not item numbers
@@ -563,7 +574,7 @@ function parseMarks(text, max) {
     }
     /* One range that cannot be read makes the whole line unreadable: the numbers beside it are not applied on the strength of a line that was
      * half understood. */
-    if (bad) { unread.push(line.trim()); return; }
+    if (bad) { unread.push(line.trim()); badRange.push(line.trim()); return; }
 
     tokens.forEach(function (tk) {
       if (tk[0] < tk[1]) (known ? rangesKnew : rangesWrong).push(tk);
@@ -576,7 +587,7 @@ function parseMarks(text, max) {
   });
   /* `ignored` is every line that named an item number but did not lead with one.
      Reported rather than acted on, so a reply that was not read never fails silently. */
-  return { wrong: wrong, knew: knew, missed: missed, ignored: ignored, unread: unread, ranges: { wrong: rangesWrong, knew: rangesKnew }, answered: answered };
+  return { wrong: wrong, knew: knew, missed: missed, ignored: ignored, unread: unread, badRange: badRange, ranges: { wrong: rangesWrong, knew: rangesKnew }, answered: answered };
 }
 
 /* Resolve those numbers against the list as it was sent, not as it stands now —

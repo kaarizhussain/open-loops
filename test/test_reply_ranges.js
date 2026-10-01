@@ -40,6 +40,12 @@ var TABLE = [
   ['all good thanks', R([])], ['all set', R([])], ['thanks!', R([])], ['none', R([])], ['', R([])], ['ok', R([])], ['all done with item', R([])],
   ['9/30 standup', R([])], ['2026-10-01', R([])], ['3:30', R([])], ['1-3pm', R([])], ['room 3-9', R([])], ['see pages 2-5', R([])],
   ['version 1.2.3', R([])], ['3.5 hours', R([])], ['12 people came', R([])],
+  // A range is read only when the WHOLE line is marks and ranges (after an optional k / knew / known / already). One inside a sentence is
+  // conversation: nothing on that line is read — not the range, not the numbers beside it — and it is not reported.
+  ['4 to 6 weeks for the rollout', R([])], ['4-6 weeks', R([])], ['4 to 6 weeks', R([])], ['k 4 to 6 weeks', R([])], ['3 7 and 4-6 weeks', R([])],
+  ['1-3 weeks and 2 days', R([])], ['2 through 4 are the ones to chase', R([])], ['1-3 are not real', R([])], ['1-3 please', R([])], ['3 - 5 people', R([])],
+  ['4 to 6', R([4, 5, 6])], ['1-3.', R([1, 2, 3])], ['1-3!', R([1, 2, 3])], ['already 1-3', R([], { knew: [1, 2, 3] })], ['known 2 to 4', R([], { knew: [2, 3, 4] })],
+  ['3 and 7 arent real', R([3, 7])], ['4 weeks is too long', R([4])],
   // Notes that name a number but do not lead with one: reported as before, applied never.
   ['3pm call moved to 4', R([], { ignored: 1 })], ['call me at 3', R([], { ignored: 1 })], ['call Dana, items 1-3', R([])]
 ];
@@ -100,6 +106,9 @@ assert.ok(bad.r.seen.indexOf('200.1') > -1, 'and the reply is read once: it is n
 var allReply = reply('all');
 assert.strictEqual(allReply.rejected, 0);
 assert.deepStrictEqual(allReply.r.unread, ['all']);
+var proseReply = reply('4 to 6 weeks for the rollout');
+assert.strictEqual(proseReply.rejected, 0, 'a range in a sentence rejects nothing');
+assert.deepStrictEqual(proseReply.r.unread.concat(proseReply.r.ignored), [], 'and is not reported');
 var half = reply('2\n9-1');
 assert.strictEqual(half.rejected, 1, 'the readable line of a reply is applied');
 assert.deepStrictEqual(half.r.unread, ['9-1']);
@@ -132,12 +141,18 @@ assert.strictEqual(rejectedNow(), 2, 'and both items were rejected, not just the
 
 fs.writeFileSync(path.join(dir, 'l.json'), snapshot);
 var unreadOut = main([input('2026-10-02', { dm: { channel: 'D0', text: banner(ts1, '```' + NL + first + NL + '```') }, dmThread: threadOf(['all', '1/3', '3-1']) }), '--config', cfg]);
+var REPLY_WITH = ' Reply with the numbers that are not real, like "3 7", or a range like "1-3".';
 ['all', '1/3', '3-1'].forEach(function (t) {
-  assert.ok(unreadOut.indexOf('NOT READ AS A CORRECTION — "' + t + '". Reply with the numbers that are not real, like "3 7", or a range like "1-3".') > -1, t + ': ' + unreadOut.split(NL).slice(0, 10).join(' / '));
+  // Only a range that cannot be read says that nothing on its line was applied.
+  assert.ok(unreadOut.indexOf('NOT READ AS A CORRECTION — "' + t + '".' + (t === '3-1' ? ' Nothing on that line was applied.' : '') + REPLY_WITH) > -1, t + ': ' + unreadOut.split(NL).slice(0, 10).join(' / '));
 });
 assert.ok(!/Took your last reply/.test(unreadOut), 'and nothing was applied');
 assert.strictEqual(rejectedNow(), 0, 'the ledger rejects nothing');
 
+fs.writeFileSync(path.join(dir, 'l.json'), snapshot);
+var prose = main([input('2026-10-03', { dm: { channel: 'D0', text: banner(ts1, '```' + NL + first + NL + '```') }, dmThread: threadOf(['4 to 6 weeks for the rollout', '1-3 weeks and 2 days']) }), '--config', cfg]);
+assert.ok(!/NOT READ AS A CORRECTION|Took your last reply/.test(prose), 'a range inside a sentence is not applied and not reported: ' + prose.split(NL).slice(0, 6).join(' / '));
+assert.strictEqual(rejectedNow(), 0, 'and rejects nothing');
 fs.writeFileSync(path.join(dir, 'l.json'), snapshot);
 var talk = main([input('2026-10-03', { dm: { channel: 'D0', text: banner(ts1, '```' + NL + first + NL + '```') }, dmThread: threadOf(['9/30 standup, 4 people', 'all good thanks', 'thanks!']) }), '--config', cfg]);
 assert.ok(!/NOT READ AS A CORRECTION|Took your last reply/.test(talk), 'ordinary conversation is not reported and not applied: ' + talk.split(NL).slice(0, 8).join(' / '));
