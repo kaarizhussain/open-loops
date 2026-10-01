@@ -205,8 +205,12 @@ fields. Map user profile email/name separately under `users`; omit unknown profi
 rather than guessing. Supply `members` only for a DM, with the other person's address.
 `dmThread` is a list, one entry per digest thread read; give each its digest root
 timestamp as `root` and the full parent/replies as `messages`. The two correction reads
-keep the unpaged input form; the separate lookup follows pages as described above. Use the original
-digest header, including its `· ref` reference, so numbered corrections resolve
+keep the unpaged input form; the separate lookup follows pages as described above.
+An otherwise empty text read containing only recognized `Channel: … (<ID>)`
+header lines is a valid empty correction read. Preserve it exactly; do not delete
+the `dm` field or edit fetched text to remove a parsing warning. Other text without
+message structure remains a parsing failure.
+Use the original digest header, including its `· ref` reference, so numbered corrections resolve
 against the list they answered.
 Never omit `root` or infer a reply's digest from its time or the newest list. Include
 the actual parent digest in the thread read. If its identity or parent cannot be
