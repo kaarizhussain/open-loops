@@ -332,6 +332,7 @@ function lastDelivered(d) {
   return d && d.date ? 'Last delivered digest: ' + DOW[dowOf(d.date)] + ' ' + d.date + (d.ref ? ' · ref ' + d.ref + ' (search this DM for that ref)' : '') + '.'
                      : 'No verified delivery recorded by status tracking yet.';
 }
+var AGAIN_PARTIAL = 'The brief is already in your DM. If you ask for another run, it will post another numbered list. Reply in the thread of the list you mean.';
 var RETRY = 'To try again now, tell your assistant "run Open Loops". That posts a fresh digest for today.';
 var EMPTY = 'An empty DM today does not mean nothing is outstanding.';
 var NO_RETRY = 'Running it again will not help until ';
@@ -364,7 +365,7 @@ function notice(a, delivered) {
       ? 'The brief posted, but the full details are unavailable: the details message did not post. The full list, the sentences and any drafts are not here.'
       : (a.details === 'posted' ? 'The brief and details posted, but' : 'The brief posted and the full details are unavailable, and') +
         ' the brief did not read back as expected, so it may be malformed, and replies to it may not be recognised.';
-    return { where: 'thread', text: ['OPEN LOOPS NOTES — for ' + d, line, RETRY].join('\n') };
+    return { where: 'thread', text: ['OPEN LOOPS NOTES — for ' + d, line, AGAIN_PARTIAL].join('\n') };
   }
   t = ['OPEN LOOPS DELIVERY UNKNOWN — for ' + d,
     'Open Loops could not confirm whether today\'s digest posted. Check this DM before running it again: it may already be here.',
@@ -425,6 +426,14 @@ function end(dir, o, now) {
     if (sup) s.superseded = s.superseded.filter(function (x) { return x.id !== o.id; });
     try { save(dir, s, now); } catch (e) { if (e.persist) e.result = { outcome: 'delivered', notice: null }; throw e; }
     return { outcome: 'delivered', done: false, notice: null, superseded: !!sup };
+  }
+  /* A replaced attempt that failed, when a later attempt for the same date has a confirmed delivery: there is nothing to tell. A delivery from before the replaced
+   * attempt began does not count, nor does one for another date. */
+  if (sup && s.delivered && s.delivered.date === a.date && Date.parse(s.delivered.at) > Date.parse(a.startedAt)) {
+    var covered = { date: s.delivered.date, ref: s.delivered.ref || null };
+    s.superseded = s.superseded.filter(function (x) { return x.id !== o.id; });
+    try { save(dir, s); } catch (e) { if (e.persist) e.result = { outcome: c.outcome, notice: null, covered: covered }; throw e; }
+    return { outcome: c.outcome, done: false, notice: null, superseded: true, covered: covered };
   }
   var n = notice(a, s.delivered);
   a.notice = 'pending';

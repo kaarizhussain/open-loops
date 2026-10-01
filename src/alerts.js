@@ -102,8 +102,13 @@ function readJson(f) {
 // Renamed into place, so a reader sees the old file or the new one, whole.
 function writeJson(f, o) {
   var tmp = f + '.' + process.pid + '.' + crypto.randomBytes(3).toString('hex') + '.tmp';   // one name per write: two sessions never share one
-  fs.writeFileSync(tmp, JSON.stringify(o, null, 1));
-  retry(function () { fs.renameSync(tmp, f); });
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(o, null, 1));
+    retry(function () { fs.renameSync(tmp, f); });
+  } catch (e) {
+    try { fs.unlinkSync(tmp); } catch (ignore) { /* only this write's own file */ }
+    throw e;
+  }
 }
 
 /* The salt that keeps two people apart while the ledger has none of its own (a ledger from before identities, until its next digest makes one).

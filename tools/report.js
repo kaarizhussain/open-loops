@@ -149,7 +149,7 @@ async function main(argv) {
   if (argv.indexOf('--send') > -1) {
     var stage = flag('failed');
     if (stage) {
-      if (D.STAGES.indexOf(stage) < 0) throw new Error('--failed takes one of: ' + D.STAGES.join(', '));
+      if (D.STAGES.indexOf(stage) < 0) { var bad = new Error('--failed takes one of: ' + D.STAGES.join(', ')); bad.usage = true; throw bad; }
       var today = new Date().toISOString().slice(0, 10);
       outbox.queue(dir, cfg, { kind: 'run_failed', stage: stage, error: 'Other', where: [] },
         [today, stage, 'Other', '-'], today);
@@ -164,7 +164,7 @@ async function main(argv) {
 if (require.main === module) {
   // Never fails the run it follows: a report that cannot go is not the reader's problem.
   main(process.argv.slice(2)).then(function (out) { console.log(out); },
-    function (e) { console.error('report: ' + e.message); });
+    function (e) { console.error('report: ' + e.message); if (e && e.usage) process.exitCode = 1; });    // a refused argument is a mistake in the call; a report that cannot go still never fails the run
 }
 
 module.exports = { consentText: consentText, main: main, send: send, consent: consent, scrub: scrub, draftExample: draftExample };

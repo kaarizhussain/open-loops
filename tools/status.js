@@ -41,6 +41,7 @@ function failure(stdout, stderr) { var e = new Error(stderr); e.stdout = stdout;
 var NO_RECORD = 'record: NOT RECORDED — this attempt has no record, because --begin could not save one.';    // only for ATTEMPT UNRECORDED
 // An attempt that did begin, whose earlier status record cannot be read now: not the same thing, and not said as if it were.
 var CANNOT_READ = 'record: This attempt\'s outcome could not be recorded. Its earlier status record could not be read.';
+var coveredText = function (c) { return 'ATTEMPT REPLACED — a later attempt for ' + c.date + ' delivered' + (c.ref ? ' (ref ' + c.ref + ')' : '') + ', so no failure notice is needed.'; };
 var postLine = function (n) { return 'post: ' + (n.where === 'thread' ? 'the thread under the brief' : 'your own DM'); };
 var NO_RESULT = 'Do not run --notice-result for this attempt: its notice result cannot be recorded.';
 var ONCE = 'This notice is the only one for this attempt: post it once, and do not run --end again. Tell the user the attempt could not be recorded.';
@@ -99,10 +100,12 @@ function mainInner(argv, err) {
     catch (e) {
       if (!e.persist) throw e;
       // The facts are the run's own, so the notice is still made. It is the only one: a retried --end could print it again after it was already posted.
+      if (e.result && e.result.covered) throw failure(coveredText(e.result.covered), persistMessage(e));
       if (e.result) throw failure(e.result.notice ? e.result.notice.text : 'DELIVERED — NOT RECORDED.', [persistMessage(e)].concat(e.result.notice ? [postLine(e.result.notice), ONCE, NO_RESULT] : ['Tell the user the delivery could not be recorded.']).join('\n'));
       unrecorded(persistMessage(e), true);
     }
     if (r.done) return 'ALREADY RECORDED (' + r.outcome + ') — no second notice.';
+    if (r.covered) return coveredText(r.covered);
     if (r.outcome === 'delivered') return 'DELIVERED — recorded.' + (r.superseded ? ' (Attempt ' + id + ' had been replaced by a later one; the last attempt is unchanged.)' : '');
     err('outcome: ' + r.outcome + '\npost: ' + (r.notice.where === 'thread' ? 'the thread under the brief' : 'your own DM') +
         (r.superseded ? '\nattempt ' + id + ' was replaced by a later attempt before it ended; its notice is printed, but it is not the last attempt, so its notice result is not recorded.'

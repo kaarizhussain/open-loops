@@ -89,7 +89,7 @@ function main(argv) {
 
 if (require.main === module) {
   try { console.log(main(process.argv.slice(2))); }
-  catch (e) { console.error('alerts: ' + e.message); process.exit(1); }
+  catch (e) { console.error('alerts: ' + e.message); process.exit(e && e.exitCode || 1); }    // 3: a configuration that cannot be used, as in every other tool
 }
 
 module.exports = { main: main, consentText: consentText };

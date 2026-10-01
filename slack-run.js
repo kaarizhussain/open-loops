@@ -349,6 +349,16 @@ function checkConfig(configPath) {
   return 'Config OK.';
 }
 
+/* Whether a ledger file can be used, without changing anything: before a copy is put in place of one that could not be read. A file that is not there is not a ledger
+ * (the store reads a missing one as a first run, which would let an empty path pass). It is loaded as a digest would, salt guard included, and nothing is written. */
+function checkLedger(file) {
+  var fail = function (msg) { var e = new Error(msg); e.exitCode = 4; return e; };
+  if (!file) throw fail('--check-ledger needs the path of the ledger file to check.');
+  if (!fs.existsSync(file) || !fs.statSync(file).isFile()) throw fail('Ledger at ' + file + ' does not exist.');
+  fileStore(file).beginRun('1970-01-01');      // in memory only: loads it, and raises what a run would raise
+  return 'Ledger OK.';
+}
+
 /* The identity resolver is set for one run and cleared after it, even when the run throws: a later run in the same process must not inherit it. */
 function main(argv) {
   try { return mainInner(argv); } finally { loops.setIdentityResolver(null); }
@@ -370,6 +380,7 @@ function mainInner(argv) {
   }
 
   if (argv[0] === '--check-config') return checkConfig(configPath);
+  if (argv[0] === '--check-ledger') return checkLedger(argv[1]);
   if (argv[0] === '--report') {
     var rc = settings(fs, configPath, { you: 'report@localhost' });
     return report(flag('ledger', rc.ledger));

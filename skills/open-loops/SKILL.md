@@ -516,8 +516,8 @@ node <checkout>/tools/status.js --end --attempt <id> --brief <b> --details <d> -
   fetched when the configuration was found unusable: `no` when `--check-config` failed, `yes` when the runner itself exited 3 after the fetch.
   The notice says nothing was fetched only when you said so. The runner's exit code says which: 3 is the configuration, 4 is the
   ledger (Slack had been fetched, so use `--failed ledger`), anything else is `--failed build`.
-- **Never move aside, delete, recreate or repair a ledger you cannot read.** Report the error and stop: the ledger holds every correction the
-  user has made, and only they decide what happens to it.
+- **Never move aside, delete, recreate or repair a ledger you cannot read on your own.** Report the error and stop: the ledger holds every correction the
+  user has made, and only they decide what happens to it. Only when they explicitly ask, do it as "When the ledger cannot be read" says.
 - `--ref` is the reference in the digest's header (four hex characters, copied from it), whenever a digest was built. A delivered
   digest needs it; without it, or with a malformed one, the command refuses and records nothing.
 - **If a post's outcome is uncertain, do not post again.** An explicit refusal from Slack means `rejected`. Anything else —
@@ -556,11 +556,36 @@ node <checkout>/tools/report.js --send --config <working dir>/openloops.config.j
 ```
 
 If the run failed, add `--failed <stage>`, naming where: `pull`, `fetch_slack`,
-`fetch_calendar`, `runner`, `post` or `readback`. Pass nothing else — the tool builds
+`fetch_calendar`, `runner`, `post` or `readback`. A configuration problem (exit 3) or an unreadable ledger (exit 4) is `runner`. Pass nothing else — the tool builds
 the report itself from fixed fields, and a crash inside the runner has already queued its
 own. With diagnostics off it sends nothing and discards anything queued. It never changes
 the digest, and its output is not posted anywhere; a report that cannot be sent waits for
 the next run.
+
+## When the configuration is unusable
+
+The failure notice tells them to say "fix the Open Loops configuration". When they do:
+
+1. Run `node <checkout>/slack-run.js --check-config --config <working dir>/openloops.config.json` and read the reason it prints.
+2. Tell them in plain words what is wrong and which setting it is.
+3. Change only the setting the reason names, and only to a value they give you or approve after you show the exact line before and after. Never delete or
+   recreate the file.
+4. Run the check again. When it prints `Config OK.`, say: "The configuration check passes. The next scheduled run will use it." Do not run a digest unless
+   they ask for one.
+
+## When the ledger cannot be read
+
+The failure notice tells them to say "check the Open Loops ledger". When they do, you look and report; you change nothing on your own:
+
+1. Read the runner's error and tell them what it says, and that the ledger holds every correction they made and their restore history, which cannot be rebuilt.
+2. Do not move, delete, recreate or repair the file, and do not run a digest to see whether it works now.
+3. Replace or move it only when they explicitly ask, naming which:
+   - **Restore from a copy they point you to.** First check the copy without changing anything: `node <checkout>/slack-run.js --check-ledger <the copy>` must
+     print `Ledger OK.` Then copy the current file beside itself under a new dated name (`<ledger>.preserved-<date-time>`, never over an existing file), and
+     only then put the copy in its place. Tell them the new name.
+   - **Start fresh.** Move the current file aside under a dated name (never delete it). Tell them that starting fresh loses access to the old corrections and
+     restore history, and that moving the file aside keeps them for recovery.
+4. Check the result with `--check-ledger` on the file now in place, and tell them what you did and where the preserved file is.
 
 ## Midday check
 
