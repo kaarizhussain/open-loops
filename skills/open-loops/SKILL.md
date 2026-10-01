@@ -826,6 +826,21 @@ rejections still work exactly as before and nothing is ever muted automatically.
 if you offered them that setting on privacy grounds, rather than letting them wait for a
 feature that will not arrive. `mute` in the config still works by hand.
 
+## Putting a rejected item back
+
+When they say an item they rejected should not have been ("bring back the Q4 headcount one", "what have I rejected?"):
+
+```bash
+node <checkout>/tools/corrections.js --list --config <working dir>/openloops.config.json
+node <checkout>/tools/corrections.js --restore <reference> --config <working dir>/openloops.config.json
+node <checkout>/tools/corrections.js --restore-item <n> --digest <ref in that digest's header> --config <working dir>/openloops.config.json
+```
+
+`--list` shows what is hidden, each with a reference, and where every restore request stands. With `storeText: false` there are no sentences to show:
+use the second form, with the number the item had in a digest they still have. The tool only **queues a request**; it never writes the ledger. Say
+"restore requested", never "restored": the next digest applies it and says whether it came back, and only then is anything true about its age. If the tool
+prints `NOT QUEUED`, relay it as it is. If it says the file cannot be read, tell them; do not delete or recreate `restores.json`.
+
 ## When a report needs more detail
 
 Automatic reports carry no text, so they show *that* a kind of item misfires, not *why*.

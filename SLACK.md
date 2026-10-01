@@ -227,6 +227,9 @@ stop sending them. A run of numbers can be a range, `1-3` or `1 to 3`, meaning e
 (*"2 marked not real (1–2)"*). `all` is not supported, on purpose: a reply that looks like a correction but cannot be read as one is reported
 as *NOT READ AS A CORRECTION* and applies nothing, and a reply that would reject most of the list at once is not applied either.
 
+A rejection can be undone: ask your assistant to bring an item back. It is only a request until the next digest applies it, and that digest says
+so (*"Restored 1 item you had rejected — it keeps its original age"*). If the item is no longer tracked, it says that instead.
+
 A line beginning with `k` means real-but-already-known:
 
 ```

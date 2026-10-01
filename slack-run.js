@@ -38,6 +38,7 @@ var digest = require('./src/digest.js');
 var { readConversation } = require('./src/slack-json.js');
 var { coverage, emptyResponse } = require('./src/slack-coverage.js');
 var { fileStore } = require('./src/store.js');
+var restoreLib = require('./src/restore.js');
 var identity = require('./src/identity.js');
 var { parseEvents } = require('./src/calendar.js');
 var { settings, loadConfig, scopeProblems, configError } = require('./src/config.js');
@@ -101,10 +102,13 @@ function inScope(name, scope) {
  * to, so an old reply resolves against the list it was actually answering rather than
  * whatever is on screen now. Each reply is acted on once — it stays in the DM
  * forever, and re-applying it against a later, shorter list marks different items. */
-function marksFromDm(messages, store, rows) {
+function marksFromDm(messages, store, rows, restore) {
   var seen = store.seenReplies(), known = {}, marked = 0, wrong = 0, knew = 0, cur = null;
   var misses = [], checked = 0, ignored = [], unread = [], badRange = [], rangesWrong = [], rangesKnew = [], rejected = [], spot = [], counted = {}, foreign = [], dates = [], byRoot = {}, mass = [], applied = [], orphans = [];
   var since = store.refsSince ? store.refsSince() : null;
+  /* A restored item is fenced: a reply typed before the request cannot reject it again, however it comes to be read again (a same-day re-run, a
+   * reply the ledger no longer remembers). `hashes` tells an edited reply from one already processed. */
+  var fences = (restore && restore.fences) || {}, hashes = (restore && restore.hashes) || {}, rejectedAt = {}, fencedKeys = {}, fencedReplies = [];
   seen.forEach(function (id) { known[id] = 1; });
 
   messages.forEach(function (m) {
@@ -146,6 +150,7 @@ function marksFromDm(messages, store, rows) {
     seen.push(m.id);
 
     var marks = L.parseMarks(m.body, keys.length);
+    var typedAt = parseFloat(m.id) * 1000, hash = restoreLib.hashOf(m.body), before = hashes[m.id];
     /* One reply rejecting most of the list is almost certainly something pasted into the DM,
      * not a correction: a real one is a handful of numbers, and a wrong rejection hides the
      * item from every later digest. Nothing is applied, and the reader is told once. */
@@ -153,6 +158,17 @@ function marksFromDm(messages, store, rows) {
       mass.push({ text: m.body.trim().split('\n')[0], count: marks.wrong.length, of: keys.length, date: forDate });
       return;
     }
+    var fencedOut = function (i) { var k = keys[i - 1]; return !!(k && fences[k] && typedAt < fences[k]); };
+    var touched = [].concat(marks.wrong, marks.knew).filter(fencedOut);
+    if (touched.length) {
+      touched.forEach(function (i) { fencedKeys[keys[i - 1]] = 1; });
+      // Unchanged since it was read, it is simply the old reply and says nothing. Edited, or not known to be unchanged, it is reported.
+      if (before !== hash) fencedReplies.push({ text: m.body.trim().split('\n')[0], edited: before !== undefined });
+      marks = Object.assign({}, marks, { wrong: marks.wrong.filter(function (i) { return !fencedOut(i); }), knew: marks.knew.filter(function (i) { return !fencedOut(i); }) });
+    }
+    // A reply that was reported (edited, or not known to be unchanged) keeps its old hash, so a same-day re-run reports it again instead of losing the warning.
+    if (!(touched.length && before !== hash)) hashes[m.id] = hash;
+    marks.wrong.forEach(function (i) { var k = keys[i - 1]; if (k && !(typedAt <= rejectedAt[k])) rejectedAt[k] = typedAt; });
     [].concat(marks.wrong || [], marks.knew || []).forEach(function (i) {
       var key = keys[i - 1];
       if (key) applied.push(key);
@@ -203,6 +219,7 @@ function marksFromDm(messages, store, rows) {
   });
 
   return { marked: marked, wrong: wrong, knew: knew, seen: seen, misses: misses, checked: checked,
+           fencedReplies: fencedReplies, fencedKeys: fencedKeys, rejectedAt: rejectedAt,
            ignored: ignored, unread: unread, badRange: badRange, rangesWrong: rangesWrong, rangesKnew: rangesKnew, foreign: foreign, dates: dates, mass: mass, rejected: rejected, spot: spot, applied: applied, orphaned: orphans };
 }
 
@@ -543,7 +560,10 @@ function mainInner(argv) {
     });
   });
   dmMessages.sort(function (a, b) { return parseFloat(a.id) - parseFloat(b.id); });
-  var replies = marksFromDm(dmMessages, store, rows);
+  /* Putting rejected items back (src/restore.js). A midday check applies nothing: it never writes the ledger, and a request waits for the digest. */
+  var restoreCtx = argv.indexOf('--check') > -1 ? null : restoreLib.begin({ store: store, requests: restoreLib.loadRequests(reportDir).requests, today: today });
+  var replies = marksFromDm(dmMessages, store, rows, { fences: restoreCtx ? restoreCtx.fences : {}, hashes: store.restoreState().hashes });
+  if (restoreCtx) restoreLib.settle({ store: store, rows: rows, ctx: restoreCtx, replies: replies, today: today });
   var unmatchedReplies = unmatched + replies.orphaned.length;
   /* A same-day re-run starts from before the first run, so a correction applied by the first
    * run is gone unless this run reads that reply again. Say so instead of relisting the item. */
@@ -739,6 +759,15 @@ function mainInner(argv) {
    * read produced nothing. Closed items count as found — recall is about whether the
    * detector saw the commitment, not about whether it is still outstanding. */
   var ref = digestRef(today, keys, sample.map(function (m) { return m.id; }));
+  /* What to say about restore requests, until it is known to have arrived: the last delivered digest's reference is the only proof. */
+  var restoreNotes = [];
+  if (restoreCtx) {
+    restoreLib.mintRefs(store, rows, today);
+    restoreLib.prune(store, today);
+    var lastDelivered = null;
+    try { lastDelivered = fs.existsSync(configPath) ? status.load(reportDir).delivered : null; } catch (e) { /* the status record must never cost the digest */ }
+    restoreNotes = restoreLib.notes({ store: store, ref: ref, keys: keys, deliveredRef: lastDelivered && lastDelivered.ref });
+  }
   var foundToday = result.open.length + result.closed.length;
   var score = L.recall(foundToday, silent.length,
                        audit.checked + replies.checked, audit.missed.length + replies.misses.length);
@@ -793,7 +822,7 @@ function mainInner(argv) {
     principals: cfg.supporting,
     muted: muted, mutes: L.suggestMutes(rows).filter(function (s) { return !already[s.phrase]; }),
     learnedNow: fresh, learnedAll: learned,
-    spotCheck: sample, recall: score, dark: result.dark, ignoredReplies: replies.ignored, unreadReplies: replies.unread, unreadRangeReplies: replies.badRange, markedRanges: { wrong: replies.rangesWrong, knew: replies.rangesKnew },
+    spotCheck: sample, recall: score, dark: result.dark, ignoredReplies: replies.ignored, restoreNotes: restoreNotes, fencedReplies: replies.fencedReplies, unreadReplies: replies.unread, unreadRangeReplies: replies.badRange, markedRanges: { wrong: replies.rangesWrong, knew: replies.rangesKnew },
     replyKey: replyKey, gapLine: status.gapLine(prevGap), dmLookup: lookup, unmatchedReplies: unmatchedReplies, ownerUnknown: ownerUnknown, inertReplies: inertReplies, dmUnreadable: dmUnreadable,
     /* Conversations skipped, not threads. One counter served both, and only the
        conversation count was reduced by it — so skipping a thread under-reported how

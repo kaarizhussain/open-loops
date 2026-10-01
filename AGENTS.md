@@ -42,12 +42,14 @@ This section is the owner's own deployment; someone running their own copy sets 
       check that posts and then dies, or cannot read the post back, leaves it unrecorded, and
       the next check can post the same items again. That is accepted, and the consent text
       says so; do not "fix" it by confirming before the post, which loses alerts instead.
+    - `restores.json`, written only by `tools/corrections.js`, holds requests to put a rejected item back (an id, a reference, a time: never the
+      reader's words). The digest reads it and records what it did in the ledger's `restoreLog`; it never writes this file, and a check applies nothing.
     - `status.json`, written only by `tools/status.js` (`--begin`, `--end`, `--notice-result`, `--schedule`, `--schedule-state`), holds the
       last attempt and, separately, the last delivered digest. The runner only stages `status.staged.json`; an attempt
       that ends delivered promotes it by ref. A failed attempt never overwrites the last delivery, and a preview (`--dry`)
       records nothing.
 - Every other agent — Codex included — runs the digest with `--dry`, does not run `--check`
-  or `tools/alerts.js --confirm` or `--baseline` or a real (non-`--dry`) `tools/status.js --begin`/`--end`, and never posts, until the owner changes this line.
+  or `tools/alerts.js --confirm` or `--baseline` or a real (non-`--dry`) `tools/status.js --begin`/`--end`, or `tools/corrections.js --restore` against the owner's data, and never posts, until the owner changes this line.
 - Two setups posting from two ledgers put two numbered lists in one DM, and a reply
   meant for one lands on the other (2026-09-22). Alerts carry no numbers and no reference,
   so they cannot collide that way.

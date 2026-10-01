@@ -22,10 +22,12 @@ var path = require('path');
 var L = require('./ledger.js');
 var retry = require('./busy.js').retry;
 
-var EMPTY = { rows: [], digests: {}, refs: {}, refsSince: null, seen: [], learned: [], audit: { checked: 0, missed: [], asked: {}, quiet: 0, found: 0 } };
+var EMPTY = { rows: [], digests: {}, refs: {}, refsSince: null, seen: [], learned: [], restoreRefs: {}, restoreLog: {}, replyHashes: {}, audit: { checked: 0, missed: [], asked: {}, quiet: 0, found: 0 } };
 
 /* A ledger that cannot be used carries exit code 4: it was read after Slack was fetched, and only its owner can repair it. */
 function ledgerError(msg) { var e = new Error(msg); e.exitCode = 4; return e; }
+
+function plain(x) { return x && typeof x === 'object' && !Array.isArray(x) ? x : {}; }
 
 function load(file) {
   try {
@@ -51,7 +53,9 @@ function load(file) {
             asked: raw.audit.asked || {} }
         : { checked: 0, missed: [], asked: {} },
       before: raw.before && raw.before.date && raw.before.state ? raw.before : null,
-      identitySalt: typeof raw.identitySalt === 'string' && raw.identitySalt ? raw.identitySalt : undefined
+      identitySalt: typeof raw.identitySalt === 'string' && raw.identitySalt ? raw.identitySalt : undefined,
+      /* Restoring a rejected item (src/restore.js). Kept outside a same-day rollback, like the digest memos. */
+      restoreRefs: plain(raw.restoreRefs), restoreLog: plain(raw.restoreLog), replyHashes: plain(raw.replyHashes)
     };
   } catch (e) {
     // Missing is the normal first run. Corrupt is not, and losing the verdicts in it
@@ -126,6 +130,7 @@ function fileStore(file, sopts) {
         discarded = state.rows.filter(function (r) { return L.cell(r[L.COL.verdict]); })
           .map(function (r) { return L.cell(r[L.COL.key]); });
         var keep = state.before, refs = state.refs, since = state.refsSince, salt = state.identitySalt;
+        var restoreRefs = state.restoreRefs, restoreLog = state.restoreLog, replyHashes = state.replyHashes;
         state = JSON.parse(JSON.stringify(keep.state));
         state.before = keep;
         // The salt is not part of what a re-run rolls back: a snapshot taken before it was made must not unmake it.
@@ -134,6 +139,9 @@ function fileStore(file, sopts) {
          * digest is in the DM and may have been answered — by its numbering, not this run's. */
         state.refs = refs;
         state.refsSince = since;
+        /* Nor is what a restore did, which replies were already read, or the references to rejected items: a re-run that forgot them would apply
+         * a reply an earlier restore had voided, or lose the name of an item. */
+        state.restoreRefs = restoreRefs; state.restoreLog = restoreLog; state.replyHashes = replyHashes;
       } else {
         var snap = JSON.parse(JSON.stringify(state));
         delete snap.before;
@@ -142,6 +150,9 @@ function fileStore(file, sopts) {
     },
 
     identitySalt: ensureSalt,
+
+    // Live objects, written by the digest only: its next flush records them.
+    restoreState: function () { return { refs: state.restoreRefs, log: state.restoreLog, hashes: state.replyHashes }; },
 
     // Keys that carried a verdict before a same-day re-run rolled the ledger back.
     discardedVerdicts: function () { return discarded.slice(); },
@@ -173,6 +184,9 @@ function fileStore(file, sopts) {
       var map = function (list) { return list.map(function (k) { return renames[k] || k; }); };
       Object.keys(state.digests).forEach(function (d) { state.digests[d] = map(state.digests[d]); });
       Object.keys(state.refs).forEach(function (r) { if (state.refs[r].keys) state.refs[r].keys = map(state.refs[r].keys); });
+      // A reference to a rejected item names the item, not its key: when the key moves, the reference follows.
+      Object.keys(state.restoreRefs).forEach(function (r) { var e = state.restoreRefs[r]; if (e && renames[e.key]) e.key = renames[e.key]; });
+      Object.keys(state.restoreLog).forEach(function (id) { var e = state.restoreLog[id]; if (e && e.key && renames[e.key]) e.key = renames[e.key]; });
     },
 
     /* The same memo, by the reference printed in the digest's header rather than its date.

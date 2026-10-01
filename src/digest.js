@@ -600,6 +600,28 @@ function renderBrief(s) {
     p('NOT READ AS A CORRECTION — "' + String(line).slice(0, 56) +
       '". Reply with just the number, like "3", to reject one.');
   });
+  /* Rejected items put back, or not (src/restore.js). Said until a digest that carried it is known to have arrived. */
+  (b.restoreNotes || []).slice(0, 4).forEach(function (x) {
+    var seen = x.firstSeen ? ' (first seen ' + MONTH[+x.firstSeen.slice(5, 7) - 1] + ' ' + (+x.firstSeen.slice(8, 10)) + ')' : '';
+    if (x.kind === 'refused') {
+      p('NOT RESTORED — ' + x.ref + ' ' + ({
+        not_tracked: 'is no longer tracked, so its original age cannot be recovered. If it is still outstanding it may be detected again as new, with a new age.',
+        not_rejected: 'is not currently rejected, so there is nothing to restore.',
+        ambiguous_prefix: 'is the start of more than one reference. Use more characters.',
+        unknown_ref: 'is not a reference this ledger knows. Ask for the list of rejected items and use a reference from it.'
+      }[x.reason] || 'could not be restored.'));
+      return;
+    }
+    var lead = x.repeat ? 'Restored earlier — the digest that said so may not have reached you. ' : '';
+    if (x.superseded) p(lead + 'You restored an item and then rejected it again, so it stays hidden.');
+    else if (x.n) p(x.repeat ? lead + 'It is back as item ' + x.n + ' and keeps its original age' + seen + '.' : 'Restored 1 item you had rejected — it is back as item ' + x.n + ' and keeps its original age' + seen + '.');
+    else p(lead + 'Restore applied to its record' + seen + ', but the commitment is not in what was read today, so it is not listed. That does not mean it is resolved — it will be listed if it shows up in a read.');
+  });
+  /* An older reply that refers to an item restored since: not applied again. An edited one, or one not known to be unchanged, is reported. */
+  (b.fencedReplies || []).slice(0, 3).forEach(function (x) {
+    p(x.edited ? 'NOT APPLIED — an edited reply refers to an item you restored: "' + String(x.text).slice(0, 40) + '". Send it again as a new reply if you want it rejected.'
+               : 'NOT APPLIED — a reply from before you restored an item refers to it, and it may have been edited: "' + String(x.text).slice(0, 40) + '". Send it again as a new reply if you want it rejected.');
+  });
   /* Lines that look like a correction and could not be read as one: "all", "1/3", a range that is reversed or runs past the list. Nothing on
    * such a line was applied, and the reader is told, so they do not wait for a change that was never made. */
   (b.unreadReplies || []).slice(0, 3).forEach(function (line) {
