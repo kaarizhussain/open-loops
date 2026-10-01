@@ -58,5 +58,10 @@ assert.ok(procedure.indexOf('Codex may list but must not queue restores with eit
 assert.ok(procedure.indexOf('Only the digest applies it.') > -1, 'queueing is not represented as restoring');
 assert.ok(procedure.indexOf('--attempt UNRECORDED --today <local-date>') > -1, 'begin persistence failure still has an end procedure');
 assert.ok(procedure.indexOf('Do not rerun `--end` or blindly retry the post.') > -1, 'persistence failure cannot trigger duplicate notices');
-assert.ok(procedure.indexOf('For `UNRECORDED`, skip `--notice-result`') > -1, 'unrecorded attempt cannot receive a recorded notice result');
+assert.ok(procedure.indexOf('For every exit-5 `--end`, skip `--notice-result`') > -1, 'every unsaved outcome skips notice recording');
+assert.ok(procedure.indexOf("stderr's `post:` line") > -1, 'unsaved notices retain their destination');
+assert.ok(procedure.indexOf('attempt that began later') > -1, 'a later delivery timestamp alone cannot suppress a notice');
+assert.ok(procedure.indexOf('When the ledger cannot be read') > -1, 'explicit recovery uses the shared preservation procedure');
+assert.ok(procedure.indexOf('Do not retry with another reference.') > -1, 'baseline refusal does not trigger a different promotion');
+assert.ok(procedure.indexOf('existing `runner` stage') > -1, 'diagnostics stay within the consented stage vocabulary');
 console.log('Codex status and diagnostic disclosure: OK');

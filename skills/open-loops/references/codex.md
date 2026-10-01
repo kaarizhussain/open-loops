@@ -109,6 +109,8 @@ Do not report an uncertain write as proof that no record exists.
 
 Then validate the config with `slack-run.js --check-config --config "<config>"`
 before each run's history fetch, including previews. Stop on an error; do not
+fetch with invalid retention or paths: invalid `keepLedgerDays`, `lookbackDays`
+over 3650, and an invalid `ledger` path are configuration errors (exit 3). Do not
 fetch first and rely on the runner to reject the data afterward. For a real
 attempt, record a failed check with `--failed config --fetched no`, both posts
 `not_attempted`, and `--verified no`. A broken config cannot supply a DM target:
@@ -250,6 +252,9 @@ Only after this check succeeds, promote the staged baseline with
 the reference from that digest. Never promote a preview or an unverified post. This
 step is for an authorized Codex writer elsewhere; the owner's deployment restriction
 above still forbids Codex from promoting a baseline here.
+If promotion refuses (exit 1), post its printed explanation once in the brief's
+thread with the `OPEN LOOPS NOTES — for <date>` header. The explanation says
+whether checks will use an earlier baseline or skip. Do not retry with another reference.
 
 After verified delivery, echo the runner's brief verbatim in the Codex conversation
 and say "The full details are in its Slack thread." Explain corrections once:
@@ -274,6 +279,9 @@ message was positively identified; `rejected` when Slack explicitly refused it;
 `not_attempted` requires `--failed config`, `ledger`, `fetch` or `build`. The other failure stages are
 `post` and `verify`. `--verified yes` means only that the brief's read-back passed;
 it does not verify the details. Supply the runner's ref whenever a digest was built.
+Contradictory facts are refused without recording anything: `--failed verify`
+requires `--verified no`, and `--failed post` cannot describe both posts as
+posted with the brief verified.
 
 For `--failed config`, supply `--fetched yes|no` from what actually happened;
 exit code 3 alone does not establish whether Slack was fetched. Runner exit code
@@ -287,7 +295,10 @@ exact expected first line with its ref. Check details in the identified brief's
 thread. Finding the message establishes that it posted; not finding it, even after
 every page, leaves delivery unknown. Do not retry an uncertain post automatically.
 
-`DELIVERED` or `ALREADY RECORDED` requires no notice. Otherwise stdout contains the
+`DELIVERED`, `ALREADY RECORDED`, or `ATTEMPT REPLACED` saying no failure notice
+is needed requires no notice. The latter requires a confirmed delivery for the
+same date from an attempt that began later; a later delivery time alone is insufficient.
+Otherwise stdout contains the
 approved notice and stderr identifies its destination: the self-DM or the brief's
 thread. Post it verbatim once, without a code fence, only under the authorized real
 run's delivery permission. Record the notice's result with:
@@ -298,11 +309,12 @@ node "<checkout>/tools/status.js" --notice-result <posted|rejected|not_attempted
 
 Handle exit 5 separately from ordinary success: the outcome could not be reliably
 recorded. If stdout opens `OPEN LOOPS`, it is the notice for that attempt; post it
-once under the authorized delivery permission, then tell the user about the
+once where stderr's `post:` line says: the brief's thread for `OPEN LOOPS NOTES`,
+or the self-DM otherwise. Then tell the user about the
 recording failure. Do not rerun `--end` or blindly retry the post. If stdout is
 `DELIVERED — NOT RECORDED.`, delivery succeeded but recording did not complete;
-do not generate a failure notice. For `UNRECORDED`, skip `--notice-result` because
-there is no usable attempt ID. If an earlier attempt was replaced and the tool
+do not generate a failure notice. For every exit-5 `--end`, skip `--notice-result`
+because its notice result cannot be recorded. If an earlier attempt was replaced and the tool
 says its notice result cannot be recorded, skip that command as well. A failed
 notice-result write does not establish that sending the notice failed.
 
@@ -312,6 +324,14 @@ the notice cannot reliably reach the user; report this in the Codex chat. Neithe
 finishing a Codex run nor generating notice text proves a digest was delivered.
 
 ## Is it working?
+
+For requests to fix the configuration or check the ledger, follow SKILL.md's
+"When the configuration is unusable" and "When the ledger cannot be read" sections.
+Use the connected Codex tools and quote local paths. `--check-ledger <file>` is
+read-only and prints `Ledger OK.` on success; failures exit 4. Recovery requires
+an explicit request, validation of the supplied copy, and preservation of the
+current file under a new dated name before replacement. Do not run a digest
+as a repair test or change the owner's ledger without that explicit request.
 
 When asked what Open Loops tracks or whether it ran, show the tool's status in the
 Codex chat, not Slack:
@@ -362,6 +382,8 @@ Someone set up earlier opts in the same way, only when they ask: `--consent` alo
 question and records nothing.
 End every run, pass or fail, with `tools/report.js --send` (plus `--failed <stage>` on a
 failure), and share an example only through "When a report needs more detail".
+For diagnostics, configuration (exit 3) and ledger (exit 4) failures use the
+existing `runner` stage; keep their local exit codes and explanations distinct.
 
 ## Scheduling in Codex
 
