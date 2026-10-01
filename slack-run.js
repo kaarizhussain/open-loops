@@ -561,7 +561,8 @@ function mainInner(argv) {
   });
   dmMessages.sort(function (a, b) { return parseFloat(a.id) - parseFloat(b.id); });
   /* Putting rejected items back (src/restore.js). A midday check applies nothing: it never writes the ledger, and a request waits for the digest. */
-  var restoreCtx = argv.indexOf('--check') > -1 ? null : restoreLib.begin({ store: store, requests: restoreLib.loadRequests(reportDir).requests, today: today });
+  var queuedRestores = argv.indexOf('--check') > -1 ? null : restoreLib.loadRequests(reportDir);
+  var restoreCtx = queuedRestores ? restoreLib.begin({ store: store, requests: queuedRestores.requests, today: today }) : null;
   var replies = marksFromDm(dmMessages, store, rows, { fences: restoreCtx ? restoreCtx.fences : {}, hashes: store.restoreState().hashes });
   if (restoreCtx) restoreLib.settle({ store: store, rows: rows, ctx: restoreCtx, replies: replies, today: today });
   var unmatchedReplies = unmatched + replies.orphaned.length;
@@ -763,7 +764,7 @@ function mainInner(argv) {
   var restoreNotes = [];
   if (restoreCtx) {
     restoreLib.mintRefs(store, rows, today);
-    restoreLib.prune(store, today);
+    restoreLib.prune(store, today, queuedRestores);
     var lastDelivered = null;
     try { lastDelivered = fs.existsSync(configPath) ? status.load(reportDir).delivered : null; } catch (e) { /* the status record must never cost the digest */ }
     restoreNotes = restoreLib.notes({ store: store, ref: ref, keys: keys, deliveredRef: lastDelivered && lastDelivered.ref });

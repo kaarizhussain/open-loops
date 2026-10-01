@@ -174,10 +174,23 @@ function notes(o) {
   return out;
 }
 
-/* Old entries and references go. Hashes are capped: they only have to outlast the replies still readable in the DM. */
-function prune(store, today) {
+/* Old entries and references go. Hashes are capped: they only have to outlast the replies still readable in the DM.
+ *
+ * A log entry is the only record that a request was decided, so it goes only when nothing depends on it:
+ *   - never while its acknowledgement is unconfirmed: only a confirmed delivery ends one, and age is not a confirmation;
+ *   - never while its request is still in restores.json, or while that file cannot be read: without the entry the request would look new, be applied
+ *     again, and undo a rejection made since.
+ * Once confirmed, old, and gone from the file, it can be dropped: nothing can apply it again. */
+function prune(store, today, queued) {
   var st = store.restoreState(), cut = function (days) { return new Date(Date.parse(today + 'T00:00:00Z') - days * 864e5).toISOString().slice(0, 10); };
-  Object.keys(st.log).forEach(function (id) { if (st.log[id].on && st.log[id].on < cut(KEEP_LOG_DAYS)) delete st.log[id]; });
+  var inFile = {};
+  ((queued && queued.requests) || []).forEach(function (r) { inFile[r.id] = 1; });
+  if (queued && !queued.damaged) {
+    Object.keys(st.log).forEach(function (id) {
+      var e = st.log[id];
+      if (e.acked === true && e.on && e.on < cut(KEEP_LOG_DAYS) && !inFile[id]) delete st.log[id];
+    });
+  }
   Object.keys(st.refs).forEach(function (r) { if (st.refs[r].on && st.refs[r].on < cut(KEEP_REF_DAYS)) delete st.refs[r]; });
   Object.keys(st.hashes).slice(0, -KEEP_HASHES).forEach(function (k) { delete st.hashes[k]; });
 }

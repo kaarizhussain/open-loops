@@ -347,4 +347,61 @@ assert.strictEqual(trimmed.data().rows.filter(function (r) { return r[L.COL.key]
 var again2 = trimmed.run('2026-10-03');
 assert.ok(again2.indexOf('Restored earlier — the digest that said so may not have reached you. It keeps its original age (first seen Sep 30), but it is not shown in this digest. It remains tracked.') > -1, again2.split(NL).slice(0, 8).join(' / '));
 
+/* ============================== 10. cleanup never ends an unconfirmed acknowledgement, and never lets an old request apply again ============================== */
+// The rules, on their own.
+var pdir = fs.mkdtempSync(path.join(os.tmpdir(), 'ol-prune-')), pstore = fileStore(path.join(pdir, 'l.json')), plog = pstore.restoreState().log, OLD = '2026-01-01';
+var e0 = function (over) { return Object.assign({ state: 'applied', key: 'k', requestedAt: OLD + 'T10:00:00.000Z', on: OLD, acked: false }, over); };
+plog.confirmedGone = e0({ acked: true });
+plog.unconfirmed = e0({ acked: false });
+plog.refusedUnconfirmed = e0({ state: 'refused', reason: 'not_rejected', acked: false });
+plog.confirmedButQueued = e0({ acked: true });
+plog.confirmedRecent = e0({ acked: true, on: '2026-09-20' });
+var queuedP = { requests: [{ id: 'confirmedButQueued', ref: 'aaaa', requestedAt: OLD + 'T10:00:00.000Z' }], damaged: false };
+R.prune(pstore, '2026-10-01', queuedP);
+assert.deepStrictEqual(Object.keys(plog).sort(), ['confirmedButQueued', 'confirmedRecent', 'refusedUnconfirmed', 'unconfirmed'], 'only a confirmed, old entry whose request has left the file is dropped');
+R.prune(pstore, '2027-10-01', { requests: [], damaged: true });
+assert.strictEqual(Object.keys(plog).length, 4, 'with restores.json unreadable nothing is dropped: the requests in it are unknown');
+R.prune(pstore, '2027-10-01', null);
+assert.strictEqual(Object.keys(plog).length, 4, 'and a run that did not read the file drops nothing');
+R.prune(pstore, '2027-10-01', { requests: [], damaged: false });
+assert.deepStrictEqual(Object.keys(plog).sort(), ['refusedUnconfirmed', 'unconfirmed'], 'unconfirmed entries are never dropped, however old; the rest go once their request has left the file');
+
+// Across more than 120 days.
+var o = rejected({ keepLedgerDays: 3650 });
+o.ask(['--restore', o.ref]);
+var dgO = o.runB(), refO = refOf(dgO), tO = ts(10, 1, 19, 30);
+assert.ok(/Restored 1 item you had rejected/.test(dgO));
+var id0 = o.requests()[0].id;
+// The reader rejects it again, under that digest; the next day it is applied.
+var R2o = banner(ts(10, 1, 20), itemNo(dgO, 'alpha'));
+var threadsO = [threadOf(o.t1, o.dg1, [o.R1]), threadOf(tO, dgO, [R2o])];
+o.run('2026-10-02', { dm: dmOf([[o.t1, o.dg1], [o.tA, o.dgA], [tO, dgO]]), dmThread: threadsO });
+assert.strictEqual(o.verdict('alpha'), 'x', 'rejected again, after the restore');
+var CARRIED = /Restored earlier — the digest that said so may not have reached you./;
+var far1 = o.run('2027-03-01');            // 151 days on, and nothing was ever confirmed
+assert.ok(CARRIED.test(far1), 'beyond 120 days the unconfirmed acknowledgement is still carried: ' + far1.split(NL).slice(0, 6).join(' / '));
+assert.ok(o.data().restoreLog[id0] && o.data().restoreLog[id0].acked === false, 'its entry is still there and not acknowledged');
+assert.strictEqual(o.verdict('alpha'), 'x', 'the later rejection is still in force');
+var far2 = o.run('2027-08-01');            // 304 days on
+assert.ok(CARRIED.test(far2), 'and still');
+assert.strictEqual(o.data().restoreLog[id0].state, 'applied');
+// A confirmed delivery of a digest that carried it is what ends it.
+delivered(o, refOf(far2));
+var far3 = o.run('2027-08-02');
+assert.ok(!CARRIED.test(far3) && !/Restore applied|Restored 1 item/.test(far3), 'confirmed: it stops');
+assert.strictEqual(o.data().restoreLog[id0].acked, true);
+// The request is still queued in restores.json, so the confirmed entry is kept — and the old request cannot apply again over the later rejection.
+assert.ok(o.requests().some(function (r) { return r.id === id0; }), 'the request is still in the file');
+assert.ok(o.data().restoreLog[id0], 'so its entry is kept even though it is confirmed and old');
+o.run('2027-08-03');
+assert.strictEqual(o.verdict('alpha'), 'x', 'the old request did not apply again and undo the later rejection');
+assert.strictEqual(o.data().restoreLog[id0].state, 'applied');
+// Once the request has left the file, the confirmed old entry can go, and nothing can apply it.
+fs.writeFileSync(path.join(o.dir, 'restores.json'), JSON.stringify({ requests: [] }));
+o.run('2027-08-04');
+assert.ok(!o.data().restoreLog[id0], 'dropped once it is confirmed, old, and no longer queued');
+assert.strictEqual(o.verdict('alpha'), 'x', 'and the later rejection is still in force');
+o.run('2027-08-05');
+assert.strictEqual(o.verdict('alpha'), 'x');
+
 console.log('restore: OK');
