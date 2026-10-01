@@ -466,10 +466,13 @@ function warnings(s) {
   (s.b.massReplies || []).slice(0, 3).forEach(function (x) {
     var what = x.kind === 'known' ? ' would mark ' + x.count + ' of ' + x.of + ' items as already known at once'
       : x.kind === 'together' ? ' would bring rejections under this digest to ' + x.count + ' of ' + x.of + ' items'
+      : x.kind === 'marks' ? ' would mark ' + x.count + ' of ' + x.of + ' items at once (' + x.wrong + ' not real, ' + x.knew + ' already known)'
       : ' would reject ' + x.count + ' of ' + x.of + ' items at once';
     out.push('NOT APPLIED — "' + String(x.text).slice(0, 40) + '"' + what + ', which looks like something pasted into the DM rather than a correction.' +
       ' Reply with fewer numbers if you meant it.');
   });
+  var heldMore = (s.b.massReplies || []).length - 3;
+  if (heldMore > 0) out.push('+ ' + heldMore + (heldMore === 1 ? ' more reply was not applied because it looked like a paste.' : ' more replies were not applied because they looked like pastes.'));
   if (s.b.notReapplied) {
     out.push('NOT RE-APPLIED — ' + s.b.notReapplied + (s.b.notReapplied === 1 ? ' correction' : ' corrections') +
       ' from the earlier run today ' + (s.b.notReapplied === 1 ? 'was' : 'were') + ' not read again, so ' +

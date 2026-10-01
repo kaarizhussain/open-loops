@@ -162,6 +162,17 @@ function fileStore(file, sopts) {
         /* Nor is what a restore did, which replies were already read, or the references to rejected items: a re-run that forgot them would apply
          * a reply an earlier restore had voided, or lose the name of an item. */
         state.restoreRefs = restoreRefs; state.restoreLog = restoreLog; state.replyHashes = replyHashes;
+        /* The rows are back to the keys the snapshot has. The digest memos, restore references and restore log are not rolled back, so they still name the
+         * keys this day's earlier run migrated to: put them back, or a restore, its fence and the replies it voided no longer find their rows. The re-run
+         * migrates again. Two keys renamed to one cannot be told apart on the way back, and are left. */
+        var back = {}, clash = {};
+        Object.keys(keep.renames || {}).forEach(function (a) { var b = keep.renames[a]; if (back[b] !== undefined) clash[b] = 1; back[b] = a; });
+        Object.keys(clash).forEach(function (b) { delete back[b]; });
+        var unmap = function (k) { return typeof k === 'string' && back[k] !== undefined ? back[k] : k; };
+        Object.keys(state.refs).forEach(function (r) { if (state.refs[r] && state.refs[r].keys) state.refs[r].keys = state.refs[r].keys.map(unmap); });
+        Object.keys(state.restoreRefs).forEach(function (r) { var e = state.restoreRefs[r]; if (e) e.key = unmap(e.key); });
+        Object.keys(state.restoreLog).forEach(function (id) { var e = state.restoreLog[id]; if (e && e.key) e.key = unmap(e.key); });
+        keep.renames = {};
       } else {
         var snap = JSON.parse(JSON.stringify(state));
         delete snap.before;
@@ -201,6 +212,13 @@ function fileStore(file, sopts) {
     /* Legacy rows re-keyed by reconcileLegacy: an older digest's numbered list, and a reply reference's, name the old
      * key, and a reply to "1" would otherwise look for a row that is no longer there. In memory until the next flush. */
     migrateKeys: function (renames) {
+      /* What this run renamed since the day's snapshot, from the key the snapshot has to the key now. A rename of a key that is itself the result of an earlier
+       * one extends that chain (a -> b, then b -> c, is a -> c), so rolling back undoes every step in one. */
+      if (state.before) {
+        var ren = state.before.renames = state.before.renames || {}, isTarget = {};
+        Object.keys(ren).forEach(function (a) { isTarget[ren[a]] = a; });
+        Object.keys(renames).forEach(function (k) { if (isTarget[k] !== undefined) ren[isTarget[k]] = renames[k]; else ren[k] = renames[k]; });
+      }
       var map = function (list) { return list.map(function (k) { return renames[k] || k; }); };
       Object.keys(state.digests).forEach(function (d) { state.digests[d] = map(state.digests[d]); });
       Object.keys(state.refs).forEach(function (r) { if (state.refs[r].keys) state.refs[r].keys = map(state.refs[r].keys); });

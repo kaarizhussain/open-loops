@@ -70,14 +70,16 @@ assert.ok(/^ATTEMPT UNRECORDED\r?\nSTARTED \d+/.test(spawned.stdout) && /could n
 
 // --end that cannot persist: the notice is still made, from the run's own facts, and it is the only one.
 var ONCE = 'This notice is the only one for this attempt: post it once, and do not run --end again. Tell the user the attempt could not be recorded.';
+var POST_DM = 'post: your own DM';
+var NO_RESULT = 'Do not run --notice-result for this attempt: its notice result cannot be recorded.';
 var d4 = tmp(), id4 = begin(d4);
 var e4 = failing('write', 'EACCES', function () { return caught(function () { cli.main(endArgs(d4, id4), function () {}); }); });
 assert.strictEqual(e4.exitCode, 5);
 assert.ok(/^OPEN LOOPS NOT RUN — for 2026-10-01/.test(e4.stdout), 'the notice is not lost: ' + e4.stdout);
-assert.strictEqual(e4.message, WRITE('EACCES') + NL + ONCE);
+assert.strictEqual(e4.message, WRITE('EACCES') + NL + POST_DM + NL + ONCE + NL + NO_RESULT);
 assert.strictEqual(S.load(d4).attempt.outcome, 'started', 'a write that failed changed nothing');
 var e4b = failing('rename', 'EBUSY', function () { return caught(function () { cli.main(endArgs(d4, id4), function () {}); }); });
-assert.strictEqual(e4b.message, UNSURE('EBUSY') + NL + ONCE, 'an uncertain write is said to be uncertain');
+assert.strictEqual(e4b.message, UNSURE('EBUSY') + NL + POST_DM + NL + ONCE + NL + NO_RESULT, 'an uncertain write is said to be uncertain');
 // A delivery that cannot be saved is not hidden either.
 var d5 = tmp(), id5 = begin(d5);
 var e5 = failing('write', 'EACCES', function () { return caught(function () { cli.main(endArgs(d5, id5, ['--brief', 'posted', '--details', 'posted', '--verified', 'yes', '--ref', 'abcd']), function () {}); }); });
@@ -91,7 +93,7 @@ var e6 = caught(function () { cli.main(endArgs(d6, id6).concat(['--today', '2026
 assert.strictEqual(e6.exitCode, 5);
 assert.ok(/^OPEN LOOPS NOT RUN — for 2026-10-01/.test(e6.stdout) && /Last delivered digest: not known — the status record could not be read\./.test(e6.stdout), e6.stdout);
 // --begin SUCCEEDED here: the attempt has a record, so the diagnostic must not say it has none. It says what happened, and that this notice is the only one.
-assert.strictEqual(e6.message, READ + NL + 'record: This attempt\'s outcome could not be recorded. Its earlier status record could not be read.' + NL + ONCE);
+assert.strictEqual(e6.message, READ + NL + 'record: This attempt\'s outcome could not be recorded. Its earlier status record could not be read.' + NL + POST_DM + NL + ONCE + NL + NO_RESULT);
 assert.ok(e6.message.indexOf('because --begin could not save one') === -1 && e6.message.indexOf('has no record') === -1, 'that wording is reserved for ATTEMPT UNRECORDED');
 assert.ok(fs.statSync(path.join(d6, 'status.json')).isDirectory() && fs.readdirSync(path.join(d6, 'status.json')).length === 0, 'and the unreadable file is left exactly as it is');
 // Delivered, with the same read failure: said the same way, and no notice is invented.

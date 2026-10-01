@@ -73,8 +73,8 @@ var BAD = [
   [JSON.stringify(Object.assign({ mute: 'x' }, GOOD)), '"mute" must be a list of phrases, got "x"'],
   [JSON.stringify(Object.assign({ mute: [1] }, GOOD)), '"mute" must be a list of phrases, got [1]'],
   [JSON.stringify(Object.assign({ unmute: 5 }, GOOD)), '"unmute" must be a list of phrases, got 5'],
-  [JSON.stringify(Object.assign({ lookbackDays: 'x' }, GOOD)), '"lookbackDays" must be a number of days, 0 or more (0 reads without a window), got "x"'],
-  [JSON.stringify(Object.assign({ lookbackDays: -1 }, GOOD)), '"lookbackDays" must be a number of days, 0 or more (0 reads without a window), got -1'],
+  [JSON.stringify(Object.assign({ lookbackDays: 'x' }, GOOD)), '"lookbackDays" must be a number of days from 0 to 3650 (0 reads without a window), got "x"'],
+  [JSON.stringify(Object.assign({ lookbackDays: -1 }, GOOD)), '"lookbackDays" must be a number of days from 0 to 3650 (0 reads without a window), got -1'],
   [JSON.stringify(Object.assign({ ledger: 5 }, GOOD)), '"ledger" must be a file path, got 5'],
   [JSON.stringify(Object.assign({ ledger: '' }, GOOD)), '"ledger" must be a file path, got ""'],
   [JSON.stringify(Object.assign({ ledger: ['a'] }, GOOD)), '"ledger" must be a file path, got ["a"]']

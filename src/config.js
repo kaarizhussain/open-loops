@@ -134,10 +134,16 @@ function settings(fs, configPath, run) {
     if (s[k] != null && !(Array.isArray(s[k]) && s[k].every(function (x) { return typeof x === 'string'; }))) missing.push('"' + k + '" must be a list of phrases, got ' + JSON.stringify(s[k]));
   });
   var days = s.lookbackDays;
-  if (days != null && !((typeof days === 'number' || (typeof days === 'string' && days.trim() !== '')) && isFinite(Number(days)) && Number(days) >= 0)) {
-    missing.push('"lookbackDays" must be a number of days, 0 or more (0 reads without a window), got ' + JSON.stringify(days));
+  /* A day count: a number, 0 or more. Past about ten years the date arithmetic overflows and the run dies with "Invalid time value", so there is a ceiling. */
+  var dayCount = function (v) { return (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '')) && isFinite(Number(v)) && Number(v) >= 0; };
+  if (days != null && !(dayCount(days) && Number(days) <= 3650)) {
+    missing.push('"lookbackDays" must be a number of days from 0 to 3650 (0 reads without a window), got ' + JSON.stringify(days));
   }
-  if (s.ledger != null && !(typeof s.ledger === 'string' && s.ledger.trim())) missing.push('"ledger" must be a file path, got ' + JSON.stringify(s.ledger));
+  /* Retention: anything that is not a number of days used to compare false against every row, so the next run dropped the whole ledger. */
+  if (s.keepLedgerDays != null && !dayCount(s.keepLedgerDays)) {
+    missing.push('"keepLedgerDays" must be a number of days, 0 or more (0 keeps every row), got ' + JSON.stringify(s.keepLedgerDays));
+  }
+  if (!(typeof s.ledger === 'string' && s.ledger.trim() && s.ledger.indexOf(String.fromCharCode(0)) < 0 && s.ledger.length <= 4096)) missing.push('"ledger" must be a file path, got ' + JSON.stringify(s.ledger));
   if (!s.you) missing.push('"you" — the address messages are outbound from; without it ' +
     'there is no way to tell inbound from outbound');
   /* tzOffset is minutes from UTC. A zone name — "America/New_York", the natural thing

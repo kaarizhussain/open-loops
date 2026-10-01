@@ -480,6 +480,7 @@ var TOKEN = new RegExp('(?<![\\d\\-\\/:a-z]|\\d\\.)#?(\\d+)(?:' + RANGE_SEP + '#
  * (k / knew / known / already, which the caller has already taken off). "4 to 6 weeks for the rollout" leads with a range and is conversation. */
 var ITEM = '#?\\d+(?:' + RANGE_SEP + '#?\\d+)?';
 var WHOLE_LINE = new RegExp('^\\s*' + ITEM + '(?:(?:\\s*[,;&]\\s*|\\s+and\\s+|\\s+)' + ITEM + ')*\\s*[.!]*\\s*$', 'i');
+var THOUSANDS = /\b\d{1,3}(?:,\d{3})+(?!\d)/g;
 var LEAD = new RegExp('^\\s*#?(\\d+)(?:' + RANGE_SEP + '#?(\\d+))?' + STAND_ALONE, 'i');
 /* "all" and "everything" are not supported, on purpose: rejecting a whole list is what a paste looks like. They are reported, not applied. */
 var EVERYTHING = /^\s*(?:(?:reject|delete|remove|drop|clear|mark)\s+)?(?:all(?:\s+of\s+(?:them|these|it))?|everything)(?:\s+(?:is\s+)?(?:wrong|not real|false))?\s*[.!]*\s*$/i;
@@ -534,6 +535,10 @@ function parseMarks(text, max) {
      * Bare numbers stay a rejection, so the common case costs nothing extra. */
     var known = /^\s*(k|knew|known|already)\b/i.test(line);
     var body = known ? line.replace(/^\s*(k|knew|known|already)\b/i, '') : line;
+    /* "1,000 dollars" and "1,5 hours" are quantities, not the items 1, 0 and 5. A thousands group (a comma and exactly three digits) always is. Digits joined by a
+     * bare comma are too, unless the whole line is a list of marks: "3,7" and "3, 7" are still two items. */
+    body = body.replace(THOUSANDS, ' ');
+    if (/\d,\d/.test(body) && !WHOLE_LINE.test(body)) body = body.replace(/\d+(?:,\d+)+/g, ' ');
 
     /* A standalone number, or a range of them: "3", "1-3", "1 to 3". A digit glued to a letter is a time or a quantity, not an item number —
      * "3pm", "2x", "5min" — and "1-3pm" is a time range, so neither end of it is read. A date or a fraction ("9/30", "2026-08-25") is digits joined

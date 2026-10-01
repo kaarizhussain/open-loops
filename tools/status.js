@@ -41,6 +41,8 @@ function failure(stdout, stderr) { var e = new Error(stderr); e.stdout = stdout;
 var NO_RECORD = 'record: NOT RECORDED — this attempt has no record, because --begin could not save one.';    // only for ATTEMPT UNRECORDED
 // An attempt that did begin, whose earlier status record cannot be read now: not the same thing, and not said as if it were.
 var CANNOT_READ = 'record: This attempt\'s outcome could not be recorded. Its earlier status record could not be read.';
+var postLine = function (n) { return 'post: ' + (n.where === 'thread' ? 'the thread under the brief' : 'your own DM'); };
+var NO_RESULT = 'Do not run --notice-result for this attempt: its notice result cannot be recorded.';
 var ONCE = 'This notice is the only one for this attempt: post it once, and do not run --end again. Tell the user the attempt could not be recorded.';
 
 function main(argv, err) {
@@ -81,8 +83,8 @@ function mainInner(argv, err) {
     var unrecorded = function (reason, defaultDay) {
       // An attempt that never had a record takes its date from --today alone; one whose record cannot be read now may fall back to the local day.
       var u = S.endUnrecorded(dir, Object.assign({ today: flag('today') || (defaultDay ? S.localDate(now) : null) }, facts));
-      throw failure(u.notice ? u.notice.text : 'DELIVERED — NOT RECORDED.', (reason ? reason + '\n' : '') + (defaultDay ? CANNOT_READ : NO_RECORD) +
-        (u.notice ? '\n' + (defaultDay ? ONCE : 'This notice is the only one for this attempt: post it once.') : ''));
+      throw failure(u.notice ? u.notice.text : 'DELIVERED — NOT RECORDED.', [reason, defaultDay ? CANNOT_READ : NO_RECORD].filter(Boolean)
+        .concat(u.notice ? [postLine(u.notice), defaultDay ? ONCE : 'This notice is the only one for this attempt: post it once.', NO_RESULT] : []).join('\n'));
     };
     if (id === 'UNRECORDED') {
       if (has('notice-result')) throw failure('', NO_RECORD);
@@ -97,7 +99,7 @@ function mainInner(argv, err) {
     catch (e) {
       if (!e.persist) throw e;
       // The facts are the run's own, so the notice is still made. It is the only one: a retried --end could print it again after it was already posted.
-      if (e.result) throw failure(e.result.notice ? e.result.notice.text : 'DELIVERED — NOT RECORDED.', persistMessage(e) + '\n' + (e.result.notice ? ONCE : 'Tell the user the delivery could not be recorded.'));
+      if (e.result) throw failure(e.result.notice ? e.result.notice.text : 'DELIVERED — NOT RECORDED.', [persistMessage(e)].concat(e.result.notice ? [postLine(e.result.notice), ONCE, NO_RESULT] : ['Tell the user the delivery could not be recorded.']).join('\n'));
       unrecorded(persistMessage(e), true);
     }
     if (r.done) return 'ALREADY RECORDED (' + r.outcome + ') — no second notice.';

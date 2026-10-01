@@ -393,6 +393,8 @@ function checkFacts(o) {
     throw new Error('--failed config needs --fetched yes|no: whether Slack had already been fetched when the configuration was found unusable. Nothing was recorded.');
   }
   var c = classify(f);
+  if (f.failed === 'verify' && f.verified) throw new Error('--failed verify means the read-back failed, so --verified must be no. Nothing was recorded.');
+  if (f.failed === 'post' && c.outcome === 'delivered') throw new Error('--failed post means a post did not land, but --brief and --details are both posted and verified. Nothing was recorded.');
   return { f: f, c: c };
 }
 

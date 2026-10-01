@@ -158,6 +158,12 @@ function marksFromDm(messages, store, rows, restore) {
       mass.push({ text: m.body.trim().split('\n')[0], count: marks.wrong.length, of: keys.length, date: forDate });
       return;
     }
+    /* Neither kind alone reaches the line, but together they do: 3 rejections and 3 "already known" over a list of 6 is one paste. */
+    var both = marks.wrong.length + marks.knew.length;
+    if (both >= 4 && both * 2 > keys.length && !(marks.knew.length >= 4 && marks.knew.length * 2 > keys.length)) {
+      mass.push({ kind: 'marks', text: m.body.trim().split('\n')[0], count: both, of: keys.length, wrong: marks.wrong.length, knew: marks.knew.length, date: forDate });
+      return;
+    }
     // The same guard for "already known": a pasted k-range over most of the list is not a correction either.
     if (marks.knew.length >= 4 && marks.knew.length * 2 > keys.length) {
       mass.push({ kind: 'known', text: m.body.trim().split('\n')[0], count: marks.knew.length, of: keys.length, date: forDate });

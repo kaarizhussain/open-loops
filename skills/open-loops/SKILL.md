@@ -530,7 +530,7 @@ node <checkout>/tools/status.js --end --attempt <id> --brief <b> --details <d> -
   after a timeout. It stays `unknown`. Record that, do not retry on your own, and say so; if they want another digest, they
   check their DM and ask for it.
 
-If `--end` exits 5 the record could not be saved, but its output is still what to do: a notice that opens `OPEN LOOPS` is the notice for this failed attempt, to be posted **once**. Do not run `--end` again for that attempt (a second run could print it again after it was already posted) and do not retry the post; tell the user the attempt could not be recorded. `DELIVERED — NOT RECORDED.` means the digest posted and verified, but the delivery is not in the status.
+If `--end` exits 5 the record could not be saved, but its output is still what to do: a notice that opens `OPEN LOOPS` is the notice for this failed attempt, to be posted **once**. Post it where the `post:` line says (the brief's thread for an `OPEN LOOPS NOTES` notice, your own DM otherwise), and skip `--notice-result`. Do not run `--end` again for that attempt (a second run could print it again after it was already posted) and do not retry the post; tell the user the attempt could not be recorded. `DELIVERED — NOT RECORDED.` means the digest posted and verified, but the delivery is not in the status.
 
 It prints `DELIVERED — recorded.` and you are done, or `ALREADY RECORDED …` and you post nothing, or a message
 that opens `OPEN LOOPS`: the notice for this failed attempt, with `post:` on stderr saying where. Post it verbatim, once,
