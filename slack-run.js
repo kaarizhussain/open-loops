@@ -764,10 +764,10 @@ function mainInner(argv) {
   var restoreNotes = [];
   if (restoreCtx) {
     restoreLib.mintRefs(store, rows, today);
-    restoreLib.prune(store, today, queuedRestores);
+    restoreLib.prune(store, today, queuedRestores, rows);
     var lastDelivered = null;
     try { lastDelivered = fs.existsSync(configPath) ? status.load(reportDir).delivered : null; } catch (e) { /* the status record must never cost the digest */ }
-    restoreNotes = restoreLib.notes({ store: store, ref: ref, keys: keys, deliveredRef: lastDelivered && lastDelivered.ref });
+    restoreNotes = restoreLib.notes({ store: store, rows: rows, ref: ref, keys: keys, deliveredRef: lastDelivered && lastDelivered.ref });
   }
   var foundToday = result.open.length + result.closed.length;
   var score = L.recall(foundToday, silent.length,

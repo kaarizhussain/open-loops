@@ -159,7 +159,8 @@ function settle(o) {
  * and was then confirmed delivered ends it. One that was not (the post failed, or its confirmation did) leaves it, and the note is carried again,
  * worded as a repeat. There is no cap: neither a number of attempts nor a number of repetitions is a confirmation, so only the confirmation ends it. */
 function notes(o) {
-  var st = o.store.restoreState(), out = [];
+  var st = o.store.restoreState(), out = [], now = {};
+  (o.rows || []).forEach(function (r) { now[L.cell(r[L.COL.key])] = L.cell(r[L.COL.verdict]); });
   Object.keys(st.log).sort(function (a, b) { return String(st.log[a].on).localeCompare(String(st.log[b].on)) || a.localeCompare(b); }).forEach(function (id) {
     var e = st.log[id];
     if (e.acked) return;
@@ -168,7 +169,8 @@ function notes(o) {
     var repeat = e.shown > 0;
     e.shown++; e.shownIn = o.ref;
     e.shownRefs = (e.shownRefs || []).filter(function (r) { return r !== o.ref; }).concat([o.ref]).slice(-KEEP_CARRIERS);
-    out.push({ kind: e.state, reason: e.reason, ref: e.ref, firstSeen: e.firstSeen, superseded: e.superseded, repeat: repeat,
+    /* What it says is what is true now: an item restored and rejected again, in this run or on any later day, stays hidden. */
+    out.push({ kind: e.state, reason: e.reason, ref: e.ref, firstSeen: e.firstSeen, superseded: e.superseded || (e.state === 'applied' && now[e.key] === 'x'), repeat: repeat,
       n: e.key ? o.keys.indexOf(e.key) + 1 || null : null });
   });
   return out;
@@ -181,7 +183,7 @@ function notes(o) {
  *   - never while its request is still in restores.json, or while that file cannot be read: without the entry the request would look new, be applied
  *     again, and undo a rejection made since.
  * Once confirmed, old, and gone from the file, it can be dropped: nothing can apply it again. */
-function prune(store, today, queued) {
+function prune(store, today, queued, rows) {
   var st = store.restoreState(), cut = function (days) { return new Date(Date.parse(today + 'T00:00:00Z') - days * 864e5).toISOString().slice(0, 10); };
   var inFile = {};
   ((queued && queued.requests) || []).forEach(function (r) { inFile[r.id] = 1; });
@@ -191,7 +193,16 @@ function prune(store, today, queued) {
       if (e.acked === true && e.on && e.on < cut(KEEP_LOG_DAYS) && !inFile[id]) delete st.log[id];
     });
   }
-  Object.keys(st.refs).forEach(function (r) { if (st.refs[r].on && st.refs[r].on < cut(KEEP_REF_DAYS)) delete st.refs[r]; });
+  /* A reference goes after a year only if nothing needs it: its item is no longer rejected, and no request still in restores.json points at it.
+   * A reference the list shows (an item that is rejected) must still be there when the digest processes the request made from it. When the file
+   * cannot be read, what it holds is unknown, so no reference is dropped. */
+  var needed = {};
+  (rows || []).forEach(function (r) { if (L.cell(r[L.COL.verdict]) === 'x') needed[L.cell(r[L.COL.key])] = 1; });
+  ((queued && queued.requests) || []).forEach(function (q) { var res = resolve(q, st, store); if (res.key) needed[res.key] = 1; });
+  Object.keys(st.refs).forEach(function (r) {
+    var e = st.refs[r];
+    if (e.on && e.on < cut(KEEP_REF_DAYS) && queued && !queued.damaged && !needed[e.key]) delete st.refs[r];
+  });
   Object.keys(st.hashes).slice(0, -KEEP_HASHES).forEach(function (k) { delete st.hashes[k]; });
 }
 

@@ -375,11 +375,16 @@ var id0 = o.requests()[0].id;
 // The reader rejects it again, under that digest; the next day it is applied.
 var R2o = banner(ts(10, 1, 20), itemNo(dgO, 'alpha'));
 var threadsO = [threadOf(o.t1, o.dg1, [o.R1]), threadOf(tO, dgO, [R2o])];
-o.run('2026-10-02', { dm: dmOf([[o.t1, o.dg1], [o.tA, o.dgA], [tO, dgO]]), dmThread: threadsO });
+var nextDay = o.run('2026-10-02', { dm: dmOf([[o.t1, o.dg1], [o.tA, o.dgA], [tO, dgO]]), dmThread: threadsO });
 assert.strictEqual(o.verdict('alpha'), 'x', 'rejected again, after the restore');
+// The restore was applied yesterday and the rejection is today's: the note is about what is true now, not about the read.
+assert.ok(nextDay.indexOf('Restored earlier — the digest that said so may not have reached you. You restored an item and then rejected it again, so it stays hidden.') > -1, nextDay.split(NL).slice(0, 8).join(' / '));
+assert.ok(!/not in what was read|it is back as item|Restore applied/.test(nextDay), 'and it does not call the item absent from the read, or back');
+assert.ok(/applied Oct 1, then you rejected it again, so it stays hidden/.test(o.corr(['--list'])), 'the list says the same, from the current state of the item');
 var CARRIED = /Restored earlier — the digest that said so may not have reached you./;
 var far1 = o.run('2027-03-01');            // 151 days on, and nothing was ever confirmed
 assert.ok(CARRIED.test(far1), 'beyond 120 days the unconfirmed acknowledgement is still carried: ' + far1.split(NL).slice(0, 6).join(' / '));
+assert.ok(/You restored an item and then rejected it again, so it stays hidden./.test(far1) && !/not in what was read/.test(far1), 'and still says what is true: it stays hidden');
 assert.ok(o.data().restoreLog[id0] && o.data().restoreLog[id0].acked === false, 'its entry is still there and not acknowledged');
 assert.strictEqual(o.verdict('alpha'), 'x', 'the later rejection is still in force');
 var far2 = o.run('2027-08-01');            // 304 days on
@@ -403,5 +408,37 @@ assert.ok(!o.data().restoreLog[id0], 'dropped once it is confirmed, old, and no 
 assert.strictEqual(o.verdict('alpha'), 'x', 'and the later rejection is still in force');
 o.run('2027-08-05');
 assert.strictEqual(o.verdict('alpha'), 'x');
+
+/* ============================== 11. a reference lives as long as its item is rejected or a request still points at it ============================== */
+var rdir = fs.mkdtempSync(path.join(os.tmpdir(), 'ol-refs-')), rstore = fileStore(path.join(rdir, 'l.json')), rrefs = rstore.restoreState().refs;
+var rowOf = function (key, verdict) { var r = []; r[L.COL.key] = key; r[L.COL.verdict] = verdict; return r; };
+var YEAR_OLD = '2025-01-01';
+rrefs.aaaa1111 = { key: 'still-rejected', on: YEAR_OLD };
+rrefs.bbbb2222 = { key: 'not-rejected-no-request', on: YEAR_OLD };
+rrefs.cccc3333 = { key: 'queued-by-ref', on: YEAR_OLD };
+rrefs.dddd4444 = { key: 'queued-by-item', on: YEAR_OLD };
+rrefs.eeee5555 = { key: 'recent', on: '2026-09-01' };
+rstore.rememberRef('7c1e', '2026-09-30', ['x', 'queued-by-item']);
+var rrows = [rowOf('still-rejected', 'x'), rowOf('not-rejected-no-request', ''), rowOf('queued-by-ref', ''), rowOf('queued-by-item', ''), rowOf('recent', '')];
+var queuedR = { damaged: false, requests: [{ id: '11111111', ref: 'cccc', requestedAt: '2026-09-30T10:00:00.000Z' }, { id: '22222222', digest: { ref: '7c1e', n: 2 }, requestedAt: '2026-09-30T10:00:00.000Z' }] };
+R.prune(rstore, '2026-10-01', queuedR, rrows);
+assert.deepStrictEqual(Object.keys(rrefs).sort(), ['aaaa1111', 'cccc3333', 'dddd4444', 'eeee5555'], 'a year-old reference is kept while its item is rejected or a queued request (by reference, prefix or item number) points at it, and dropped otherwise');
+R.prune(rstore, '2026-10-01', { requests: [], damaged: true }, []);
+assert.strictEqual(Object.keys(rrefs).length, 4, 'with restores.json unreadable no reference is dropped');
+R.prune(rstore, '2026-10-01', null, []);
+assert.strictEqual(Object.keys(rrefs).length, 4, 'nor in a run that did not read it');
+
+// End to end: a reference more than 365 days old, through the list, the queue and the digest.
+var yr = rejected({ keepLedgerDays: 3650 });
+var named = yr.ref;
+yr.run('2027-11-01');                       // 396 days after the rejection was recorded
+assert.strictEqual(yr.data().restoreRefs[named].on, '2026-10-01', 'the reference is the one that was minted, not a new one');
+var listYr = yr.corr(['--list']);
+assert.ok(new RegExp('^ {2}' + named + ' {2}rejection recorded Oct 1 · first seen Sep 30', 'm').test(listYr), 'it is still listed: ' + listYr);
+var askedYr = yr.corr(['--restore', named, '--now', '2027-11-01T19:00']);
+assert.ok(/^Restore requested for /.test(askedYr), 'and can still be queued: ' + askedYr);
+var dgYr = yr.run('2027-11-02');
+assert.strictEqual(yr.data().restoreLog[yr.requests()[0].id].state, 'applied', 'and the digest processes it: ' + dgYr.split(NL).slice(0, 6).join(' / '));
+assert.strictEqual(yr.rowByKey()[L.COL.verdict], '', 'restored');
 
 console.log('restore: OK');

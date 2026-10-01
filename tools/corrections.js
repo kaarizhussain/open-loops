@@ -70,7 +70,7 @@ function main(argv) {
         var e = st.log[r.id], what = r.ref || 'item ' + r.digest.n + ' of digest ' + r.digest.ref;
         var state = !e ? 'pending: waiting for the next digest to process it' :
           e.state === 'refused' ? 'refused: ' + (WHY[e.reason] || e.reason) :
-          e.superseded ? 'applied ' + md(e.on) + ', then you rejected it again, so it stays hidden' : 'applied ' + md(e.on);
+          (e.superseded || (byKey[e.key] && byKey[e.key][L.COL.verdict] === 'x')) ? 'applied ' + md(e.on) + ', then you rejected it again, so it stays hidden' : 'applied ' + md(e.on);
         lines.push('  ' + r.id + '  ' + what + '  requested ' + md(dayOf(r.requestedAt)) + '  ' + state);
       });
     }
