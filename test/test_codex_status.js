@@ -56,4 +56,7 @@ assert.ok(procedure.indexOf('Never move aside, delete, recreate or') > -1, 'an u
 assert.ok(procedure.indexOf('tools/corrections.js" --list') > -1, 'recovery inspection is documented');
 assert.ok(procedure.indexOf('Codex may list but must not queue restores with either flag') > -1, 'owner recovery keeps its authorized writer');
 assert.ok(procedure.indexOf('Only the digest applies it.') > -1, 'queueing is not represented as restoring');
+assert.ok(procedure.indexOf('--attempt UNRECORDED --today <local-date>') > -1, 'begin persistence failure still has an end procedure');
+assert.ok(procedure.indexOf('Do not rerun `--end` or blindly retry the post.') > -1, 'persistence failure cannot trigger duplicate notices');
+assert.ok(procedure.indexOf('For `UNRECORDED`, skip `--notice-result`') > -1, 'unrecorded attempt cannot receive a recorded notice result');
 console.log('Codex status and diagnostic disclosure: OK');

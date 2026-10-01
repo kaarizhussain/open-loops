@@ -101,6 +101,12 @@ such attempt must end through the status procedure below, even if fetching fails
 A preview does not begin or end a real attempt, write status or post failure notices.
 In the owner's deployment Codex remains a preview reader only (AGENTS.md).
 
+If `--begin` exits 5, retain its `ATTEMPT UNRECORDED` and `STARTED` output.
+Read stderr to distinguish a read failure, write failure or uncertain update.
+Continue the authorized run; end it with `--attempt UNRECORDED --today <local-date>`
+and its actual facts so failure handling still works without a saved attempt.
+Do not report an uncertain write as proof that no record exists.
+
 Then validate the config with `slack-run.js --check-config --config "<config>"`
 before each run's history fetch, including previews. Stop on an error; do not
 fetch first and rely on the runner to reject the data afterward. For a real
@@ -259,7 +265,7 @@ For an authorized real writer only, record the outcome once after delivery and
 verification, or when a run stops:
 
 ```text
-node "<checkout>/tools/status.js" --end --attempt <id> --brief <fact> --details <fact> --verified <yes|no> [--failed <stage>] [--fetched <yes|no>] [--ref <ref>] --config "<config>"
+node "<checkout>/tools/status.js" --end --attempt <id> --today <attempt-date> --brief <fact> --details <fact> --verified <yes|no> [--failed <stage>] [--fetched <yes|no>] [--ref <ref>] --config "<config>"
 ```
 
 Use only these facts for each post: `posted` when Slack returned a timestamp or the
@@ -289,6 +295,16 @@ run's delivery permission. Record the notice's result with:
 ```text
 node "<checkout>/tools/status.js" --notice-result <posted|rejected|not_attempted|unknown> --attempt <id> --config "<config>"
 ```
+
+Handle exit 5 separately from ordinary success: the outcome could not be reliably
+recorded. If stdout opens `OPEN LOOPS`, it is the notice for that attempt; post it
+once under the authorized delivery permission, then tell the user about the
+recording failure. Do not rerun `--end` or blindly retry the post. If stdout is
+`DELIVERED — NOT RECORDED.`, delivery succeeded but recording did not complete;
+do not generate a failure notice. For `UNRECORDED`, skip `--notice-result` because
+there is no usable attempt ID. If an earlier attempt was replaced and the tool
+says its notice result cannot be recorded, skip that command as well. A failed
+notice-result write does not establish that sending the notice failed.
 
 Use `not_attempted` only when no self-DM destination could be found. Apply the
 same evidence rules to an attempted notice. An unreachable Slack connection means
