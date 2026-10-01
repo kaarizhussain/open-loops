@@ -90,7 +90,16 @@ fs.unlinkSync(path.join(d6, 'status.json')); fs.mkdirSync(path.join(d6, 'status.
 var e6 = caught(function () { cli.main(endArgs(d6, id6).concat(['--today', '2026-10-01']), function () {}); });
 assert.strictEqual(e6.exitCode, 5);
 assert.ok(/^OPEN LOOPS NOT RUN — for 2026-10-01/.test(e6.stdout) && /Last delivered digest: not known — the status record could not be read\./.test(e6.stdout), e6.stdout);
-assert.strictEqual(e6.message, READ + NL + 'record: NOT RECORDED — this attempt has no record, because --begin could not save one.' + NL + 'This notice is the only one for this attempt: post it once.');
+// --begin SUCCEEDED here: the attempt has a record, so the diagnostic must not say it has none. It says what happened, and that this notice is the only one.
+assert.strictEqual(e6.message, READ + NL + 'record: This attempt\'s outcome could not be recorded. Its earlier status record could not be read.' + NL + ONCE);
+assert.ok(e6.message.indexOf('because --begin could not save one') === -1 && e6.message.indexOf('has no record') === -1, 'that wording is reserved for ATTEMPT UNRECORDED');
+assert.ok(fs.statSync(path.join(d6, 'status.json')).isDirectory() && fs.readdirSync(path.join(d6, 'status.json')).length === 0, 'and the unreadable file is left exactly as it is');
+// Delivered, with the same read failure: said the same way, and no notice is invented.
+var d6b = tmp(), id6b = begin(d6b);
+fs.unlinkSync(path.join(d6b, 'status.json')); fs.mkdirSync(path.join(d6b, 'status.json'));
+var e6b = caught(function () { cli.main(endArgs(d6b, id6b, ['--brief', 'posted', '--details', 'posted', '--verified', 'yes', '--ref', 'abcd']).concat(['--today', '2026-10-01']), function () {}); });
+assert.strictEqual(e6b.stdout, 'DELIVERED — NOT RECORDED.');
+assert.strictEqual(e6b.message, READ + NL + 'record: This attempt\'s outcome could not be recorded. Its earlier status record could not be read.');
 
 // An attempt that began without a record: the notice is made from the facts of the run.
 var d7 = tmp();

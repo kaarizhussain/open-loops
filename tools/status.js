@@ -38,7 +38,9 @@ function persistMessage(e) {
     : 'status: could not write status.json (' + r + '). It was not changed.';
 }
 function failure(stdout, stderr) { var e = new Error(stderr); e.stdout = stdout; e.exitCode = 5; return e; }
-var NO_RECORD = 'record: NOT RECORDED — this attempt has no record, because --begin could not save one.';
+var NO_RECORD = 'record: NOT RECORDED — this attempt has no record, because --begin could not save one.';    // only for ATTEMPT UNRECORDED
+// An attempt that did begin, whose earlier status record cannot be read now: not the same thing, and not said as if it were.
+var CANNOT_READ = 'record: This attempt\'s outcome could not be recorded. Its earlier status record could not be read.';
 var ONCE = 'This notice is the only one for this attempt: post it once, and do not run --end again. Tell the user the attempt could not be recorded.';
 
 function main(argv, err) {
@@ -79,7 +81,8 @@ function mainInner(argv, err) {
     var unrecorded = function (reason, defaultDay) {
       // An attempt that never had a record takes its date from --today alone; one whose record cannot be read now may fall back to the local day.
       var u = S.endUnrecorded(dir, Object.assign({ today: flag('today') || (defaultDay ? S.localDate(now) : null) }, facts));
-      throw failure(u.notice ? u.notice.text : 'DELIVERED — NOT RECORDED.', (reason ? reason + '\n' : '') + NO_RECORD + (u.notice ? '\nThis notice is the only one for this attempt: post it once.' : ''));
+      throw failure(u.notice ? u.notice.text : 'DELIVERED — NOT RECORDED.', (reason ? reason + '\n' : '') + (defaultDay ? CANNOT_READ : NO_RECORD) +
+        (u.notice ? '\n' + (defaultDay ? ONCE : 'This notice is the only one for this attempt: post it once.') : ''));
     };
     if (id === 'UNRECORDED') {
       if (has('notice-result')) throw failure('', NO_RECORD);
