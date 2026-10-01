@@ -94,16 +94,21 @@ record consent, create a check automation or reuse Claude's scheduling steps.
 
 ## Fetch and run
 
-Validate the config with `slack-run.js --check-config --config "<config>"` before
-each run's history fetch, including previews. Stop on an error; do not fetch first
-and rely on the runner to reject the data afterward.
-
-For an authorized real digest, before fetching, run
+For an authorized real digest, before validating the config or fetching, run
 `node "<checkout>/tools/status.js" --begin --today <local-date> --config "<config>"`.
 Keep the returned `ATTEMPT` id and `STARTED` epoch for recording the outcome. Every
 such attempt must end through the status procedure below, even if fetching fails.
 A preview does not begin or end a real attempt, write status or post failure notices.
 In the owner's deployment Codex remains a preview reader only (AGENTS.md).
+
+Then validate the config with `slack-run.js --check-config --config "<config>"`
+before each run's history fetch, including previews. Stop on an error; do not
+fetch first and rely on the runner to reject the data afterward. For a real
+attempt, record a failed check with `--failed config --fetched no`, both posts
+`not_attempted`, and `--verified no`. A broken config cannot supply a DM target:
+use the connected Slack profile's user id for the self-DM under the authorized
+delivery permission. If that destination cannot be found, record the notice as
+`not_attempted`; if sending it is uncertain, use `unknown`.
 
 Read the config first. Apply its include/exclude rules before fetching. Fetch all pages
 covering `lookbackDays` (21 by default), and all pages of each root's thread replies.
@@ -254,15 +259,21 @@ For an authorized real writer only, record the outcome once after delivery and
 verification, or when a run stops:
 
 ```text
-node "<checkout>/tools/status.js" --end --attempt <id> --brief <fact> --details <fact> --verified <yes|no> [--failed <stage>] [--ref <ref>] --config "<config>"
+node "<checkout>/tools/status.js" --end --attempt <id> --brief <fact> --details <fact> --verified <yes|no> [--failed <stage>] [--fetched <yes|no>] [--ref <ref>] --config "<config>"
 ```
 
 Use only these facts for each post: `posted` when Slack returned a timestamp or the
 message was positively identified; `rejected` when Slack explicitly refused it;
 `not_attempted` when no post was tried; `unknown` otherwise. For the brief,
-`not_attempted` requires `--failed fetch` or `build`. The other failure stages are
+`not_attempted` requires `--failed config`, `ledger`, `fetch` or `build`. The other failure stages are
 `post` and `verify`. `--verified yes` means only that the brief's read-back passed;
 it does not verify the details. Supply the runner's ref whenever a digest was built.
+
+For `--failed config`, supply `--fetched yes|no` from what actually happened;
+exit code 3 alone does not establish whether Slack was fetched. Runner exit code
+4 identifies an unreadable ledger after fetching: use `--failed ledger`. Other
+processing failures use `--failed build`. Never move aside, delete, recreate or
+repair an unreadable ledger automatically; preserve it and report the problem.
 
 A timeout or an unsuccessful search is not proof of rejection. To investigate an
 uncertain post, read the DM from `STARTED`, preserving pagination, and look for the
@@ -276,10 +287,11 @@ thread. Post it verbatim once, without a code fence, only under the authorized r
 run's delivery permission. Record the notice's result with:
 
 ```text
-node "<checkout>/tools/status.js" --notice-result <posted|rejected|unknown> --attempt <id> --config "<config>"
+node "<checkout>/tools/status.js" --notice-result <posted|rejected|not_attempted|unknown> --attempt <id> --config "<config>"
 ```
 
-Apply the same evidence rules to that notice. An unreachable Slack connection means
+Use `not_attempted` only when no self-DM destination could be found. Apply the
+same evidence rules to an attempted notice. An unreachable Slack connection means
 the notice cannot reliably reach the user; report this in the Codex chat. Neither
 finishing a Codex run nor generating notice text proves a digest was delivered.
 
