@@ -23,10 +23,17 @@ var MAX_NAMES = 12;
 function file(dir) { return path.join(dir, 'status.json'); }
 function stagedFile(dir) { return path.join(dir, 'status.staged.json'); }
 
+/* A failure to read or write the record says which it was, because what the caller may then claim differs:
+ *   read      status.json could not be read: nothing was changed.
+ *   write     the new version could not be written beside it: nothing was changed.
+ *   uncertain the new version was written but could not be moved into place: the record may or may not have changed. */
+function persistError(kind, e) { var x = new Error(e && e.message || String(e)); x.persist = kind; x.reason = e && e.code || (e && e.message) || String(e); return x; }
+
 function writeJson(f, o) {
   var tmp = f + '.' + process.pid + '.' + crypto.randomBytes(3).toString('hex') + '.tmp';   // one name per write: two sessions never share one
-  fs.writeFileSync(tmp, JSON.stringify(o, null, 1));
-  retry(function () { fs.renameSync(tmp, f); });
+  var drop = function () { try { fs.unlinkSync(tmp); } catch (ignore) { /* only this write's own file, and only if it is there */ } };
+  try { fs.writeFileSync(tmp, JSON.stringify(o, null, 1)); } catch (e) { drop(); throw persistError('write', e); }
+  try { retry(function () { fs.renameSync(tmp, f); }); } catch (e) { drop(); throw persistError('uncertain', e); }
 }
 
 // The staged file is the runner's and may be absent or torn: that reads as nothing there.
@@ -111,7 +118,7 @@ function extractObject(text, key) {
 function load(dir) {
   var text = null;
   try { text = retry(function () { return fs.readFileSync(file(dir), 'utf8'); }); }
-  catch (e) { if (e.code !== 'ENOENT') text = ''; }
+  catch (e) { if (e.code !== 'ENOENT') throw persistError('read', e); }
   var out = { schedule: null, attempt: null, delivered: null, note: null, damaged: null, superseded: [] };
   if (text === null) return out;
   var root = null;
@@ -139,7 +146,7 @@ function preserve(dir, now) {
   for (var i = 0; i < 20; i++) {
     var name = 'status.json.damaged-' + stamp + '-' + crypto.randomBytes(4).toString('hex');
     try { fs.copyFileSync(file(dir), path.join(dir, name), fs.constants.COPYFILE_EXCL); return name; }
-    catch (e) { if (e.code !== 'EEXIST') throw e; }
+    catch (e) { if (e.code !== 'EEXIST') throw persistError('write', e); }
   }
   throw new Error('could not find an unused name to preserve the damaged status record under');
 }
@@ -321,6 +328,7 @@ function classify(f) {
 }
 
 function lastDelivered(d) {
+  if (d && d.unreadable) return 'Last delivered digest: not known — the status record could not be read.';
   return d && d.date ? 'Last delivered digest: ' + DOW[dowOf(d.date)] + ' ' + d.date + (d.ref ? ' · ref ' + d.ref + ' (search this DM for that ref)' : '') + '.'
                      : 'No verified delivery recorded by status tracking yet.';
 }
@@ -329,8 +337,11 @@ var EMPTY = 'An empty DM today does not mean nothing is outstanding.';
 var NO_RETRY = 'Running it again will not help until ';
 
 /* The notice, stage by stage, saying only what is true at that stage. `where` is where it is posted. */
+var STAGES = ['config', 'ledger', 'fetch', 'build', 'post'];
 function notice(a, delivered) {
   var d = a.date, last = lastDelivered(delivered), t;
+  // Nothing recorded says where it stopped (an older or damaged record): it is not told as "built, but could not be posted".
+  if (a.outcome === 'not_delivered' && STAGES.indexOf(a.cause) < 0) a = Object.assign({}, a, { outcome: 'unknown' });
   if (a.outcome === 'not_delivered' && (a.cause === 'config' || a.cause === 'ledger')) {
     /* What was fetched is what the run recorded, never inferred from the stage: a configuration found unusable after Slack was read did fetch. */
     var why = a.cause === 'ledger'
@@ -361,15 +372,8 @@ function notice(a, delivered) {
   return { where: 'dm', text: t.join('\n') };
 }
 
-/* Ends an attempt from the facts. Returns the notice to post, or null when there is none to issue.
- * A second call for the same attempt issues nothing: one notice per failed attempt. */
-function end(dir, o, now) {
-  var s = load(dir);
-  var current = !!(s.attempt && s.attempt.id === o.id), sup = current ? null : (s.superseded || []).filter(function (x) { return x.id === o.id; })[0];
-  if (!current && !sup) throw new Error('no attempt ' + o.id + ' is open: run --begin first, and use the id it printed');
-  // A replaced attempt is ended on its own copy: it never becomes the last attempt, but its notice, or its delivery, is not lost.
-  var a = current ? s.attempt : { id: sup.id, date: sup.date, startedAt: sup.startedAt, outcome: 'started' };
-  if (a.outcome !== 'started') return { outcome: a.outcome, done: true, notice: null };
+/* The facts of an ended run, checked. Nothing is recorded by a refusal. */
+function checkFacts(o) {
   var f = { brief: o.brief, details: o.details, verified: o.verified === true, failed: o.failed || '' };
   if (NOT_A_FACT.indexOf(f.brief) > -1 || NOT_A_FACT.indexOf(f.details) > -1) {
     throw new Error('"' + (NOT_A_FACT.indexOf(f.brief) > -1 ? f.brief : f.details) + '" is not something that can be reported: absence proves nothing. ' +
@@ -381,10 +385,27 @@ function end(dir, o, now) {
   if (f.brief === 'not_attempted' && STOPPED_BEFORE_POSTING.indexOf(f.failed) < 0) {
     throw new Error('--brief not_attempted only fits a run that stopped before posting (--failed ' + STOPPED_BEFORE_POSTING.join(', ') + '); a post that was tried and did not land is rejected or unknown');
   }
+  if (STOPPED_BEFORE_POSTING.indexOf(f.failed) > -1 && (f.brief !== 'not_attempted' || f.details !== 'not_attempted')) {
+    throw new Error('--failed ' + f.failed + ' means the run stopped before posting, so --brief and --details must be not_attempted, got ' + f.brief + '/' + f.details + '. Nothing was recorded.');
+  }
+  if (o.fetched != null && f.failed !== 'config') throw new Error('--fetched only goes with --failed config. Nothing was recorded.');
   if (f.failed === 'config' && o.fetched !== 'yes' && o.fetched !== 'no') {
     throw new Error('--failed config needs --fetched yes|no: whether Slack had already been fetched when the configuration was found unusable. Nothing was recorded.');
   }
-  var c = classify(f), at = (now || new Date()).toISOString();
+  var c = classify(f);
+  return { f: f, c: c };
+}
+
+/* Ends an attempt from the facts. Returns the notice to post, or null when there is none to issue.
+ * A second call for the same attempt issues nothing: one notice per failed attempt. */
+function end(dir, o, now) {
+  var s = load(dir);
+  var current = !!(s.attempt && s.attempt.id === o.id), sup = current ? null : (s.superseded || []).filter(function (x) { return x.id === o.id; })[0];
+  if (!current && !sup) throw new Error('no attempt ' + o.id + ' is open: run --begin first, and use the id it printed');
+  // A replaced attempt is ended on its own copy: it never becomes the last attempt, but its notice, or its delivery, is not lost.
+  var a = current ? s.attempt : { id: sup.id, date: sup.date, startedAt: sup.startedAt, outcome: 'started' };
+  if (a.outcome !== 'started') return { outcome: a.outcome, done: true, notice: null };
+  var fc = checkFacts(o), f = fc.f, c = fc.c, at = (now || new Date()).toISOString();
   if (o.ref != null && o.ref !== '' && !REF.test(o.ref)) throw new Error('--ref must be the four-character reference in the digest\'s header, got "' + o.ref + '". Nothing was recorded.');
   if (c.outcome === 'delivered' && !o.ref) throw new Error('A delivered digest needs --ref, the four-character reference in its header. Nothing was recorded.');
   a.outcome = c.outcome; a.cause = c.cause || null; a.endedAt = at;
@@ -400,14 +421,32 @@ function end(dir, o, now) {
     a.notice = 'none';
     s.note = null;
     if (sup) s.superseded = s.superseded.filter(function (x) { return x.id !== o.id; });
-    save(dir, s, now);
+    try { save(dir, s, now); } catch (e) { if (e.persist) e.result = { outcome: 'delivered', notice: null }; throw e; }
     return { outcome: 'delivered', done: false, notice: null, superseded: !!sup };
   }
   var n = notice(a, s.delivered);
   a.notice = 'pending';
   if (sup) s.superseded = s.superseded.filter(function (x) { return x.id !== o.id; });
-  save(dir, s);
+  try { save(dir, s); } catch (e) { if (e.persist) e.result = { outcome: c.outcome, notice: n }; throw e; }
   return { outcome: c.outcome, done: false, notice: n, superseded: !!sup };
+}
+
+/* An attempt whose --begin could not save a record, or whose record cannot be read now: the notice is still made, from the facts of this run alone.
+ * Nothing is recorded, and the result says so. */
+function endUnrecorded(dir, o) {
+  if (!validDate(o.today)) throw new Error('--today must be a real date like 2026-09-30 for an attempt that has no record. Nothing was recorded.');
+  var fc = checkFacts(o), f = fc.f, c = fc.c;
+  if (o.ref != null && o.ref !== '' && !REF.test(o.ref)) throw new Error('--ref must be the four-character reference in the digest\'s header, got "' + o.ref + '". Nothing was recorded.');
+  if (c.outcome === 'delivered') {
+    if (!o.ref) throw new Error('A delivered digest needs --ref, the four-character reference in its header. Nothing was recorded.');
+    return { outcome: 'delivered', done: false, notice: null, unrecorded: true };
+  }
+  var delivered;
+  try { delivered = load(dir).delivered; } catch (e) { delivered = { unreadable: true }; }
+  var a = { id: 'UNRECORDED', date: o.today, outcome: c.outcome, cause: c.cause || null, brief: f.brief, details: f.details, verified: f.verified, ref: o.ref || null };
+  if (c.cause === 'config') a.fetched = o.fetched === 'yes';
+  if (c.cause === 'ledger') a.fetched = true;
+  return { outcome: c.outcome, done: false, notice: notice(a, delivered), unrecorded: true };
 }
 
 /* Only Slack's confirmation makes a notice "posted". Until this is called it is "pending": generated, not delivered. */
@@ -451,6 +490,7 @@ function attemptLine(a, delivered) {
                rejected: 'Slack rejected the notice, so it was not posted.', unknown: 'Whether the notice posted is unknown.',
                not_attempted: 'No notice was posted: your own DM could not be found to post it in.' }[a.notice] || '';
   var ref = a.ref ? ' (ref ' + a.ref + ')' : '';
+  if (a.outcome === 'not_delivered' && STAGES.indexOf(a.cause) < 0) a = Object.assign({}, a, { outcome: 'unknown' });
   var body = a.outcome === 'started'
     ? 'started; no completion recorded. It may still be running or may have been interrupted; its delivery outcome is unknown.'
     : a.outcome === 'unknown'
@@ -525,7 +565,7 @@ function view(dir, cfg, sched, now, scope) {
 }
 
 module.exports = {
-  load: load, repair: repair, validDate: validDate, begin: begin, end: end, noticeResult: noticeResult, classify: classify, notice: notice,
+  endUnrecorded: endUnrecorded, load: load, repair: repair, validDate: validDate, begin: begin, end: end, noticeResult: noticeResult, classify: classify, notice: notice,
   setSchedule: setSchedule, setScheduleState: setScheduleState, gap: gap, gapLine: gapLine, cronDays: cronDays, describeCron: describeCron,
   readFacts: readFacts, stage: stage, view: view, parseNow: parseNow, localDate: localDate,
   file: file, stagedFile: stagedFile

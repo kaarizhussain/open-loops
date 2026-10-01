@@ -44,7 +44,7 @@ function main(argv) {
       return 'NOT QUEUED — ' + res.ref + ' ' + ({ unknown_ref: 'is not a reference this ledger knows (a digest this old is not remembered, or the number is past its list). Ask for the list of rejected items.',
         ambiguous_prefix: 'is the start of more than one reference. Use more characters.' }[res.refuse]) + ' Nothing was queued.';
     }
-    var q = R.addRequest(dir, target, st.log, now);
+    var q = R.addRequest(dir, target, st.log, now, function (t) { var x = R.resolve(Object.assign({ id: '00000000' }, t), st, store); return x.key || null; });
     return (q.existing ? 'Restore already requested for ' + res.ref + ' (request ' + q.id + '). ' : 'Restore requested for ' + res.ref + ' (request ' + q.id + '). ') +
       'It is queued: your next digest will say whether it came back.';
   }

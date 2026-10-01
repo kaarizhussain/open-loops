@@ -32,8 +32,9 @@ var KEEP_LOG_DAYS = 120, KEEP_REF_DAYS = 365, KEEP_HASHES = 400;
 
 function file(dir) { return path.join(dir, 'restores.json'); }
 
+var ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
 function valid(r) {
-  if (!r || typeof r !== 'object' || !ID.test(r.id) || isNaN(Date.parse(r.requestedAt))) return false;
+  if (!r || typeof r !== 'object' || !ID.test(r.id) || typeof r.requestedAt !== 'string' || !ISO.test(r.requestedAt) || isNaN(Date.parse(r.requestedAt))) return false;
   if (typeof r.ref === 'string') return REF.test(r.ref);
   return !!r.digest && DIGEST_REF.test(r.digest.ref) && Number.isInteger(r.digest.n) && r.digest.n >= 1 && r.digest.n <= 999;
 }
@@ -46,7 +47,9 @@ function loadRequests(dir) {
   try {
     var o = JSON.parse(text.replace(/^﻿/, ''));
     if (!o || !Array.isArray(o.requests)) throw new Error('shape');
-    return { requests: o.requests.filter(valid), damaged: false };
+    // One request that is not whole makes the whole file unusable. Dropping it would lose a request without a word; the file is left as it is.
+    if (!o.requests.every(valid)) throw new Error('invalid request');
+    return { requests: o.requests, damaged: false };
   } catch (e) { return { requests: [], damaged: true }; }
 }
 
@@ -54,17 +57,24 @@ function loadRequests(dir) {
 
 function writeRequests(dir, requests) {
   var f = file(dir), tmp = f + '.' + process.pid + '.' + crypto.randomBytes(3).toString('hex') + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify({ requests: requests }, null, 1));
-  retry(function () { fs.renameSync(tmp, f); });
+  try {
+    fs.writeFileSync(tmp, JSON.stringify({ requests: requests }, null, 1));
+    retry(function () { fs.renameSync(tmp, f); });
+  } catch (e) {
+    try { fs.unlinkSync(tmp); } catch (ignore) { /* only this write's own file */ }
+    throw e;
+  }
 }
 
 /* Only the structured request is kept: an id, what it points at, when. Never the words the reader used. A request for something already
  * waiting is the same request. Finished requests the ledger has logged are dropped after a month. */
-function addRequest(dir, target, log, now) {
+function addRequest(dir, target, log, now, keyOf) {
   var cur = loadRequests(dir);
   if (cur.damaged) throw new Error('restores.json could not be read, so nothing was queued. The file was preserved. Ask your assistant to inspect it before trying again.');
   var same = function (r) { return target.ref ? r.ref === target.ref : r.digest && r.digest.ref === target.digest.ref && r.digest.n === target.digest.n; };
-  var waiting = cur.requests.filter(function (r) { return same(r) && !log[r.id]; })[0];
+  /* The same item asked for two ways (by reference, by item number) is one request: they resolve to the same key. */
+  var key = keyOf ? keyOf(target) : null;
+  var waiting = cur.requests.filter(function (r) { return !log[r.id] && (same(r) || (key && keyOf(r) === key)); })[0];
   if (waiting) return { id: waiting.id, existing: true };
   var cutoff = now.getTime() - 30 * 864e5;
   var keep = cur.requests.filter(function (r) { return !(log[r.id] && Date.parse(r.requestedAt) < cutoff); });
@@ -122,14 +132,19 @@ function begin(o) {
   Object.keys(st.log).forEach(function (id) {
     var e = st.log[id];
     if (e.state === 'applied' && e.key) fences[e.key] = Math.max(fences[e.key] || 0, Date.parse(e.requestedAt));
-    if (e.state === 'applied' && e.key && e.on === o.today) active.push({ id: id, key: e.key, ref: e.ref, requestedAt: e.requestedAt, pending: false });
+    if (e.state === 'applied' && e.key && e.on === o.today) active.push({ id: id, key: e.key, ref: e.ref, requestedAt: e.requestedAt, pending: false, dupes: [] });
   });
+  var primary = {};
+  active.forEach(function (a) { primary[a.key] = a; });
   o.requests.forEach(function (r) {
     if (st.log[r.id]) return;            // decided already, in this ledger or one a same-day re-run rolled back: never decided twice
     var res = resolve(r, st, o.store);
     if (res.refuse) { st.log[r.id] = entry('refused', { reason: res.refuse, ref: res.ref, requestedAt: r.requestedAt, on: o.today }); return; }
     fences[res.key] = Math.max(fences[res.key] || 0, Date.parse(r.requestedAt));
-    active.push({ id: r.id, key: res.key, ref: res.ref, requestedAt: r.requestedAt, pending: true });
+    // Two requests for one item are one restore with one note; each still gets its own terminal result, so neither can apply again.
+    if (primary[res.key]) { primary[res.key].dupes.push({ id: r.id, ref: res.ref, requestedAt: r.requestedAt }); return; }
+    primary[res.key] = { id: r.id, key: res.key, ref: res.ref, requestedAt: r.requestedAt, pending: true, dupes: [] };
+    active.push(primary[res.key]);
   });
   return { fences: fences, active: active };
 }
@@ -140,18 +155,25 @@ function settle(o) {
   var st = o.store.restoreState(), byKey = {};
   o.rows.forEach(function (r) { byKey[L.cell(r[L.COL.key])] = r; });
   o.ctx.active.forEach(function (a) {
+    var settled = function () {
+      (a.dupes || []).forEach(function (d) {
+        if (!st.log[a.id] || st.log[d.id]) return;
+        st.log[d.id] = Object.assign({}, st.log[a.id], { ref: d.ref, requestedAt: d.requestedAt, acked: true, shown: 0, shownIn: null, shownRefs: [], duplicateOf: a.id });
+      });
+    };
     var row = byKey[a.key], verdict = row ? L.cell(row[L.COL.verdict]) : '';
     var later = (o.replies.rejectedAt[a.key] || 0) > Date.parse(a.requestedAt), out;
-    if (!row) { if (!a.pending) return; out = { state: 'refused', reason: 'not_tracked' }; }
+    if (!row) { if (!a.pending) return settled(); out = { state: 'refused', reason: 'not_tracked' }; }
     else if (verdict === 'x' && later) out = { state: 'applied', superseded: true };
     else if (verdict === 'x') { row[L.COL.verdict] = ''; out = { state: 'applied' }; }
     else if (o.replies.fencedKeys[a.key]) out = { state: 'applied' };     // the rejection it voided was an older reply, which was not applied again
     else if (a.pending) out = { state: 'refused', reason: 'not_rejected' };
-    else return;
+    else return settled();
     if (a.pending) {
       st.log[a.id] = entry(out.state, { reason: out.reason || null, key: a.key, ref: a.ref, requestedAt: a.requestedAt, on: o.today,
         firstSeen: row ? L.cell(row[L.COL.first_seen]) : null, superseded: !!out.superseded });
     } else st.log[a.id].superseded = !!out.superseded;
+    settled();
   });
 }
 

@@ -266,6 +266,8 @@ which prints `ATTEMPT <id>` and `STARTED <epoch seconds>`: keep both for "End th
 when the configuration is what is broken. A preview (`--dry`) adds `--dry` and gets `ATTEMPT PREVIEW`; carry that through unchanged, and
 nothing is recorded or posted for it.
 
+If `--begin` exits 5 it could not save the record (the message says whether it could not read it, could not write it, or may or may not have written it). It still prints `ATTEMPT UNRECORDED` and `STARTED <epoch seconds>`, and the run goes on: a failure is still reported. Carry `UNRECORDED` as the attempt id, and end it with `--attempt UNRECORDED --today <date>` plus the same facts; the notice is made from what the run did, and nothing is recorded for it.
+
 **Check the configuration.** Before anything is fetched, run
 
 ```bash
@@ -527,6 +529,8 @@ node <checkout>/tools/status.js --end --attempt <id> --brief <b> --details <d> -
   covered the whole period — proves nothing: the message may have gone out with a damaged header, or may still be in flight
   after a timeout. It stays `unknown`. Record that, do not retry on your own, and say so; if they want another digest, they
   check their DM and ask for it.
+
+If `--end` exits 5 the record could not be saved, but its output is still what to do: a notice that opens `OPEN LOOPS` is the notice for this failed attempt, to be posted **once**. Do not run `--end` again for that attempt (a second run could print it again after it was already posted) and do not retry the post; tell the user the attempt could not be recorded. `DELIVERED — NOT RECORDED.` means the digest posted and verified, but the delivery is not in the status.
 
 It prints `DELIVERED — recorded.` and you are done, or `ALREADY RECORDED …` and you post nothing, or a message
 that opens `OPEN LOOPS`: the notice for this failed attempt, with `post:` on stderr saying where. Post it verbatim, once,

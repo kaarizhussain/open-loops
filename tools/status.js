@@ -30,7 +30,26 @@ var { loadConfig } = require('../src/config.js');
 
 var PREVIEW = 'PREVIEW — nothing is recorded, and no failure notice is posted for a preview.';
 
+/* A failure to read or write the record is reported as its own result (exit 5), never as an ordinary success, and says what is and is not known. */
+function persistMessage(e) {
+  var r = e.reason;
+  return e.persist === 'read' ? 'status: could not read status.json (' + r + '). It was not changed.'
+    : e.persist === 'uncertain' ? 'status: status.json may or may not have been updated (' + r + '): the new version was written but could not be moved into place. Check with: node tools/status.js --show --read-only'
+    : 'status: could not write status.json (' + r + '). It was not changed.';
+}
+function failure(stdout, stderr) { var e = new Error(stderr); e.stdout = stdout; e.exitCode = 5; return e; }
+var NO_RECORD = 'record: NOT RECORDED — this attempt has no record, because --begin could not save one.';
+var ONCE = 'This notice is the only one for this attempt: post it once, and do not run --end again. Tell the user the attempt could not be recorded.';
+
 function main(argv, err) {
+  try { return mainInner(argv, err); }
+  catch (e) {
+    if (e.persist && e.exitCode !== 5) throw failure('', persistMessage(e));
+    throw e;
+  }
+}
+
+function mainInner(argv, err) {
   var flag = function (k) { var i = argv.indexOf('--' + k); return i > -1 && argv[i + 1] !== undefined && argv[i + 1].indexOf('--') !== 0 ? argv[i + 1] : null; };
   var has = function (k) { return argv.indexOf('--' + k) > -1; };
   var configPath = flag('config') || 'openloops.config.json';
@@ -44,18 +63,40 @@ function main(argv, err) {
 
   if (has('begin')) {
     if (has('dry')) return PREVIEW + '\nATTEMPT PREVIEW';
-    return 'ATTEMPT ' + S.begin(dir, flag('today'), now) + '\nSTARTED ' + Math.floor(now.getTime() / 1000);
+    var started = 'STARTED ' + Math.floor(now.getTime() / 1000), began;
+    try { began = S.begin(dir, flag('today'), now); }
+    catch (e) {
+      if (!e.persist) throw e;
+      throw failure('ATTEMPT UNRECORDED\n' + started, persistMessage(e) + '\nThe run can continue without an attempt record. End it with: node tools/status.js --end --attempt UNRECORDED --today <date> …: a failure notice is still generated from what the run did.');
+    }
+    return 'ATTEMPT ' + began + '\n' + started;
   }
   if (has('end') || has('notice-result')) {
     var id = flag('attempt');
     if (!id) throw new Error('--attempt <id> is required: the id --begin printed');
     if (id === 'PREVIEW') return PREVIEW;
+    var facts = { brief: flag('brief'), details: flag('details'), verified: flag('verified') === 'yes', failed: flag('failed'), fetched: flag('fetched'), ref: flag('ref') };
+    var unrecorded = function (reason, defaultDay) {
+      // An attempt that never had a record takes its date from --today alone; one whose record cannot be read now may fall back to the local day.
+      var u = S.endUnrecorded(dir, Object.assign({ today: flag('today') || (defaultDay ? S.localDate(now) : null) }, facts));
+      throw failure(u.notice ? u.notice.text : 'DELIVERED — NOT RECORDED.', (reason ? reason + '\n' : '') + NO_RECORD + (u.notice ? '\nThis notice is the only one for this attempt: post it once.' : ''));
+    };
+    if (id === 'UNRECORDED') {
+      if (has('notice-result')) throw failure('', NO_RECORD);
+      unrecorded('');
+    }
     if (has('notice-result')) {
       S.noticeResult(dir, id, flag('notice-result'));
       return 'Recorded.';
     }
-    var r = S.end(dir, { id: id, brief: flag('brief'), details: flag('details'),
-      verified: flag('verified') === 'yes', failed: flag('failed'), fetched: flag('fetched'), ref: flag('ref') }, now);
+    var r;
+    try { r = S.end(dir, Object.assign({ id: id }, facts), now); }
+    catch (e) {
+      if (!e.persist) throw e;
+      // The facts are the run's own, so the notice is still made. It is the only one: a retried --end could print it again after it was already posted.
+      if (e.result) throw failure(e.result.notice ? e.result.notice.text : 'DELIVERED — NOT RECORDED.', persistMessage(e) + '\n' + (e.result.notice ? ONCE : 'Tell the user the delivery could not be recorded.'));
+      unrecorded(persistMessage(e), true);
+    }
     if (r.done) return 'ALREADY RECORDED (' + r.outcome + ') — no second notice.';
     if (r.outcome === 'delivered') return 'DELIVERED — recorded.' + (r.superseded ? ' (Attempt ' + id + ' had been replaced by a later one; the last attempt is unchanged.)' : '');
     err('outcome: ' + r.outcome + '\npost: ' + (r.notice.where === 'thread' ? 'the thread under the brief' : 'your own DM') +
@@ -92,7 +133,11 @@ function main(argv, err) {
 
 if (require.main === module) {
   try { console.log(main(process.argv.slice(2), function (m) { console.error(m); })); }
-  catch (e) { console.error('status: ' + e.message); process.exit(1); }
+  catch (e) {
+    if (e.stdout) console.log(e.stdout);
+    console.error(e.exitCode === 5 ? e.message : 'status: ' + e.message);
+    process.exit(e.exitCode || 1);
+  }
 }
 
 module.exports = { main: main };

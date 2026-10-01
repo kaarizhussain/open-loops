@@ -27,7 +27,14 @@ var EMPTY = { rows: [], digests: {}, refs: {}, refsSince: null, seen: [], learne
 /* A ledger that cannot be used carries exit code 4: it was read after Slack was fetched, and only its owner can repair it. */
 function ledgerError(msg) { var e = new Error(msg); e.exitCode = 4; return e; }
 
-function plain(x) { return x && typeof x === 'object' && !Array.isArray(x) ? x : {}; }
+/* A restore record that is present must be whole. An entry that is not is a damaged ledger (exit 4), not something to skip: skipping a decided request
+ * could apply it again. */
+function checked(x, name, ok, scalar) {
+  if (x == null) return {};
+  if (typeof x !== 'object' || Array.isArray(x)) throw new Error(name + ' must be an object');
+  Object.keys(x).forEach(function (k) { var e = x[k]; if (!(scalar ? ok(e) : e && typeof e === 'object' && !Array.isArray(e) && ok(e))) throw new Error(name + ' entry "' + k + '" is not valid'); });
+  return x;
+}
 
 function load(file) {
   try {
@@ -55,14 +62,19 @@ function load(file) {
       before: raw.before && raw.before.date && raw.before.state ? raw.before : null,
       identitySalt: typeof raw.identitySalt === 'string' && raw.identitySalt ? raw.identitySalt : undefined,
       /* Restoring a rejected item (src/restore.js). Kept outside a same-day rollback, like the digest memos. */
-      restoreRefs: plain(raw.restoreRefs), restoreLog: plain(raw.restoreLog), replyHashes: plain(raw.replyHashes)
+      restoreRefs: checked(raw.restoreRefs, 'restoreRefs', function (e) { return typeof e.key === 'string' && (e.on == null || typeof e.on === 'string'); }),
+      restoreLog: checked(raw.restoreLog, 'restoreLog', function (e) {
+        return (e.state === 'applied' || e.state === 'refused') && (e.key == null || typeof e.key === 'string') && typeof e.requestedAt === 'string' && !isNaN(Date.parse(e.requestedAt)) &&
+          (e.shownRefs === undefined || (Array.isArray(e.shownRefs) && e.shownRefs.every(function (x) { return typeof x === 'string'; })));
+      }),
+      replyHashes: checked(raw.replyHashes, 'replyHashes', function (e) { return typeof e === 'string'; }, true)
     };
   } catch (e) {
     // Missing is the normal first run. Corrupt is not, and losing the verdicts in it
     // would silently un-reject everything someone has already marked wrong.
     if (e.code === 'ENOENT') return JSON.parse(JSON.stringify(EMPTY));
     throw ledgerError('Ledger at ' + file + ' could not be read (' + e.message +
-      '). Move it aside to start fresh — deleting it loses every verdict recorded so far.');
+      '). Open Loops did not change it. Only its owner should decide whether to move it aside or restore it: deleting it loses every verdict recorded so far.');
   }
 }
 
@@ -71,12 +83,13 @@ function fileStore(file, sopts) {
   /* The ledger's identity salt: random, made once, kept in the ledger itself so it travels with every copy and backup, and never
    * remade. A ledger that already holds person tokens but has lost its salt cannot be read back into the same people, so it is an
    * error — quietly making a new salt would split every person from their corrections. */
+  var tokensIn = function (rows) { return (rows || []).some(function (r) { return /^[0-9a-f]{64}$/.test(L.cell(r[L.COL.who_id])); }); };
+  var saltMissing = function () { return ledgerError('Ledger at ' + file + ' holds person identifiers but no identity salt. Restore the file it was copied from. Open Loops did not make a new salt: it would detach every person from their corrections.'); };
   var ensureSalt = function () {
     if (state.identitySalt) return state.identitySalt;
     /* A midday check never writes the ledger, so it must not make a salt either: one made in memory would differ at the next check. */
     if (sopts && sopts.noSalt) return null;
-    var held = (state.rows || []).some(function (r) { return /^[0-9a-f]{64}$/.test(L.cell(r[L.COL.who_id])); });
-    if (held) throw ledgerError('Ledger at ' + file + ' holds person identifiers but no identity salt. Restore the file it was copied from, or move it aside: a new salt would detach every person from their corrections.');
+    if (tokensIn(state.rows)) throw saltMissing();
     state.identitySalt = require('crypto').randomBytes(16).toString('hex');
     return state.identitySalt;
   };
@@ -87,10 +100,15 @@ function fileStore(file, sopts) {
     /* Written via a temporary file and renamed, because a run interrupted midway
      * through a direct write leaves a truncated ledger — and a truncated ledger reads
      * as "nothing was ever marked wrong". */
-    var tmp = file + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(state, null, 1));
-    // A reader (a check, a scan, an editor) can hold the file; on Windows the rename then fails instead of waiting.
-    retry(function () { fs.renameSync(tmp, file); });
+    var tmp = file + '.' + process.pid + '.' + require('crypto').randomBytes(3).toString('hex') + '.tmp';    // this write's own file, so a failed write removes that and nothing else
+    try {
+      fs.writeFileSync(tmp, JSON.stringify(state, null, 1));
+      // A reader (a check, a scan, an editor) can hold the file; on Windows the rename then fails instead of waiting.
+      retry(function () { fs.renameSync(tmp, file); });
+    } catch (e) {
+      try { fs.unlinkSync(tmp); } catch (ignore) { /* it may not have been created */ }
+      throw e;
+    }
   };
 
   return {
@@ -125,6 +143,8 @@ function fileStore(file, sopts) {
      * against once that run is undone, so it is dropped. Rare, and the reply can be sent
      * again under the digest that replaced it. */
     beginRun: function (date) {
+      // A same-day re-run starts from before the first run, whose rows may hold no tokens at all: the tokens in the rows it is about to discard are what say the salt was lost.
+      if (!state.identitySalt && !(sopts && sopts.noSalt) && tokensIn(state.rows)) throw saltMissing();
       if (state.before && state.before.date === date) {
         // What the earlier run today had recorded, so a run that does not re-read it can say so.
         discarded = state.rows.filter(function (r) { return L.cell(r[L.COL.verdict]); })

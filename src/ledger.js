@@ -475,7 +475,7 @@ function recall(found, quiet, checked, missed) {
 /* One mark, or one range of marks, that stands alone: not part of a date, a time, a fraction or a chain of numbers. */
 var RANGE_SEP = '(?:\\s*[-–—]\\s*|\\s+(?:to|through|thru)\\s+)';
 var STAND_ALONE = '(?![\\d\\-\\/:a-z]|\\.\\d)(?!\\s*[-–—\\/]\\s*\\d)';
-var TOKEN = new RegExp('(?<![\\d\\-\\/:]|\\d\\.)#?(\\d+)(?:' + RANGE_SEP + '#?(\\d+))?' + STAND_ALONE, 'gi');
+var TOKEN = new RegExp('(?<![\\d\\-\\/:a-z]|\\d\\.)#?(\\d+)(?:' + RANGE_SEP + '#?(\\d+))?' + STAND_ALONE, 'gi');
 /* A range is read only when the WHOLE line is correction syntax: marks and ranges, separated by spaces, commas, "and" or &, after an optional label
  * (k / knew / known / already, which the caller has already taken off). "4 to 6 weeks for the rollout" leads with a range and is conversation. */
 var ITEM = '#?\\d+(?:' + RANGE_SEP + '#?\\d+)?';
