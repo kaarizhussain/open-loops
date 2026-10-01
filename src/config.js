@@ -73,14 +73,17 @@ function configError(msg) { var e = new Error(msg); e.exitCode = 3; return e; }
 
 function loadConfig(fs, path) {
   if (!path) return {};
+  var parsed;
   try {
-    return JSON.parse(fs.readFileSync(path, 'utf8').replace(/^\uFEFF/, ''));   // Windows editors and PowerShell 5.1 add a byte-order mark
+    parsed = JSON.parse(fs.readFileSync(path, 'utf8').replace(/^\uFEFF/, ''));   // Windows editors and PowerShell 5.1 add a byte-order mark
   } catch (e) {
     if (e.code === 'ENOENT') return {};
     throw configError('Config at ' + path + ' could not be read (' + e.message +
       '). Fix it rather than deleting it — falling back to defaults would read ' +
       'channels you have excluded.');
   }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw configError('the config file must hold a JSON object, got ' + JSON.stringify(parsed));
+  return parsed;
 }
 
 /* A scope rule that cannot be read as written must stop the run. Every way of getting one
@@ -126,6 +129,15 @@ function settings(fs, configPath, run) {
     if (k in file) missing.push('"' + k + '" at the top level of the config does nothing — it belongs inside ' +
       '"channels": {"' + k + '": [...]}');
   });
+  /* The shapes the rest of the run takes for granted. Every one of these used to pass --check-config and then crash the run partway. */
+  ['mute', 'unmute'].forEach(function (k) {
+    if (s[k] != null && !(Array.isArray(s[k]) && s[k].every(function (x) { return typeof x === 'string'; }))) missing.push('"' + k + '" must be a list of phrases, got ' + JSON.stringify(s[k]));
+  });
+  var days = s.lookbackDays;
+  if (days != null && !((typeof days === 'number' || (typeof days === 'string' && days.trim() !== '')) && isFinite(Number(days)) && Number(days) >= 0)) {
+    missing.push('"lookbackDays" must be a number of days, 0 or more (0 reads without a window), got ' + JSON.stringify(days));
+  }
+  if (s.ledger != null && !(typeof s.ledger === 'string' && s.ledger.trim())) missing.push('"ledger" must be a file path, got ' + JSON.stringify(s.ledger));
   if (!s.you) missing.push('"you" — the address messages are outbound from; without it ' +
     'there is no way to tell inbound from outbound');
   /* tzOffset is minutes from UTC. A zone name — "America/New_York", the natural thing

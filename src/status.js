@@ -77,6 +77,12 @@ function cleanAttempt(o) {
     brief: inSet(o.brief, facts), details: inSet(o.details, facts), verified: o.verified === true,
     ref: REF.test(o.ref) ? o.ref : null, notice: inSet(o.notice, ['none', 'pending', 'posted', 'rejected', 'unknown', 'not_attempted']) }, dropped: 0 };
 }
+/* Attempts that began and were replaced by a later --begin before they ended, so their --end can still say what happened. */
+function cleanSuperseded(a) {
+  return (Array.isArray(a) ? a : []).filter(function (x) { return isObj(x) && ID.test(x.id) && validDate(x.date) && validIso(x.startedAt); })
+    .map(function (x) { return { id: x.id, date: x.date, startedAt: x.startedAt }; }).slice(-3);
+}
+
 function cleanNote(o) {
   return isObj(o) && typeof o.file === 'string' && /^status\.json\.damaged-[0-9T-]+-[0-9a-f]{8}(?:-\d+)?$/.test(o.file)
     ? { file: o.file, recovered: strs(o.recovered, 3), lost: strs(o.lost, 3) } : null;
@@ -106,7 +112,7 @@ function load(dir) {
   var text = null;
   try { text = retry(function () { return fs.readFileSync(file(dir), 'utf8'); }); }
   catch (e) { if (e.code !== 'ENOENT') text = ''; }
-  var out = { schedule: null, attempt: null, delivered: null, note: null, damaged: null };
+  var out = { schedule: null, attempt: null, delivered: null, note: null, damaged: null, superseded: [] };
   if (text === null) return out;
   var root = null;
   try { var parsed = JSON.parse(text); if (isObj(parsed)) root = parsed; } catch (e) { root = null; }
@@ -122,7 +128,7 @@ function load(dir) {
     out[sec[0]] = c.value; recovered.push(sec[1]);
     if (c.dropped) damaged = true;
   });
-  if (root) out.note = cleanNote(root.note);
+  if (root) { out.note = cleanNote(root.note); out.superseded = cleanSuperseded(root.superseded); }
   if (damaged) out.damaged = { recovered: recovered, lost: lost };
   return out;
 }
@@ -143,7 +149,7 @@ function preserve(dir, now) {
 function save(dir, s, now) {
   var note = s.note || null;
   if (s.damaged) note = { file: preserve(dir, now), recovered: s.damaged.recovered, lost: s.damaged.lost };
-  writeJson(file(dir), { schedule: s.schedule, attempt: s.attempt, delivered: s.delivered, note: note });
+  writeJson(file(dir), { schedule: s.schedule, attempt: s.attempt, delivered: s.delivered, note: note, superseded: s.superseded && s.superseded.length ? s.superseded : undefined });
 }
 
 /* Brings a damaged record into a whole one (preserving the original) and returns it. */
@@ -294,6 +300,8 @@ var STOPPED_BEFORE_POSTING = ['config', 'ledger', 'fetch', 'build'];
 function begin(dir, today, now) {
   if (today != null && !validDate(today)) throw new Error('--today must be a real date like 2026-09-30, got "' + today + '". Nothing was recorded.');
   var s = load(dir), id = crypto.randomBytes(4).toString('hex');
+  /* A run that began and never ended (it crashed, or a second run began over it) is kept, not erased: its own --end can still report. */
+  if (s.attempt && s.attempt.outcome === 'started') s.superseded = (s.superseded || []).concat([{ id: s.attempt.id, date: s.attempt.date, startedAt: s.attempt.startedAt }]).slice(-3);
   s.attempt = { id: id, date: today || localDate(now || new Date()), startedAt: (now || new Date()).toISOString(), outcome: 'started' };
   save(dir, s);
   return id;
@@ -356,8 +364,11 @@ function notice(a, delivered) {
 /* Ends an attempt from the facts. Returns the notice to post, or null when there is none to issue.
  * A second call for the same attempt issues nothing: one notice per failed attempt. */
 function end(dir, o, now) {
-  var s = load(dir), a = s.attempt;
-  if (!a || a.id !== o.id) throw new Error('no attempt ' + o.id + ' is open: run --begin first, and use the id it printed');
+  var s = load(dir);
+  var current = !!(s.attempt && s.attempt.id === o.id), sup = current ? null : (s.superseded || []).filter(function (x) { return x.id === o.id; })[0];
+  if (!current && !sup) throw new Error('no attempt ' + o.id + ' is open: run --begin first, and use the id it printed');
+  // A replaced attempt is ended on its own copy: it never becomes the last attempt, but its notice, or its delivery, is not lost.
+  var a = current ? s.attempt : { id: sup.id, date: sup.date, startedAt: sup.startedAt, outcome: 'started' };
   if (a.outcome !== 'started') return { outcome: a.outcome, done: true, notice: null };
   var f = { brief: o.brief, details: o.details, verified: o.verified === true, failed: o.failed || '' };
   if (NOT_A_FACT.indexOf(f.brief) > -1 || NOT_A_FACT.indexOf(f.details) > -1) {
@@ -388,13 +399,15 @@ function end(dir, o, now) {
       messages: ok ? st.messages : null, meetings: ok ? st.meetings : null, windowDays: ok ? st.windowDays : null };
     a.notice = 'none';
     s.note = null;
+    if (sup) s.superseded = s.superseded.filter(function (x) { return x.id !== o.id; });
     save(dir, s, now);
-    return { outcome: 'delivered', done: false, notice: null };
+    return { outcome: 'delivered', done: false, notice: null, superseded: !!sup };
   }
   var n = notice(a, s.delivered);
   a.notice = 'pending';
+  if (sup) s.superseded = s.superseded.filter(function (x) { return x.id !== o.id; });
   save(dir, s);
-  return { outcome: c.outcome, done: false, notice: n };
+  return { outcome: c.outcome, done: false, notice: n, superseded: !!sup };
 }
 
 /* Only Slack's confirmation makes a notice "posted". Until this is called it is "pending": generated, not delivered. */
@@ -475,6 +488,10 @@ function view(dir, cfg, sched, now, scope) {
     L('Last delivered digest', stamp(dv.at) + (dv.ref ? ' · ref ' + dv.ref : ' · ref not recorded') + '\nbrief and details posted; brief verified\n' + readLine(dv));
   } else L('Last delivered digest', 'No verified delivery recorded by status tracking yet');
   L('Last attempt', attemptLine(s.attempt, dv));
+  (s.superseded || []).forEach(function (x) {
+    var d = new Date(x.startedAt);
+    L('', 'An earlier attempt (' + DOW[d.getDay()] + ' ' + clock(d) + ') started and was replaced by a later one before reporting an outcome.');
+  });
   var g = gap(dir, today);
   if (g) L('', 'No digest since ' + dayName(g.prev) + '; the schedule expected one on ' + g.missed.map(dayName).join(', ') + '.');
 

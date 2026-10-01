@@ -57,9 +57,10 @@ function main(argv, err) {
     var r = S.end(dir, { id: id, brief: flag('brief'), details: flag('details'),
       verified: flag('verified') === 'yes', failed: flag('failed'), fetched: flag('fetched'), ref: flag('ref') }, now);
     if (r.done) return 'ALREADY RECORDED (' + r.outcome + ') — no second notice.';
-    if (r.outcome === 'delivered') return 'DELIVERED — recorded.';
+    if (r.outcome === 'delivered') return 'DELIVERED — recorded.' + (r.superseded ? ' (Attempt ' + id + ' had been replaced by a later one; the last attempt is unchanged.)' : '');
     err('outcome: ' + r.outcome + '\npost: ' + (r.notice.where === 'thread' ? 'the thread under the brief' : 'your own DM') +
-        '\nwhen Slack has answered that post: node tools/status.js --notice-result posted|rejected|not_attempted|unknown --attempt ' + id);
+        (r.superseded ? '\nattempt ' + id + ' was replaced by a later attempt before it ended; its notice is printed, but it is not the last attempt, so its notice result is not recorded.'
+          : '\nwhen Slack has answered that post: node tools/status.js --notice-result posted|rejected|not_attempted|unknown --attempt ' + id));
     return r.notice.text;
   }
   if (has('schedule')) {

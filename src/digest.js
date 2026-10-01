@@ -464,8 +464,10 @@ function warnings(s) {
       ' The config wins; nothing was stored.');
   }
   (s.b.massReplies || []).slice(0, 3).forEach(function (x) {
-    out.push('NOT APPLIED — "' + String(x.text).slice(0, 40) + '" would reject ' + x.count + ' of ' + x.of +
-      ' items at once, which looks like something pasted into the DM rather than a correction.' +
+    var what = x.kind === 'known' ? ' would mark ' + x.count + ' of ' + x.of + ' items as already known at once'
+      : x.kind === 'together' ? ' would bring rejections under this digest to ' + x.count + ' of ' + x.of + ' items'
+      : ' would reject ' + x.count + ' of ' + x.of + ' items at once';
+    out.push('NOT APPLIED — "' + String(x.text).slice(0, 40) + '"' + what + ', which looks like something pasted into the DM rather than a correction.' +
       ' Reply with fewer numbers if you meant it.');
   });
   if (s.b.notReapplied) {
@@ -613,6 +615,7 @@ function renderBrief(s) {
       '". Reply with just the number, like "3", to reject one.');
   });
   /* Rejected items put back, or not (src/restore.js). Said until a digest that carried it is known to have arrived. */
+  if (b.restoreDamaged) p('RESTORE REQUESTS NOT PROCESSED — restores.json could not be read, so no queued restore was applied. The file was preserved. Ask your assistant to inspect it.');
   var shownN = (b.restoreNotes || []).length ? shownNumbers(s) : {};
   (b.restoreNotes || []).slice(0, 4).forEach(function (x) {
     var seen = x.firstSeen ? ' (first seen ' + MONTH[+x.firstSeen.slice(5, 7) - 1] + ' ' + (+x.firstSeen.slice(8, 10)) + ')' : '';
@@ -631,6 +634,7 @@ function renderBrief(s) {
     else if (x.n) p(x.repeat ? lead + 'It is back as item ' + x.n + ' and keeps its original age' + seen + '.' : 'Restored 1 item you had rejected — it is back as item ' + x.n + ' and keeps its original age' + seen + '.');
     else p(lead + 'Restore applied to its record' + seen + ', but the commitment is not in what was read today, so it is not listed. That does not mean it is resolved — it will be listed if it shows up in a read.');
   });
+  if (b.restoreNotesMore > 0) p('+ ' + b.restoreNotesMore + (b.restoreNotesMore === 1 ? ' more restore note is' : ' more restore notes are') + ' not shown here. Ask your assistant to list your restore requests.');
   /* An older reply that refers to an item restored since: not applied again. An edited one, or one not known to be unchanged, is reported. */
   (b.fencedReplies || []).slice(0, 3).forEach(function (x) {
     p(x.edited ? 'NOT APPLIED — an edited reply refers to an item you restored: "' + String(x.text).slice(0, 40) + '". Send it again as a new reply if you want it rejected.'
@@ -638,6 +642,7 @@ function renderBrief(s) {
   });
   /* Lines that look like a correction and could not be read as one: "all", "1/3", a range that is reversed or runs past the list. Nothing on
    * such a line was applied, and the reader is told, so they do not wait for a change that was never made. */
+  if ((b.unreadReplies || []).length > 3) p('+ ' + ((b.unreadReplies || []).length - 3) + ((b.unreadReplies || []).length - 3 === 1 ? ' more reply was' : ' more replies were') + ' not read as corrections.');
   (b.unreadReplies || []).slice(0, 3).forEach(function (line) {
     p('NOT READ AS A CORRECTION — "' + String(line).slice(0, 56) + '".' + ((b.unreadRangeReplies || []).indexOf(line) > -1 ? ' Nothing on that line was applied.' : '') +
       ' Reply with the numbers that are not real, like "3 7", or a range like "1-3".');

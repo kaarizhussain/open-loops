@@ -492,6 +492,17 @@ function unsupportedShape(line, max) {
   return /^[,;]*$/.test(seps) ? !inList : inList;
 }
 
+/* A line that is only numbers and punctuation, where two item numbers are joined by something that is not a range, a list or a decimal: "1..3", "1~3",
+ * "1‐3" (a Unicode hyphen), "1 → 3". It was half-read as 1 and 3, silently skipping what was between them. It is reported, and nothing is applied. */
+function junkSeparated(line, max) {
+  var t = line.trim();
+  if (!/^[\d\s\p{P}\p{S}]+$/u.test(t)) return false;
+  var ns = (t.match(/\d+/g) || []).map(Number), seps = t.split(/\d+/).slice(1, -1).map(function (x) { return x.replace(/[#\s]/g, ''); }), bad = false;
+  if (ns.length < 2 || !ns.every(function (n) { return n >= 1 && n <= max; })) return false;
+  seps.forEach(function (x) { if (!/^[,;&]*$/.test(x) && x !== '.' && x !== ':' && !/^[\/\-–—]$/.test(x)) bad = true; });
+  return bad;
+}
+
 function parseMarks(text, max) {
   var wrong = [], knew = [], missed = [], ignored = [], unread = [], badRange = [], rangesWrong = [], rangesKnew = [], seen = {}, seenLetter = {};
   /* Whether the spot check was answered at all, which is not the same as whether it
@@ -528,6 +539,7 @@ function parseMarks(text, max) {
      * "3pm", "2x", "5min" — and "1-3pm" is a time range, so neither end of it is read. A date or a fraction ("9/30", "2026-08-25") is digits joined
      * by separators and is not read either, nor is a chain ("1-3-5"). */
     /* `any`: a single number was named. Only that is reported when the line does not lead with it; a range in a note ("see pages 2-5") was never reported. */
+    if (max && junkSeparated(body, max)) { unread.push(line.trim()); return; }
     var tokens = [], bad = false, any = false, sawRange = false, m;
     TOKEN.lastIndex = 0;
     while ((m = TOKEN.exec(body))) {

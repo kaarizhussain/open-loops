@@ -158,6 +158,11 @@ function marksFromDm(messages, store, rows, restore) {
       mass.push({ text: m.body.trim().split('\n')[0], count: marks.wrong.length, of: keys.length, date: forDate });
       return;
     }
+    // The same guard for "already known": a pasted k-range over most of the list is not a correction either.
+    if (marks.knew.length >= 4 && marks.knew.length * 2 > keys.length) {
+      mass.push({ kind: 'known', text: m.body.trim().split('\n')[0], count: marks.knew.length, of: keys.length, date: forDate });
+      return;
+    }
     var fencedOut = function (i) { var k = keys[i - 1]; return !!(k && fences[k] && typedAt < fences[k]); };
     var touched = [].concat(marks.wrong, marks.knew).filter(fencedOut);
     if (touched.length) {
@@ -168,6 +173,19 @@ function marksFromDm(messages, store, rows, restore) {
     }
     // A reply that was reported (edited, or not known to be unchanged) keeps its old hash, so a same-day re-run reports it again instead of losing the warning.
     if (!(touched.length && before !== hash)) hashes[m.id] = hash;
+    /* The guard counts per digest, not only per reply: one paste can arrive as several messages. What this digest's items already carry as rejected in
+     * the ledger (an earlier run's, or an earlier reply in this one, which has been applied to the rows by now), plus what this reply would add,
+     * must not pass the same line. */
+    var isRejected = {};
+    rows.forEach(function (r) { if (L.cell(r[L.COL.verdict]) === 'x') isRejected[L.cell(r[L.COL.key])] = 1; });
+    var newKeys = {}, already = 0;
+    marks.wrong.forEach(function (i) { var k = keys[i - 1]; if (k && !isRejected[k]) newKeys[k] = 1; });
+    keys.forEach(function (k) { if (isRejected[k]) already++; });
+    var together = already + Object.keys(newKeys).length;
+    if (Object.keys(newKeys).length && together >= 4 && together * 2 > keys.length) {
+      mass.push({ kind: 'together', text: m.body.trim().split('\n')[0], count: together, of: keys.length, date: forDate });
+      return;
+    }
     marks.wrong.forEach(function (i) { var k = keys[i - 1]; if (k && !(typedAt <= rejectedAt[k])) rejectedAt[k] = typedAt; });
     [].concat(marks.wrong || [], marks.knew || []).forEach(function (i) {
       var key = keys[i - 1];
@@ -767,7 +785,7 @@ function mainInner(argv) {
     restoreLib.prune(store, today, queuedRestores, rows);
     var lastDelivered = null;
     try { lastDelivered = fs.existsSync(configPath) ? status.load(reportDir).delivered : null; } catch (e) { /* the status record must never cost the digest */ }
-    restoreNotes = restoreLib.notes({ store: store, rows: rows, ref: ref, keys: keys, deliveredRef: lastDelivered && lastDelivered.ref });
+    restoreNotes = restoreLib.notes({ store: store, rows: rows, ref: ref, keys: keys, deliveredRef: lastDelivered && lastDelivered.ref, limit: 4 });
   }
   var foundToday = result.open.length + result.closed.length;
   var score = L.recall(foundToday, silent.length,
@@ -823,7 +841,7 @@ function mainInner(argv) {
     principals: cfg.supporting,
     muted: muted, mutes: L.suggestMutes(rows).filter(function (s) { return !already[s.phrase]; }),
     learnedNow: fresh, learnedAll: learned,
-    spotCheck: sample, recall: score, dark: result.dark, ignoredReplies: replies.ignored, restoreNotes: restoreNotes, fencedReplies: replies.fencedReplies, unreadReplies: replies.unread, unreadRangeReplies: replies.badRange, markedRanges: { wrong: replies.rangesWrong, knew: replies.rangesKnew },
+    spotCheck: sample, recall: score, dark: result.dark, ignoredReplies: replies.ignored, restoreNotes: restoreNotes, restoreNotesMore: restoreNotes.more || 0, restoreDamaged: !!(queuedRestores && queuedRestores.damaged), fencedReplies: replies.fencedReplies, unreadReplies: replies.unread, unreadRangeReplies: replies.badRange, markedRanges: { wrong: replies.rangesWrong, knew: replies.rangesKnew },
     replyKey: replyKey, gapLine: status.gapLine(prevGap), dmLookup: lookup, unmatchedReplies: unmatchedReplies, ownerUnknown: ownerUnknown, inertReplies: inertReplies, dmUnreadable: dmUnreadable,
     /* Conversations skipped, not threads. One counter served both, and only the
        conversation count was reduced by it — so skipping a thread under-reported how

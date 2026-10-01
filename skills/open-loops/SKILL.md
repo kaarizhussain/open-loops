@@ -534,8 +534,10 @@ with no code fence and nothing added, to their own DM — or, when it says the t
 brief's thread. Then tell it what Slack answered, and only what Slack answered:
 
 ```bash
-node <checkout>/tools/status.js --notice-result <posted|rejected|unknown> --attempt <id> --config <working dir>/openloops.config.json
+node <checkout>/tools/status.js --notice-result <posted|rejected|not_attempted|unknown> --attempt <id> --config <working dir>/openloops.config.json
 ```
+
+If `--end` says the attempt was replaced by a later one (another run began over it), post its notice all the same, but skip `--notice-result`: it is not the last attempt, so no result is recorded for it.
 
 `posted` only if Slack returned a timestamp; `rejected` only if Slack explicitly refused it; `not_attempted` if you could not find their own DM and
 posted nothing; anything else, including a Slack that cannot be reached, is `unknown`. Do not keep trying. The failure itself is already

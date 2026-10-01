@@ -159,13 +159,15 @@ function settle(o) {
  * and was then confirmed delivered ends it. One that was not (the post failed, or its confirmation did) leaves it, and the note is carried again,
  * worded as a repeat. There is no cap: neither a number of attempts nor a number of repetitions is a confirmation, so only the confirmation ends it. */
 function notes(o) {
-  var st = o.store.restoreState(), out = [], now = {};
+  var st = o.store.restoreState(), out = [], now = {}, more = 0;
   (o.rows || []).forEach(function (r) { now[L.cell(r[L.COL.key])] = L.cell(r[L.COL.verdict]); });
   Object.keys(st.log).sort(function (a, b) { return String(st.log[a].on).localeCompare(String(st.log[b].on)) || a.localeCompare(b); }).forEach(function (id) {
     var e = st.log[id];
     if (e.acked) return;
     // Confirmed delivered: the last delivered digest is one that carried this note, the latest or an earlier one.
     if (o.deliveredRef && (e.shownRefs || []).concat(e.shownIn ? [e.shownIn] : []).indexOf(o.deliveredRef) > -1) { e.acked = true; return; }
+    // Only a note that is actually displayed counts as carried: one held back by the display limit has not been said, so a delivery confirms nothing about it.
+    if (o.limit && out.length >= o.limit) { more++; return; }
     var repeat = e.shown > 0;
     e.shown++; e.shownIn = o.ref;
     e.shownRefs = (e.shownRefs || []).filter(function (r) { return r !== o.ref; }).concat([o.ref]).slice(-KEEP_CARRIERS);
@@ -173,6 +175,7 @@ function notes(o) {
     out.push({ kind: e.state, reason: e.reason, ref: e.ref, firstSeen: e.firstSeen, superseded: e.superseded || (e.state === 'applied' && now[e.key] === 'x'), repeat: repeat,
       n: e.key ? o.keys.indexOf(e.key) + 1 || null : null });
   });
+  out.more = more;
   return out;
 }
 
