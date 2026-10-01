@@ -322,7 +322,20 @@ by status tracking yet, not that no digest has ever arrived.
 
 Numbered corrections and accuracy reports use the same ledger as Claude:
 `3 7` rejects items, `k 1 4` marks already-known items, and `miss b` answers the spot check.
+Ranges such as `1-3` or `k 2 to 4` work only when the whole line is supported
+correction syntax; prose around a range applies nothing. Follow SKILL.md's reply
+rules, including invalid-range handling and the mass-reply guard.
 Run `node "<checkout>/slack-run.js" --report --config "<config>"` for the report.
+
+To inspect hidden items and restore requests, use the read-only command
+`node "<checkout>/tools/corrections.js" --list --config "<config>"`.
+For an independently authorized setup, follow SKILL.md's restore procedure:
+`--restore <reference>` or `--restore-item <n> --digest <ref>` queues a structured
+request in `restores.json`; it never edits the ledger. Only the digest applies it.
+Relay the tool's result as a request, not a completed restoration. Preserve a
+damaged request file; never delete or recreate it to retry. In the repository
+owner's deployment, Codex may list but must not queue restores with either flag
+against the owner's data (AGENTS.md). Keep one writer of `restores.json` per setup.
 
 After the first verified digest and the schedule choice (including a no), ask the
 diagnostics question last. Print it with

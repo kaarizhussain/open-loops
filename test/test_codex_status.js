@@ -53,4 +53,7 @@ assert.ok(procedure.indexOf('--failed config --fetched no') > -1, 'failed prefet
 assert.ok(procedure.indexOf('--failed config`, `ledger`, `fetch` or `build`') > -1, 'all prepost failure stages are documented');
 assert.ok(procedure.indexOf('--notice-result <posted|rejected|not_attempted|unknown>') > -1, 'notice facts include a missing destination');
 assert.ok(procedure.indexOf('Never move aside, delete, recreate or') > -1, 'an unreadable ledger is preserved');
+assert.ok(procedure.indexOf('tools/corrections.js" --list') > -1, 'recovery inspection is documented');
+assert.ok(procedure.indexOf('Codex may list but must not queue restores with either flag') > -1, 'owner recovery keeps its authorized writer');
+assert.ok(procedure.indexOf('Only the digest applies it.') > -1, 'queueing is not represented as restoring');
 console.log('Codex status and diagnostic disclosure: OK');
