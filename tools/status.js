@@ -26,7 +26,7 @@ var path = require('path');
 var S = require('../src/status.js');
 var alerts = require('../src/alerts.js');
 var diag = require('../src/diagnostics.js');
-var { loadConfig } = require('../src/config.js');
+var { loadConfig, channelProblems } = require('../src/config.js');
 
 var PREVIEW = 'PREVIEW — nothing is recorded, and no failure notice is posted for a preview.';
 
@@ -131,7 +131,7 @@ function mainInner(argv, err) {
     /* What the scheduler says is what the task is: record a pause or a resume the reader made in the app, so the days it
      * was off are not counted as missed. Nothing is recorded when the scheduler could not be read. */
     if (!has('read-only') && sched && S.load(dir).schedule) S.setScheduleState(dir, sched.paused ? 'paused' : 'resumed', now);
-    return S.view(dir, cfg, sched, now, { alerts: !!alerts.consent(cfg), diagnostics: !!diag.consent(cfg), readOnly: has('read-only') });
+    return S.view(dir, cfg, sched, now, { alerts: !!alerts.consent(cfg), diagnostics: !!diag.consent(cfg), readOnly: has('read-only'), channelProblems: channelProblems(cfg) });
   }
   throw new Error('usage: see the top of tools/status.js');
 }

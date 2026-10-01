@@ -627,6 +627,7 @@ function renderBrief(s) {
         not_tracked: 'is no longer tracked, so its original age cannot be recovered. If it is still outstanding it may be detected again as new, with a new age.',
         not_rejected: 'is not currently rejected, so there is nothing to restore.',
         ambiguous_prefix: 'is the start of more than one reference. Use more characters.',
+        set_aside: 'was set aside because the item could not be tied to one person, so it cannot be restored. If it is still outstanding it may be detected again as new, with a new age.',
         unknown_ref: 'is not a reference this ledger knows. Ask for the list of rejected items and use a reference from it.'
       }[x.reason] || 'could not be restored.'));
       return;

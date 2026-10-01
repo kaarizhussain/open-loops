@@ -119,6 +119,19 @@ function scopeProblems(scope, label) {
   return out;
 }
 
+var topLevelScope = function (k) { return '"' + k + '" at the top level of the config does nothing — it belongs inside "channels": {"' + k + '": [...]}'; };
+
+/* Everything wrong with the channel settings in a config file, in the words settings() uses: the "channels" object itself, however it is malformed, and scope
+ * keys written at the top level where they do nothing. The status view reports these instead of crashing on them. */
+function channelProblems(file) {
+  var out = [];
+  if (file && typeof file === 'object' && !Array.isArray(file)) {
+    if (file.channels !== undefined) out = scopeProblems(file.channels, '"channels"');
+    Object.keys(SCOPE_KEYS).forEach(function (k) { if (k in file) out.push(topLevelScope(k)); });
+  }
+  return out;
+}
+
 /* Everything the run needs, in one object, with the reasons a setup is unusable
  * reported together rather than one per attempt. */
 function settings(fs, configPath, run) {
@@ -126,8 +139,7 @@ function settings(fs, configPath, run) {
   var s = merge(DEFAULTS, file, run || {});
   var missing = scopeProblems(s.channels, '"channels"');
   Object.keys(SCOPE_KEYS).forEach(function (k) {
-    if (k in file) missing.push('"' + k + '" at the top level of the config does nothing — it belongs inside ' +
-      '"channels": {"' + k + '": [...]}');
+    if (k in file) missing.push(topLevelScope(k));
   });
   /* The shapes the rest of the run takes for granted. Every one of these used to pass --check-config and then crash the run partway. */
   ['mute', 'unmute'].forEach(function (k) {
@@ -159,4 +171,4 @@ function settings(fs, configPath, run) {
   return s;
 }
 
-module.exports = { configError: configError, DEFAULTS: DEFAULTS, merge: merge, loadConfig: loadConfig, settings: settings, scopeProblems: scopeProblems };
+module.exports = { configError: configError, DEFAULTS: DEFAULTS, merge: merge, loadConfig: loadConfig, settings: settings, scopeProblems: scopeProblems, channelProblems: channelProblems };

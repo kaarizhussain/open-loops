@@ -23,7 +23,8 @@ var MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct
 var md = function (d) { return d && /^\d{4}-\d{2}-\d{2}/.test(d) ? MONTH[+d.slice(5, 7) - 1] + ' ' + (+d.slice(8, 10)) : 'a date that was not recorded'; };
 var dayOf = function (iso) { var d = new Date(iso); return isNaN(d) ? null : d.toISOString().slice(0, 10); };
 
-var WHY = { not_tracked: 'no longer tracked', not_rejected: 'not currently rejected', ambiguous_prefix: 'more than one reference starts that way', unknown_ref: 'not a reference this ledger knows' };
+var ASIDE = /[|]ambiguous$/;
+var WHY = { set_aside: 'set aside, not restorable', not_tracked: 'no longer tracked', not_rejected: 'not currently rejected', ambiguous_prefix: 'more than one reference starts that way', unknown_ref: 'not a reference this ledger knows' };
 
 function main(argv) {
   var flag = function (k) { var i = argv.indexOf('--' + k); return i > -1 && argv[i + 1] !== undefined && argv[i + 1].indexOf('--') !== 0 ? argv[i + 1] : null; };
@@ -42,7 +43,8 @@ function main(argv) {
     var res = R.resolve(Object.assign({ id: '00000000' }, target), st, store);
     if (res.refuse) {
       return 'NOT QUEUED — ' + res.ref + ' ' + ({ unknown_ref: 'is not a reference this ledger knows (a digest this old is not remembered, or the number is past its list). Ask for the list of rejected items.',
-        ambiguous_prefix: 'is the start of more than one reference. Use more characters.' }[res.refuse]) + ' Nothing was queued.';
+        ambiguous_prefix: 'is the start of more than one reference. Use more characters.',
+        set_aside: 'was set aside because the item could not be tied to one person, so it cannot be restored.' }[res.refuse]) + ' Nothing was queued.';
     }
     var q = R.addRequest(dir, target, st.log, now, function (t) { var x = R.resolve(Object.assign({ id: '00000000' }, t), st, store); return x.key || null; });
     return (q.existing ? 'Restore already requested for ' + res.ref + ' (request ' + q.id + '). ' : 'Restore requested for ' + res.ref + ' (request ' + q.id + '). ') +
@@ -52,15 +54,21 @@ function main(argv) {
   if (has('list')) {
     var byKey = {};
     rows.forEach(function (r) { byKey[r[L.COL.key]] = r; });
-    var out = [], hidden = rows.filter(function (r) { return r[L.COL.verdict] === 'x'; }), unnamed = 0;
-    hidden.forEach(function (r) {
-      var ref = R.refOf(st.refs, r[L.COL.key]);
-      if (!ref) { unnamed++; return; }
+    var out = [], aside = [], asideNamed = 0, hidden = rows.filter(function (r) { return r[L.COL.verdict] === 'x'; }), unnamed = 0, unnamedAside = 0;
+    var line = function (ref, r) {
       var text = r[L.COL.what];
-      out.push('  ' + ref + '  rejection recorded ' + md(st.refs[ref].on) + ' · first seen ' + md(r[L.COL.first_seen]) + ' · ' + (text ? '"' + String(text).slice(0, 80) + '"' : r[L.COL.type] + ' (the ledger keeps no sentences)'));
+      return '  ' + ref + '  rejection recorded ' + md(st.refs[ref].on) + ' · first seen ' + md(r[L.COL.first_seen]) + ' · ' + (text ? '"' + String(text).slice(0, 80) + '"' : r[L.COL.type] + ' (the ledger keeps no sentences)');
+    };
+    hidden.forEach(function (r) {
+      var ref = R.refOf(st.refs, r[L.COL.key]), isAside = ASIDE.test(r[L.COL.key]);
+      if (!ref) { if (isAside) unnamedAside++; else unnamed++; return; }
+      if (isAside) { aside.push(line(ref, r) + ' — set aside: it could not be tied to one person, so it cannot be restored.'); return; }
+      out.push(line(ref, r));
     });
-    var lines = ['HIDDEN AS WRONG — ' + out.length];
+    var lines = ['HIDDEN AS WRONG — ' + out.length];      // what can be restored: set-aside records are listed below, with the reason, and not counted
     if (out.length) lines = lines.concat(out);
+    if (aside.length) lines = lines.concat(aside);
+    if (unnamedAside) lines.push('  ' + unnamedAside + (unnamedAside === 1 ? ' rejected record was set aside because it' : ' rejected records were set aside because they') + ' could not be tied to one person, and cannot be restored.');
     if (unnamed) lines.push('  ' + unnamed + (unnamed === 1 ? ' more was' : ' more were') + ' rejected before references existed: they get one at the next digest.');
     var reqs = R.loadRequests(dir);
     if (reqs.damaged) lines.push('', 'restores.json could not be read, so requests cannot be listed or queued until it is fixed.');

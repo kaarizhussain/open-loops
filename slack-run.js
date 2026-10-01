@@ -647,6 +647,8 @@ function mainInner(argv) {
   var rec = L.reconcileLegacy(rows, candidates, { legacyKey: loops.legacyKey, readsOk: readsOk,
     owner: function (row) { return identity.ownerOf(row, identitySalt); }, tokenOf: function (who) { return identity.token(identitySalt, who); } });
   store.migrateKeys(rec.renames);
+  // Records set aside (by identity, or as an ambiguous legacy row): their restore references and log follow them, so they can say what happened.
+  store.followKeys(Object.assign({}, ident.renamed, rec.setAside));
   var ambiguousLegacy = {};
   rec.ambiguous.forEach(function (a) { ambiguousLegacy[a.legacy] = 1; });
   var ambiguousReplies = Object.keys(replies.applied.reduce(function (o, k) { if (ambiguousLegacy[k]) o[k] = 1; return o; }, {})).length;

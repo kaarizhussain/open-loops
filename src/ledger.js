@@ -69,7 +69,7 @@ function isKnown(v) {
  * neither and preserved under "<legacy key>|ambiguous", which no live key can equal, so it is reported once
  * and never matched again. Rows are changed in place; the caller rewrites stored digest memos from .renames. */
 function reconcileLegacy(rows, candidates, o) {
-  var groups = {}, byKey = {}, out = { renames: {}, ambiguous: [], deferred: {}, unowned: [] };
+  var groups = {}, byKey = {}, out = { renames: {}, setAside: {}, ambiguous: [], deferred: {}, unowned: [] };
   candidates.forEach(function (c) {
     var lk = o.legacyKey(c.key);
     if (lk === c.key) return;
@@ -89,12 +89,12 @@ function reconcileLegacy(rows, candidates, o) {
     var own = o.owner ? o.owner(row) : null;
     if (own && own.state === 'unknown' && cell(row[COL.verdict])) {
       out.unowned.push({ legacy: lk, people: Math.max(1, Object.keys(groups[lk].people).length) });
-      row[COL.key] = lk + '|ambiguous';
+      row[COL.key] = lk + '|ambiguous'; out.setAside[lk] = row[COL.key];
       return;
     }
     if (qs.length > 1) {
       out.ambiguous.push({ legacy: lk, n: qs.length, channels: Object.keys(groups[lk].channels).sort(), verdict: cell(row[COL.verdict]) });
-      row[COL.key] = lk + '|ambiguous';
+      row[COL.key] = lk + '|ambiguous'; out.setAside[lk] = row[COL.key];
       return;
     }
     if (!o.readsOk) { out.deferred[lk] = 1; return; }

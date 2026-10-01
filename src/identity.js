@@ -53,6 +53,7 @@ function apply(rows, pairs, salt, tokenFn) {
     if (!g.people[n]) { g.people[n] = { norm: n, tok: tok(salt, n) }; g.order.push(n); }
   });
 
+  var renamed = {};      // rows set aside as K|ambiguous, from the key they had: what restore references have to follow
   Object.keys(groups).forEach(function (base) {
     var g = groups[base], people = g.order.map(function (n) { return g.people[n]; });
     // Different people with one token: never merged. The later one is told apart by a counter.
@@ -74,6 +75,7 @@ function apply(rows, pairs, salt, tokenFn) {
         var k = base + '|ambiguous';
         while (byKey[k]) k += '|ambiguous';
         delete byKey[base]; R[COL.key] = k; byKey[k] = R; R = null;
+        renamed[base] = k;
         if (report) { unowned.push({ base: base, people: people.length }); inert[k] = base; }
       };
       if (o.state === 'known') {
@@ -97,6 +99,7 @@ function apply(rows, pairs, salt, tokenFn) {
   });
 
   return {
+    renamed: renamed,
     resolve: function (base, who) { var g = assigned[base]; return g && g[norm(who)] ? g[norm(who)] : base; },
     unowned: unowned, inert: inert
   };

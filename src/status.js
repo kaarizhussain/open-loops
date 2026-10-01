@@ -548,13 +548,21 @@ function view(dir, cfg, sched, now, scope) {
   if (!sched && s.schedule && s.schedule.state === 'deleted') next = 'none — the digest task was deleted' + (s.schedule.deletedAt ? ' on ' + s.schedule.deletedAt : '') + '.';
   L('Next run', next);
 
-  var inc = (cfg.channels && cfg.channels.include) || [], exc = (cfg.channels && cfg.channels.exclude) || [];
-  var chans = inc.filter(function (x) { return !DM_NAME.test(x); }), dms = inc.filter(function (x) { return DM_NAME.test(x); });
-  L('Tracking', nameList(chans) || (dms.length ? 'no channels' : 'every channel it is handed (no include list is set)'));
-  var xs = exc.filter(function (x) { return !DM_NAME.test(x); });
-  if (xs.length) L('Not tracking', nameList(xs) + ' (excluded)');
-  L('Direct messages', 'your own DM (the digest and your replies)' +
-    (dms.length ? '; also ' + dms.join(', ') + ' (named in your config)' : '; no others are named in your config, so none are read'));
+  /* Channel settings that cannot be read are reported, every one of them, and the rest of the status is still shown: this is the view people open when
+   * something is wrong, so it must not be the thing that breaks on it. */
+  var problems = (scope && scope.channelProblems) || [];
+  if (problems.length) {
+    L('Tracking', 'the channel settings in your config cannot be read: ' + problems.join('.\n') + '.');
+    L('Direct messages', 'your own DM (the digest and your replies)');
+  } else {
+    var inc = (cfg.channels && cfg.channels.include) || [], exc = (cfg.channels && cfg.channels.exclude) || [];
+    var chans = inc.filter(function (x) { return !DM_NAME.test(x); }), dms = inc.filter(function (x) { return DM_NAME.test(x); });
+    L('Tracking', nameList(chans) || (dms.length ? 'no channels' : 'every channel it is handed (no include list is set)'));
+    var xs = exc.filter(function (x) { return !DM_NAME.test(x); });
+    if (xs.length) L('Not tracking', nameList(xs) + ' (excluded)');
+    L('Direct messages', 'your own DM (the digest and your replies)' +
+      (dms.length ? '; also ' + dms.join(', ') + ' (named in your config)' : '; no others are named in your config, so none are read'));
+  }
   var extra = [scope && scope.alerts ? 'Midday alerts on' : 'Midday alerts off',
                scope && scope.diagnostics ? 'Diagnostic reports on' : 'Diagnostic reports off'];
   out.push(extra.join(' · '));

@@ -111,6 +111,15 @@ function fileStore(file, sopts) {
     }
   };
 
+  /* What this run renamed since the day's snapshot, from the key the snapshot has to the key now. A rename of a key that is itself the result of an earlier
+   * one extends that chain (a -> b, then b -> c, is a -> c), so rolling back undoes every step in one. */
+  var recordRenames = function (renames) {
+    if (!state.before) return;
+    var ren = state.before.renames = state.before.renames || {}, isTarget = {};
+    Object.keys(ren).forEach(function (a) { isTarget[ren[a]] = a; });
+    Object.keys(renames).forEach(function (k) { if (isTarget[k] !== undefined) ren[isTarget[k]] = renames[k]; else ren[k] = renames[k]; });
+  };
+
   return {
     path: file,
 
@@ -211,14 +220,15 @@ function fileStore(file, sopts) {
 
     /* Legacy rows re-keyed by reconcileLegacy: an older digest's numbered list, and a reply reference's, name the old
      * key, and a reply to "1" would otherwise look for a row that is no longer there. In memory until the next flush. */
+    /* A record set aside as K|ambiguous keeps its restore reference, its log entries and its date: they follow the key. Digest memos are left as they were. */
+    followKeys: function (renames) {
+      recordRenames(renames);
+      Object.keys(state.restoreRefs).forEach(function (r) { var e = state.restoreRefs[r]; if (e && renames[e.key]) e.key = renames[e.key]; });
+      Object.keys(state.restoreLog).forEach(function (id) { var e = state.restoreLog[id]; if (e && e.key && renames[e.key]) e.key = renames[e.key]; });
+    },
+
     migrateKeys: function (renames) {
-      /* What this run renamed since the day's snapshot, from the key the snapshot has to the key now. A rename of a key that is itself the result of an earlier
-       * one extends that chain (a -> b, then b -> c, is a -> c), so rolling back undoes every step in one. */
-      if (state.before) {
-        var ren = state.before.renames = state.before.renames || {}, isTarget = {};
-        Object.keys(ren).forEach(function (a) { isTarget[ren[a]] = a; });
-        Object.keys(renames).forEach(function (k) { if (isTarget[k] !== undefined) ren[isTarget[k]] = renames[k]; else ren[k] = renames[k]; });
-      }
+      recordRenames(renames);
       var map = function (list) { return list.map(function (k) { return renames[k] || k; }); };
       Object.keys(state.digests).forEach(function (d) { state.digests[d] = map(state.digests[d]); });
       Object.keys(state.refs).forEach(function (r) { if (state.refs[r].keys) state.refs[r].keys = map(state.refs[r].keys); });

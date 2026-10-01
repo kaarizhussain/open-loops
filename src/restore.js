@@ -101,7 +101,7 @@ function mintRefs(store, rows, today) {
   rows.forEach(function (r) {
     if (L.cell(r[L.COL.verdict]) !== 'x') return;
     var key = L.cell(r[L.COL.key]);
-    if (!key || refOf(st.refs, key)) return;
+    if (!key || refOf(st.refs, key) || /[|]ambiguous$/.test(key)) return;      // a set-aside record keeps the reference it had and is given no new one
     var ref;
     do { ref = crypto.randomBytes(4).toString('hex'); } while (st.refs[ref]);
     st.refs[ref] = { key: key, on: today };
@@ -110,13 +110,15 @@ function mintRefs(store, rows, today) {
 
 function resolve(req, st, store) {
   if (req.ref) {
-    if (st.refs[req.ref]) return { key: st.refs[req.ref].key, ref: req.ref };
+    var aside = function (r) { return /[|]ambiguous$/.test(st.refs[r].key) ? { refuse: 'set_aside', ref: r } : { key: st.refs[r].key, ref: r }; };
+    if (st.refs[req.ref]) return aside(req.ref);
     var hits = Object.keys(st.refs).filter(function (r) { return r.indexOf(req.ref) === 0; });
-    if (hits.length === 1) return { key: st.refs[hits[0]].key, ref: hits[0] };
+    if (hits.length === 1) return aside(hits[0]);
     return { refuse: hits.length ? 'ambiguous_prefix' : 'unknown_ref', ref: req.ref };
   }
   var memo = store.recallRef ? store.recallRef(req.digest.ref) : null, key = memo && memo.keys ? memo.keys[req.digest.n - 1] : null;
   if (!key) return { refuse: 'unknown_ref', ref: req.digest.ref + '#' + req.digest.n };
+  if (!refOf(st.refs, key) && refOf(st.refs, key + '|ambiguous')) return { refuse: 'set_aside', ref: refOf(st.refs, key + '|ambiguous') };
   return { key: key, ref: refOf(st.refs, key) || req.digest.ref + '#' + req.digest.n };
 }
 
