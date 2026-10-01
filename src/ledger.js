@@ -472,8 +472,24 @@ function recall(found, quiet, checked, missed) {
  * 12 look fine" marks 12 as well. The digest asks for bare numbers, and a stray mark
  * costs one suppressed item that returns the moment the cell is cleared. Require a
  * leading keyword if that turns out to bite. */
+/* One mark, or one range of marks, that stands alone: not part of a date, a time, a fraction or a chain of numbers. */
+var RANGE_SEP = '(?:\\s*[-–—]\\s*|\\s+(?:to|through|thru)\\s+)';
+var STAND_ALONE = '(?![\\d\\-\\/:a-z]|\\.\\d)(?!\\s*[-–—\\/]\\s*\\d)';
+var TOKEN = new RegExp('(?<![\\d\\-\\/:]|\\d\\.)#?(\\d+)(?:' + RANGE_SEP + '#?(\\d+))?' + STAND_ALONE, 'gi');
+var LEAD = new RegExp('^\\s*#?(\\d+)(?:' + RANGE_SEP + '#?(\\d+))?' + STAND_ALONE, 'i');
+/* "all" and "everything" are not supported, on purpose: rejecting a whole list is what a paste looks like. They are reported, not applied. */
+var EVERYTHING = /^\s*(?:(?:reject|delete|remove|drop|clear|mark)\s+)?(?:all(?:\s+of\s+(?:them|these|it))?|everything)(?:\s+(?:is\s+)?(?:wrong|not real|false))?\s*[.!]*\s*$/i;
+/* A line made only of digits and separators that names no item and is not a date: "1/3" or "1-3-5" (every number an item, joined the wrong way),
+ * or bare numbers past the end of the list ("9" on a list of 8). "9/30" and "2026-08-25" have numbers that are not items, so they are dates. */
+function unsupportedShape(line, max) {
+  var t = line.trim();
+  if (!/^#?\d+(?:\s*[,;\s\/\-–—]\s*#?\d+)*\s*[.!]*$/.test(t)) return false;
+  var ns = (t.match(/\d+/g) || []).map(Number), seps = t.replace(/[\d#\s.!]/g, ''), inList = ns.every(function (n) { return n >= 1 && n <= max; });
+  return /^[,;]*$/.test(seps) ? !inList : inList;
+}
+
 function parseMarks(text, max) {
-  var wrong = [], knew = [], missed = [], ignored = [], seen = {}, seenLetter = {};
+  var wrong = [], knew = [], missed = [], ignored = [], unread = [], rangesWrong = [], rangesKnew = [], seen = {}, seenLetter = {};
   /* Whether the spot check was answered at all, which is not the same as whether it
    * named a miss. A bare `miss` means "none of these" and is the answer that makes the
    * clean ones count; no miss line at all means they did not look, and counting the
@@ -504,12 +520,25 @@ function parseMarks(text, max) {
     var known = /^\s*(k|knew|known|already)\b/i.test(line);
     var body = known ? line.replace(/^\s*(k|knew|known|already)\b/i, '') : line;
 
-    /* A digit glued to a letter is a time or a quantity, not an item number — "3pm",
-     * "2x", "5min". */
-    var nums = (body.match(/(?<![\d\-\/:]|\d\.)\d+(?![\d\-\/:a-z]|\.\d)/gi) || [])
-      .map(Number)
-      .filter(function (n) { return n >= 1 && n <= max; });
-    if (!nums.length) return;
+    /* A standalone number, or a range of them: "3", "1-3", "1 to 3". A digit glued to a letter is a time or a quantity, not an item number —
+     * "3pm", "2x", "5min" — and "1-3pm" is a time range, so neither end of it is read. A date or a fraction ("9/30", "2026-08-25") is digits joined
+     * by separators and is not read either, nor is a chain ("1-3-5"). */
+    /* `any`: a single number was named. Only that is reported when the line does not lead with it; a range in a note ("see pages 2-5") was never reported. */
+    var tokens = [], bad = false, any = false, m;
+    TOKEN.lastIndex = 0;
+    while ((m = TOKEN.exec(body))) {
+      var a = Number(m[1]), b = m[2] === undefined ? a : Number(m[2]);
+      if (m[2] === undefined) { if (a >= 1 && a <= max) { tokens.push([a, a]); any = true; } continue; }
+      /* A range is checked against the list BEFORE it is expanded, so "1-999999999" allocates nothing. A reversed one, or one that runs past the
+       * list, is not clamped to something that looks right: it is not read at all. */
+      if (a >= 1 && a <= b && b <= max) tokens.push([a, b]); else if (max) bad = true;    // with no list there is nothing to be out of range of
+    }
+    if (!tokens.length && !bad) {
+      /* Nothing here names an item, but the line may still be a correction that cannot be read: "all", or numbers that are not item numbers
+       * ("1/3", "9" on a list of 8). Reported, never applied. Ordinary conversation has words in it, so it is left alone. */
+      if (max && (EVERYTHING.test(line) || unsupportedShape(line, max))) unread.push(line.trim());
+      return;
+    }
 
     /* The line has to LEAD with the mark.
      *
@@ -525,18 +554,29 @@ function parseMarks(text, max) {
      * tomorrow is the reminder. So: lead with the number, as the digest asks. Anything
      * else is recorded and reported rather than acted on. */
     /* The lead has to BE a mark: a standalone number in range. "3pm call with Dana moved to 4" starts with a digit and is not one. */
-    var lead = body.match(/^\s*#?(\d+)(?![\d\-\/:a-z]|\.\d)/i);
-    if (!lead || +lead[1] < 1 || +lead[1] > max) { ignored.push(line.trim()); return; }
+    var lead = body.match(LEAD);
+    var leadsWithMark = lead && (lead[2] !== undefined || (+lead[1] >= 1 && +lead[1] <= max));
+    if (!leadsWithMark) {
+      if (any) ignored.push(line.trim());
+      else if (max && unsupportedShape(line, max)) unread.push(line.trim());    // "1 - 3 - 5": numbers only, joined in a way that is not a range
+      return;
+    }
+    /* One range that cannot be read makes the whole line unreadable: the numbers beside it are not applied on the strength of a line that was
+     * half understood. */
+    if (bad) { unread.push(line.trim()); return; }
 
-    nums.forEach(function (n) {
-      if (seen[n]) return;
-      seen[n] = 1;
-      (known ? knew : wrong).push(n);
+    tokens.forEach(function (tk) {
+      if (tk[0] < tk[1]) (known ? rangesKnew : rangesWrong).push(tk);
+      for (var n = tk[0]; n <= tk[1]; n++) {
+        if (seen[n]) continue;
+        seen[n] = 1;
+        (known ? knew : wrong).push(n);
+      }
     });
   });
   /* `ignored` is every line that named an item number but did not lead with one.
      Reported rather than acted on, so a reply that was not read never fails silently. */
-  return { wrong: wrong, knew: knew, missed: missed, ignored: ignored, answered: answered };
+  return { wrong: wrong, knew: knew, missed: missed, ignored: ignored, unread: unread, ranges: { wrong: rangesWrong, knew: rangesKnew }, answered: answered };
 }
 
 /* Resolve those numbers against the list as it was sent, not as it stands now —

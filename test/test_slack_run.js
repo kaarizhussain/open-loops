@@ -481,7 +481,7 @@ assert.strictEqual(pct(main(['--report', '--ledger', quietLedger]), 'Recall'),
 assert.deepStrictEqual(L.parseMarks('miss', 10).missed, [], 'bare "miss" flags nothing');
 assert.deepStrictEqual(L.parseMarks('miss b d', 10).missed, ['b', 'd']);
 assert.deepStrictEqual(L.parseMarks('3 7\nmiss a', 10),
-  { wrong: [3, 7], knew: [], missed: ['a'], ignored: [], answered: true },
+  { wrong: [3, 7], knew: [], missed: ['a'], ignored: [], unread: [], ranges: { wrong: [], knew: [] }, answered: true },
   'rejections and misses in one reply');
 
 /* --- answering the spot check, and not answering it ---

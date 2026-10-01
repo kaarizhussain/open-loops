@@ -586,8 +586,10 @@ function renderBrief(s) {
      * the reader an item had gone that was still there. */
     var took = [];
     var wrong = b.markedWrong != null ? b.markedWrong : b.marked, knew = b.markedKnew || 0;
-    if (wrong) took.push(wrong + ' marked not real, dropped for good');
-    if (knew) took.push(knew + ' marked already known');
+    /* A reply that used a range says which, so the reader sees what the range was taken to mean. */
+    var span = function (rs) { return rs && rs.length ? ' (' + rs.map(function (r) { return r[0] + '–' + r[1]; }).join(', ') + ')' : ''; };
+    if (wrong) took.push(wrong + ' marked not real' + span(b.markedRanges && b.markedRanges.wrong) + ', dropped for good');
+    if (knew) took.push(knew + ' marked already known' + span(b.markedRanges && b.markedRanges.knew));
     p('Took your last reply — ' + took.join(' · ') + '.');
   }
   /* A reply that named an item number but did not lead with it. Not acted on — "call
@@ -597,6 +599,12 @@ function renderBrief(s) {
   (b.ignoredReplies || []).slice(0, 3).forEach(function (line) {
     p('NOT READ AS A CORRECTION — "' + String(line).slice(0, 56) +
       '". Reply with just the number, like "3", to reject one.');
+  });
+  /* Lines that look like a correction and could not be read as one: "all", "1/3", a range that is reversed or runs past the list. Nothing on
+   * such a line was applied, and the reader is told, so they do not wait for a change that was never made. */
+  (b.unreadReplies || []).slice(0, 3).forEach(function (line) {
+    p('NOT READ AS A CORRECTION — "' + String(line).slice(0, 56) +
+      '". Reply with the numbers that are not real, like "3 7", or a range like "1-3".');
   });
   var w = warnings(s).length;
   if (w) p(w + (w === 1 ? ' read warning' : ' read warnings') + ' — in the thread.');

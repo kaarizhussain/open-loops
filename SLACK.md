@@ -223,7 +223,9 @@ real:
 They stop appearing, and the next digest opens with *"Took your last reply — 2 marked not
 real, dropped for good."* An acknowledgement matters more than it sounds: a correction that
 produces no visible response teaches you that corrections don't matter, and then you
-stop sending them.
+stop sending them. A run of numbers can be a range, `1-3` or `1 to 3`, meaning every item in it, and the acknowledgement says which
+(*"2 marked not real (1–2)"*). `all` is not supported, on purpose: a reply that looks like a correction but cannot be read as one is reported
+as *NOT READ AS A CORRECTION* and applies nothing, and a reply that would reject most of the list at once is not applied either.
 
 A line beginning with `k` means real-but-already-known:
 

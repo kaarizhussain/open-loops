@@ -18,7 +18,7 @@ var slack = read('SLACK.md'), skill = read('skills/open-loops/SKILL.md'), readme
 var flat = function (s) { return s.replace(/\s+/g, ' '); };
 
 // The acknowledgement: what the digest builds is what SLACK.md quotes.
-assert.ok(digestSrc.indexOf("' marked not real, dropped for good'") > -1, 'the digest still builds this wording');
+assert.ok(digestSrc.indexOf("' marked not real' + span(") > -1 && digestSrc.indexOf("', dropped for good'") > -1, 'the digest still builds this wording (a reply that used a range adds its range after \"not real\")');
 assert.ok(flat(slack).indexOf('Took your last reply — 2 marked not real, dropped for good.') > -1, 'SLACK.md quotes it');
 assert.ok(!/2 items marked wrong/.test(flat(slack)));
 
