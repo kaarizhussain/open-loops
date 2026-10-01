@@ -478,6 +478,9 @@ against, because that is now what the reader has seen. If the post failed or the
 do not run it: the next digest stages its own, and a check that finds no baseline skips instead of
 comparing against a list the reader never saw.
 
+If it refuses (exit 1), post what it printed under the digest, as the thread message below (its first line `OPEN LOOPS NOTES — for <YYYY-MM-DD>`, then the printed
+line), and do not try again with another reference: it says whether midday checks will use an earlier baseline or skip.
+
 Anything else you post under the digest — something that looked wrong, a source you
 fetched again — goes in the same thread, as one message whose first line is exactly
 `OPEN LOOPS NOTES — for <YYYY-MM-DD>`. The next run reads that thread for the reader's

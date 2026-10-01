@@ -196,7 +196,15 @@ function notes(o) {
     e.shown++; e.shownIn = o.ref;
     e.shownRefs = (e.shownRefs || []).filter(function (r) { return r !== o.ref; }).concat([o.ref]).slice(-KEEP_CARRIERS);
     /* What it says is what is true now: an item restored and rejected again, in this run or on any later day, stays hidden. */
-    out.push({ kind: e.state, reason: e.reason, ref: e.ref, firstSeen: e.firstSeen, superseded: e.superseded || (e.state === 'applied' && now[e.key] === 'x'), repeat: repeat,
+    /* The record was set aside (it could not be tied to one person). What the run can prove is which of today's listed items carry the same commitment: those whose key
+     * is its base key, or that base with a person on it. Nothing is said about age or a verdict having moved. */
+    var aside = e.state === 'applied' && !!e.key && /[|]ambiguous$/.test(e.key), matches = [];
+    if (aside) {
+      var base = e.key.replace(/([|]ambiguous)+$/, '');
+      // o.keys are the digest's open items, and a set-aside record is never one of them
+      o.keys.forEach(function (k, i) { if (k === base || k.indexOf(base + '|') === 0) matches.push(i + 1); });
+    }
+    out.push({ aside: aside, matches: matches, kind: e.state, reason: e.reason, ref: e.ref, firstSeen: e.firstSeen, superseded: e.superseded || (e.state === 'applied' && now[e.key] === 'x'), repeat: repeat,
       n: e.key ? o.keys.indexOf(e.key) + 1 || null : null });
   });
   out.more = more;

@@ -71,7 +71,7 @@ function cleanSchedule(o) {
 function cleanDelivered(o) {
   if (!isObj(o) || !validDate(o.date) || !validIso(o.at) || !(o.ref === null || o.ref === undefined || REF.test(o.ref))) return null;
   var r = isObj(o.read) && ['complete', 'incomplete', 'nothing', 'unknown'].indexOf(o.read.state) > -1 ? o.read : { state: 'unknown', why: [] };
-  return { value: { date: o.date, at: o.at, ref: o.ref || null, read: { state: r.state, why: strs(r.why, 6) }, channels: strs(o.channels, 12),
+  return { value: { date: o.date, at: o.at, startedAt: validIso(o.startedAt) ? o.startedAt : undefined, ref: o.ref || null, read: { state: r.state, why: strs(r.why, 6) }, channels: strs(o.channels, 12),
     conversations: num(o.conversations), messages: num(o.messages), meetings: num(o.meetings), windowDays: num(o.windowDays) }, dropped: 0 };
 }
 function cleanAttempt(o) {
@@ -417,7 +417,7 @@ function end(dir, o, now) {
   if (c.cause === 'ledger') a.fetched = true;    // the ledger is read only after Slack was fetched
   if (c.outcome === 'delivered') {
     var st = readJson(stagedFile(dir)), ok = o.ref && st.ref === o.ref;
-    s.delivered = { date: a.date, at: at, ref: o.ref || null,
+    s.delivered = { date: a.date, at: at, startedAt: a.startedAt, ref: o.ref || null,
       read: ok ? st.read : { state: 'unknown', why: [] },
       channels: ok ? st.channels || [] : [], conversations: ok ? st.conversations : null,
       messages: ok ? st.messages : null, meetings: ok ? st.meetings : null, windowDays: ok ? st.windowDays : null };
@@ -427,9 +427,10 @@ function end(dir, o, now) {
     try { save(dir, s, now); } catch (e) { if (e.persist) e.result = { outcome: 'delivered', notice: null }; throw e; }
     return { outcome: 'delivered', done: false, notice: null, superseded: !!sup };
   }
-  /* A replaced attempt that failed, when a later attempt for the same date has a confirmed delivery: there is nothing to tell. A delivery from before the replaced
-   * attempt began does not count, nor does one for another date. */
-  if (sup && s.delivered && s.delivered.date === a.date && Date.parse(s.delivered.at) > Date.parse(a.startedAt)) {
+  /* A replaced attempt that failed, when a LATER attempt for the same date has a confirmed delivery: there is nothing to tell. It is the delivering attempt that has to
+   * have begun later. Its delivery being confirmed after the replaced one began proves nothing: an earlier attempt can end after a later one starts. A record that
+   * does not say when its attempt began cannot prove it, and does not count; nor does one for another date. */
+  if (sup && s.delivered && s.delivered.date === a.date && s.delivered.startedAt && Date.parse(s.delivered.startedAt) > Date.parse(a.startedAt)) {
     var covered = { date: s.delivered.date, ref: s.delivered.ref || null };
     s.superseded = s.superseded.filter(function (x) { return x.id !== o.id; });
     try { save(dir, s); } catch (e) { if (e.persist) e.result = { outcome: c.outcome, notice: null, covered: covered }; throw e; }

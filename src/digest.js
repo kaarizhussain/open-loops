@@ -633,7 +633,16 @@ function renderBrief(s) {
       return;
     }
     var lead = x.repeat ? 'Restored earlier — the digest that said so may not have reached you. ' : '';
-    if (x.superseded) p(lead + 'You restored an item and then rejected it again, so it stays hidden.');
+    if (x.aside) {
+      var shownMatches = x.matches.filter(function (n) { return shownN[n]; }), more = x.matches.length - shownMatches.length;
+      var numbers = function (ns) { return ns.length === 1 ? 'item ' + ns[0] : 'items ' + ns.slice(0, -1).join(', ') + ' and ' + ns[ns.length - 1]; };
+      var tail = !x.matches.length ? 'Nothing for this commitment is listed today. That does not mean it is resolved.'
+        : !shownMatches.length ? 'The same commitment has ' + x.matches.length + ' matching ' + (x.matches.length === 1 ? 'item' : 'items') + ', not shown in this digest.'
+        : 'The same commitment is listed below as matching ' + numbers(shownMatches) + (more ? ', and ' + more + ' more not shown in this digest' : '') + '.';
+      p(x.repeat ? lead + 'The record' + seen + ' could not be tied to one person and was set aside. ' + tail
+                 : 'Restore applied to its record' + seen + ', but the record could not be tied to one person, so it was set aside. ' + tail);
+    }
+    else if (x.superseded) p(lead + 'You restored an item and then rejected it again, so it stays hidden.');
     else if (x.n && !shownN[x.n]) p(x.repeat ? lead + 'It keeps its original age' + seen + ', but it is not shown in this digest. It remains tracked.' : 'Restore applied — it keeps its original age' + seen + ', but it is not shown in this digest. It remains tracked.');
     else if (x.n) p(x.repeat ? lead + 'It is back as item ' + x.n + ' and keeps its original age' + seen + '.' : 'Restored 1 item you had rejected — it is back as item ' + x.n + ' and keeps its original age' + seen + '.');
     else p(lead + 'Restore applied to its record' + seen + ', but the commitment is not in what was read today, so it is not listed. That does not mean it is resolved — it will be listed if it shows up in a read.');

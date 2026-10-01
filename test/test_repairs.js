@@ -114,12 +114,27 @@ var d4 = tmp(), a4 = attempts(d4), q1 = a4.begin('18:00'); a4.begin('18:30');
 assert.ok(/^OPEN LOOPS NOT RUN/.test(a4.end(q1, FAIL, '19:00')));
 // A delivery that began before the replaced attempt but ended after it: judged by when it was confirmed, which is later: covered. One confirmed before it began is not.
 var d5 = tmp(), a5 = attempts(d5), s1 = a5.begin('18:00'), s2 = a5.begin('18:30');
-fs.writeFileSync(path.join(d5, 'status.json'), JSON.stringify(Object.assign(JSON.parse(fs.readFileSync(path.join(d5, 'status.json'), 'utf8')), { delivered: { date: '2026-10-01', at: new Date(2026, 9, 1, 17, 59).toISOString(), ref: 'abcd' } })));
+fs.writeFileSync(path.join(d5, 'status.json'), JSON.stringify(Object.assign(JSON.parse(fs.readFileSync(path.join(d5, 'status.json'), 'utf8')), { delivered: { date: '2026-10-01', startedAt: new Date(2026, 9, 1, 17, 58).toISOString(), at: new Date(2026, 9, 1, 17, 59).toISOString(), ref: 'abcd' } })));
 assert.ok(/^OPEN LOOPS NOT RUN/.test(a5.end(s1, FAIL, '19:00')), 'confirmed a minute before it began: not covered');
 // A delivery with no recorded reference is still a delivery.
 var d6 = tmp(), a6 = attempts(d6), t1 = a6.begin('18:00'); a6.begin('18:30');
-fs.writeFileSync(path.join(d6, 'status.json'), JSON.stringify(Object.assign(JSON.parse(fs.readFileSync(path.join(d6, 'status.json'), 'utf8')), { delivered: { date: '2026-10-01', at: new Date(2026, 9, 1, 19, 0).toISOString() } })));
+fs.writeFileSync(path.join(d6, 'status.json'), JSON.stringify(Object.assign(JSON.parse(fs.readFileSync(path.join(d6, 'status.json'), 'utf8')), { delivered: { date: '2026-10-01', startedAt: new Date(2026, 9, 1, 18, 30).toISOString(), at: new Date(2026, 9, 1, 19, 0).toISOString() } })));
 assert.strictEqual(a6.end(t1, FAIL, '19:05'), 'ATTEMPT REPLACED — a later attempt for 2026-10-01 delivered, so no failure notice is needed.');
+// A delivery that does not say when its attempt began cannot prove it was a later attempt: not covered.
+var d6b = tmp(), a6b = attempts(d6b), w1 = a6b.begin('18:00'); a6b.begin('18:30');
+fs.writeFileSync(path.join(d6b, 'status.json'), JSON.stringify(Object.assign(JSON.parse(fs.readFileSync(path.join(d6b, 'status.json'), 'utf8')), { delivered: { date: '2026-10-01', at: new Date(2026, 9, 1, 19, 0).toISOString(), ref: 'abcd' } })));
+assert.ok(/^OPEN LOOPS NOT RUN/.test(a6b.end(w1, FAIL, '19:05')), 'a delivery that does not say when its attempt began proves nothing');
+// An EARLIER attempt that finishes after the replaced attempt has started is not a later attempt, however late its delivery is confirmed.
+var d9 = tmp(), a9 = attempts(d9), early1 = a9.begin('17:00'), replaced = a9.begin('18:00'), latest = a9.begin('18:30');
+assert.ok(/^DELIVERED — recorded\. \(Attempt/.test(a9.end(early1, OK, '18:10')), 'the earlier attempt delivers at 18:10, after the replaced one started at 18:00');
+assert.strictEqual(S.load(d9).delivered.at > new Date(2026, 9, 1, 18, 0).toISOString(), true, 'its delivery was confirmed after the replaced attempt began');
+var notCovered = a9.end(replaced, FAIL, '18:20');
+assert.ok(/^OPEN LOOPS NOT RUN — for 2026-10-01/.test(notCovered), 'but the delivering attempt began at 17:00, before the replaced one: its notice is still needed: ' + notCovered);
+// The same layout where the delivering attempt did begin later: covered.
+var d10 = tmp(), a10 = attempts(d10), x1 = a10.begin('17:00'), x2 = a10.begin('18:00'), x3 = a10.begin('18:30');
+assert.ok(/^DELIVERED/.test(a10.end(x3, OK, '18:40')));
+assert.strictEqual(a10.end(x2, FAIL, '18:50'), COVERED, 'a later attempt that did deliver covers it');
+assert.strictEqual(S.load(d10).delivered.startedAt, new Date(2026, 9, 1, 18, 30).toISOString(), 'the record keeps when the delivering attempt began');
 // If it cannot be recorded, the answer is still given, with the persistence failure.
 var d7 = tmp(), a7 = attempts(d7), u1 = a7.begin('18:00'), u2 = a7.begin('18:30'); a7.end(u2, OK, '19:00');
 var e7 = failing(function () { return caught(function () { a7.end(u1, FAIL, '19:05'); }); });

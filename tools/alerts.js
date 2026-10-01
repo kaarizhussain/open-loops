@@ -71,8 +71,14 @@ function main(argv) {
   }
   if (has('baseline')) {
     var b = A.promoteBaseline(dir, flag('ref'));
-    return b ? 'Baseline recorded for the digest of ' + b.date + '.'
-      : 'Nothing staged for that ref: no baseline was written.';
+    if (b) return 'Baseline recorded for the digest of ' + b.date + '.';
+    /* Refused. What the midday checks will do now depends on the baseline that is already there, so it is looked at, not assumed: a usable one, a file that
+     * cannot be read, or none. The checks skip when there is no usable baseline (A.decide). */
+    var earlier = A.load(dir).baseline, present = fs.existsSync(A.baselineFile(dir));
+    var text = 'Nothing staged for that ref: no baseline was written' + (earlier ? '. Midday checks will compare against the earlier baseline, from the digest of ' + earlier.date + '.'
+      : present ? ', and the earlier baseline could not be read. Midday checks will skip until a digest writes one.'
+      : ', and there is no usable earlier baseline. Midday checks will skip until a digest writes one.');
+    var refusal = new Error(text); refusal.stdout = text; refusal.exitCode = 1; throw refusal;
   }
   if (has('confirm')) {
     var id = flag('id');
@@ -89,7 +95,10 @@ function main(argv) {
 
 if (require.main === module) {
   try { console.log(main(process.argv.slice(2))); }
-  catch (e) { console.error('alerts: ' + e.message); process.exit(e && e.exitCode || 1); }    // 3: a configuration that cannot be used, as in every other tool
+  catch (e) {
+    if (e && e.stdout) console.log(e.stdout); else console.error('alerts: ' + e.message);
+    process.exit(e && e.exitCode || 1);
+  }    // 3: a configuration that cannot be used, as in every other tool
 }
 
 module.exports = { main: main, consentText: consentText };

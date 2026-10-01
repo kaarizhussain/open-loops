@@ -149,6 +149,7 @@ main([write(base('2026-09-01')), '--ledger', path.join(dir, 'shape-old.json')]);
 /* ---- 6. The baseline is written only once the digest is posted and read back ---- */
 (function () {
   var A = require('../src/alerts.js'), cli = require('../tools/alerts.js');
+  var refusedText = function (c, args) { try { return c.main(args); } catch (e) { return e.stdout || String(e.message); } };
   var d = fs.mkdtempSync(path.join(os.tmpdir(), 'openloops-base-'));
   var cfg = path.join(d, 'openloops.config.json');
   fs.writeFileSync(cfg, JSON.stringify({ you: ME, ledger: path.join(d, 'ledger.json'), spotCheck: 0 }));
@@ -161,19 +162,19 @@ main([write(base('2026-09-01')), '--ledger', path.join(dir, 'shape-old.json')]);
   assert.ok(!fs.existsSync(baseFile), 'a digest run only prints the digest: a post that never lands must not move the baseline');
   var ref = refOf(text);
   assert.ok(ref, 'precondition: the digest carries a ref');
-  assert.ok(/Nothing staged/.test(cli.main(['--baseline', '--ref', 'ffff', '--config', cfg])), 'a ref that is not the staged digest promotes nothing');
+  assert.ok(/Nothing staged/.test(refusedText(cli, ['--baseline', '--ref', 'ffff', '--config', cfg])), 'a ref that is not the staged digest promotes nothing');
   assert.ok(!fs.existsSync(baseFile));
   assert.ok(/Baseline recorded/.test(cli.main(['--baseline', '--ref', ref, '--config', cfg])), 'the read-back digest promotes its own baseline');
   var v1 = A.load(d).baseline;
   assert.strictEqual(v1.date, '2026-09-30');
-  assert.ok(/Nothing staged/.test(cli.main(['--baseline', '--ref', ref, '--config', cfg])), 'and once: the staged copy is consumed');
+  assert.ok(/Nothing staged/.test(refusedText(cli, ['--baseline', '--ref', ref, '--config', cfg])), 'and once: the staged copy is consumed');
   assert.deepStrictEqual(A.load(d).baseline, v1);
 
   // The next digest is drafted but never posted: the old baseline stands.
   var text2 = main([write(base('2026-10-01')), '--config', cfg]);
   assert.deepStrictEqual(A.load(d).baseline, v1, 'an unposted digest leaves the last posted baseline in place');
   // A stale staged copy cannot be promoted under the earlier digest's ref.
-  assert.ok(/Nothing staged/.test(cli.main(['--baseline', '--ref', ref, '--config', cfg])));
+  assert.ok(/Nothing staged/.test(refusedText(cli, ['--baseline', '--ref', ref, '--config', cfg])));
   assert.ok(/Baseline recorded/.test(cli.main(['--baseline', '--ref', refOf(text2), '--config', cfg])));
   assert.strictEqual(A.load(d).baseline.date, '2026-10-01');
   assert.notStrictEqual(A.load(d).baseline.version, v1.version, 'every posted digest is a new version');
