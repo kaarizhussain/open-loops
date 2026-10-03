@@ -60,7 +60,7 @@ function readConversation(conversation, opts) {
     if (!Array.isArray(conversation.pages) || 'text' in conversation || 'messages' in conversation) {
       throw new Error('Supply pages, messages or text for a Slack conversation, not a mixture');
     }
-    var byId = {}, suspect = false;
+    var byId = {}, suspect = false, unparsed = 0;
     conversation.pages.forEach(function (page) {
       if (!page || typeof page !== 'object' || 'pages' in page ||
           (!('text' in page) && !('messages' in page))) {
@@ -68,11 +68,13 @@ function readConversation(conversation, opts) {
       }
       var got = readConversation(page, opts);
       if (got.suspect) suspect = true;
+      unparsed += got.unparsed || 0;
       got.forEach(function (m) { byId[m.id] = m; });
     });
     var merged = Object.keys(byId).map(function (id) { return byId[id]; })
       .sort(function (a, b) { return Number(a.id) - Number(b.id); });
     Object.defineProperty(merged, "suspect", { value: suspect });
+    Object.defineProperty(merged, "unparsed", { value: unparsed });
     return merged;
   }
   if (Object.prototype.hasOwnProperty.call(conversation, 'messages')) {

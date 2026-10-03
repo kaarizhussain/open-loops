@@ -365,10 +365,11 @@ node <checkout>/tools/dm-lookup.js --page <that file> --number <page number, fro
 ```
 
 It prints `FOUND ts=… date=… ref=…` (the digest to start from: stop), `NEXT` (read the next page, using the cursor in
-`pagination_info`, and run it again with the next number), or one of `NONE`, `CAPPED` and `UNKNOWN`, which end the search, each
+`pagination_info`, and run it again with the next number), or one of `NONE`, `CAPPED`, `UNKNOWN` and `UNREADABLE`, which end the search, each
 with a `dmLookup:` line to copy into the input as `dmLookup`. `NONE` means the whole DM history was read and holds no
 earlier digest, which is what a first run looks like, and nothing is wrong. `CAPPED` (ten pages, none found, more remains),
-`UNKNOWN` (the connector gave no pagination evidence, so whether more history exists cannot be told) and a read that
+`UNKNOWN` (the connector gave no pagination evidence, so whether more history exists cannot be told), `UNREADABLE` (a message
+on the page could not be parsed, and it may be the digest; its line is `dmLookup: failed`) and a read that
 failed (`dm-lookup.js --failed` prints its `dmLookup: failed` line) all mean the earlier digest could not be located. The
 digest then says so; it is never treated as a first run. Always pass `dmLookup`, and say in your summary when it is not
 `found` or `searched_none`.
@@ -390,7 +391,7 @@ The thread reads — each digest, its details, and any replies typed under it �
 `dmThread`: a list, one entry per thread read, each with its digest's `Message TS` as
 `root`. The channel read — replies typed straight into the DM since, and on a re-run
 today's digest itself — is `dm`; it is often empty, and that is fine. If the
-lookup ended `NONE`, `CAPPED`, `UNKNOWN` or failed, pass the first page of the
+lookup ended `NONE`, `CAPPED`, `UNKNOWN`, `UNREADABLE` or failed, pass the first page of the
 lookup read as `dm`, add the thread of any digest dated today to `dmThread`, and
 otherwise leave `dmThread` out.
 

@@ -17,7 +17,8 @@
  *   CAPPED                    not found in MAX_PAGES pages, with more history remaining
  *   UNKNOWN                   not found, and the connector gave no pagination evidence, so whether more history exists
  *                             is not known
- * and, on the ones that end the search, a `dmLookup:` line to copy into the run input. CAPPED, UNKNOWN and a failed
+ *   UNREADABLE                a message on the page could not be parsed, so it may be the digest: the search ends there
+ * and, on the ones that end the search, a `dmLookup:` line to copy into the run input. CAPPED, UNKNOWN, UNREADABLE and a failed
  * read (`--failed`) mean the earlier digest could not be located; the digest then says so rather than reading as a first run.
  * No network and no Slack. */
 var fs = require('fs');
@@ -43,6 +44,9 @@ function main(argv) {
   var source = { channel: 'DM', pages: [page] };
   var messages = readConversation(source, { channel: 'DM', tzOffset: cfg.tzOffset || 0,
     self: String(cfg.you || 'unknown@localhost').toLowerCase(), selfUid: cfg.selfUid || cfg.selfDm });
+  /* A message that could not be parsed may be the digest being looked for, so no answer from this page can be trusted —
+   * not NONE, and not an older FOUND either, since the lost one may be newer. */
+  if (messages.unparsed) return 'UNREADABLE — a message on this page could not be parsed, and it may be the earlier digest.\ndmLookup: failed';
   var best = null;
   messages.forEach(function (m) {
     var h = String(m.body || '').match(DIGEST_HEADER);

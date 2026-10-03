@@ -133,7 +133,8 @@ node "<checkout>/tools/dm-lookup.js" --page "<page.json>" --number <n> --today <
 ```
 
 Start at page 1. Follow the connector cursor and increment `n` only on `NEXT`.
-Stop on `FOUND`, `NONE`, `CAPPED` (ten pages), or `UNKNOWN`. Use `--failed` if
+Stop on `FOUND`, `NONE`, `CAPPED` (ten pages), `UNKNOWN`, or `UNREADABLE` (a message
+on the page could not be parsed; it prints `dmLookup: failed`). Use `--failed` if
 the DM read fails. Copy the returned `dmLookup:` value into the input's `dmLookup`
 field: `found`, `searched_none`, `capped`, `cannot_page`, or `failed`. `NONE` means
 the history was fully searched with no earlier digest; capped, failed or unsupported

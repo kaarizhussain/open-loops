@@ -457,6 +457,8 @@ function mainInner(argv) {
     var read = coverage(source, cut, cfg.tzOffset);
     if (!got.length && !emptyResponse(source)) {
       read = { state: 'unknown', reason: 'the response could not be parsed' };
+    } else if (got.unparsed) {
+      read = { state: 'unknown', reason: got.unparsed + ' message' + (got.unparsed === 1 ? '' : 's') + ' could not be parsed' };
     }
     // Duplicate source entries cannot override an uncertain fetch. Pages belong in pages[].
     if (!sourceCoverage[key] || sourceCoverage[key].state === 'complete') sourceCoverage[key] = read;
@@ -569,6 +571,8 @@ function mainInner(argv) {
       var got = readConversation(src, opts);
       var txt = dmTextOf(src);
       if (!got.length && txt.replace(DM_HEADER_LINE, '').trim() && !/Message TS:/.test(txt)) dmUnreadable = true;   // text, and nothing in it that is a message
+      /* A "Message TS:" line is not a message: one whose timestamp cannot be read is a correction that was not read. */
+      if (got.unparsed) dmUnreadable = true;
       return got;
     } catch (e) { dmUnreadable = true; return []; }
   };

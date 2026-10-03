@@ -93,7 +93,7 @@ var SYSTEM = /\b(?:has joined the channel|has left the channel|set the channel (
 function parseChannel(text, opts) {
   opts = opts || {};
   var lines = String(text || '').split(/\r?\n/);
-  var out = [], cur = null;
+  var out = [], cur = null, unparsed = 0;
 
   /* The email on a banner is optional — Slack only returns one when the token holds
    * users:read.email and the account has an address set, so guests, app messages and
@@ -127,6 +127,9 @@ function parseChannel(text, opts) {
     var tsOk = !!cur.ts && isFinite(parseFloat(cur.ts)) &&
       !isNaN(new Date(Math.floor(parseFloat(cur.ts) * 1000) + (opts.tzOffset || 0) * 60000).getTime());
     // Drop empties and Slack's own housekeeping notices.
+    /* A message with something to say and no usable timestamp is a message lost, not an empty one. Counted, so the
+     * read that dropped it cannot claim to be complete: one good greeting beside it used to make the read look whole. */
+    if (!tsOk && body && !SYSTEM.test(body)) unparsed++;
     if (tsOk && body && !SYSTEM.test(body)) {
       out.push({
         id: cur.ts,
@@ -210,6 +213,7 @@ function parseChannel(text, opts) {
   }
   // Not enumerable: the result stays a plain list of messages to anything comparing it.
   Object.defineProperty(result, "suspect", { value: same > 0 || (down > 0 && up > 0) });
+  Object.defineProperty(result, "unparsed", { value: unparsed });
   return result;
 }
 
