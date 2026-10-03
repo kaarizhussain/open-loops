@@ -424,7 +424,8 @@ function mainInner(argv) {
   var widenedStore = input.storeText === true && cfg.storeText === false;
   var self = cfg.you;
   var reportDir = path.dirname(path.resolve(configPath));
-  outbox.prune(reportDir, cfg);    // diagnostics off: anything still queued is discarded, never sent
+  // diagnostics off: anything still queued is discarded, never sent. A preview leaves the outbox as it found it.
+  if (argv.indexOf('--dry') === -1) outbox.prune(reportDir, cfg);
   var today = flag('today', input.today || new Date().toISOString().slice(0, 10));
   if (!status.validDate(today)) throw new Error('--today must be a real date like 2026-09-30, got "' + today + '".');
   var store = fileStore(flag('ledger', cfg.ledger), { noSalt: argv.indexOf('--check') > -1 });
@@ -963,6 +964,7 @@ function queueReports(dir, cfg, replies, rows) {
 /* A crash, as a report: where in our code and the error's class — never its message.
  * A config that cannot be read has no consent in it, so that crash is not reported. */
 function queueCrash(argv, e) {
+  if (argv.indexOf('--dry') > -1) return;    // a preview is not a run, and its failure is not reported as one
   try {
     var i = argv.indexOf('--config'), configPath = i > -1 && argv[i + 1] ? argv[i + 1] : 'openloops.config.json';
     var cfg = loadConfig(fs, configPath);

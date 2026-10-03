@@ -553,7 +553,7 @@ recorded before any notice is posted, so a notice that cannot be posted never lo
 it. A preview posts no notice. The scheduler marking a run "succeeded" only means the session ended; it says nothing
 about whether a digest posted, which is what this record is for.
 
-**Last, every run, pass or fail:**
+**Last, every real run, pass or fail** (a preview with `--dry` skips this: it sends, queues and prunes nothing):
 
 ```bash
 node <checkout>/tools/report.js --send --config <working dir>/openloops.config.json

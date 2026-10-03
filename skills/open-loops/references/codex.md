@@ -385,10 +385,13 @@ show its exact words; this prints the question without recording consent. On a y
 run `node "<checkout>/tools/report.js" --consent --yes --host codex --config "<config>"`.
 Someone set up earlier opts in the same way, only when they ask: `--consent` alone prints the
 question and records nothing.
-End every run, pass or fail, with `tools/report.js --send` (plus `--failed <stage>` on a
-failure), and share an example only through "When a report needs more detail".
-For diagnostics, configuration (exit 3) and ledger (exit 4) failures use the
-existing `runner` stage; keep their local exit codes and explanations distinct.
+End every authorized real run, pass or fail, with `tools/report.js --send` (plus
+`--failed <stage>` on a failure), and share an example only through "When a report needs
+more detail". A preview (`--dry`) skips this step entirely: it sends, queues and prunes
+nothing. `report.js` takes its own stage names, not the status ones; translate:
+`config` → `runner`, `ledger` → `runner`, `fetch` → `fetch_slack` or `fetch_calendar`
+(whichever read failed), `build` → `runner`, `post` → `post`, `verify` → `readback`.
+A failed `git pull` is `pull`. Keep local exit codes and explanations distinct.
 
 ## Scheduling in Codex
 

@@ -63,5 +63,5 @@ assert.ok(procedure.indexOf("stderr's `post:` line") > -1, 'unsaved notices reta
 assert.ok(procedure.indexOf('attempt that began later') > -1, 'a later delivery timestamp alone cannot suppress a notice');
 assert.ok(procedure.indexOf('When the ledger cannot be read') > -1, 'explicit recovery uses the shared preservation procedure');
 assert.ok(procedure.indexOf('Do not retry with another reference.') > -1, 'baseline refusal does not trigger a different promotion');
-assert.ok(procedure.indexOf('existing `runner` stage') > -1, 'diagnostics stay within the consented stage vocabulary');
+assert.ok(procedure.replace(/\s+/g, ' ').indexOf('`config` → `runner`, `ledger` → `runner`') > -1, 'diagnostics stay within the consented stage vocabulary (the full mapping: test_preview_diagnostics.js)');
 console.log('Codex status and diagnostic disclosure: OK');
