@@ -10,15 +10,26 @@ function install(destination, opts) {
   var root = path.resolve(__dirname, '..');
   var target = path.resolve(destination || path.join(
     process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'skills', 'open-loops'));
-  if (fs.existsSync(target)) {
-    if (!(opts && opts.update)) {
-      throw new Error('Skill directory already exists: ' + target + '. Run with --update to replace it, keeping the old copy beside it.');
-    }
-    // Instructions and runner stay one version: replace the copy, never merge into it.
-    fs.renameSync(target, target + '.bak-' + new Date().toISOString().replace(/[:.]/g, '-'));
+  var exists = fs.existsSync(target);
+  if (exists && !(opts && opts.update)) {
+    throw new Error('Skill directory already exists: ' + target + '. Run with --update to replace it, keeping the old copy beside it.');
   }
-  fs.cpSync(path.join(root, 'skills', 'open-loops'), target, { recursive: true, errorOnExist: true, force: false });
-  fs.writeFileSync(path.join(target, 'local.json'), JSON.stringify({ checkout: root }, null, 2) + '\n');
+  /* Instructions and runner stay one version: replace the copy, never merge into it. The replacement is built complete
+   * beside the live copy, and the live one moves aside only then — it used to move first, so a copy that failed (a full
+   * disk) left no installed skill at all. A swap that fails puts the old one back. */
+  var stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  var fresh = target + '.new-' + stamp, backup = target + '.bak-' + stamp;
+  try {
+    fs.cpSync(path.join(root, 'skills', 'open-loops'), fresh, { recursive: true, errorOnExist: true, force: false });
+    fs.writeFileSync(path.join(fresh, 'local.json'), JSON.stringify({ checkout: root }, null, 2) + '\n');
+  } catch (e) { fs.rmSync(fresh, { recursive: true, force: true }); throw e; }
+  if (exists) fs.renameSync(target, backup);
+  try { fs.renameSync(fresh, target); }
+  catch (e) {
+    if (exists) fs.renameSync(backup, target);
+    fs.rmSync(fresh, { recursive: true, force: true });
+    throw e;
+  }
   return target;
 }
 
