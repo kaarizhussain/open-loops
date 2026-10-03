@@ -166,18 +166,11 @@ is inaccurate, but because it is identical. So what changed rides on the counts 
 a day with old and new items mixed each item says `NEW` or how long it has sat, and
 anything that dropped off is reported once as cleared.
 
-### Seeing it without installing it
+### How it was built
 
-The text above is the product. This is **not** — it is a browser page that runs the same
-detector over an invented mailbox, so the reasoning can be poked at without connecting
-anything. Nobody who installs the skill sees this screen; it exists because a ranked list
-is easier to argue with when you can click a row and read why it fired.
-
-[![The demo page — the same detector over an invented mailbox](docs/screenshot.png)](https://kaarizhussain.github.io/open-loops/)
-
-**[▶ Try it](https://kaarizhussain.github.io/open-loops/)** — a synthetic CRO's Thursday.
-Click any row for the sentence that triggered it, the rule that fired, and a drafted chase
-note. Every name in it is fictional.
+**[▶ The case study](https://kaarizhussain.github.io/open-loops/)** — a short, clickable
+walk through the decisions, the data, and the mistakes that became rules. The screens in it
+are re-created from a real run on a test workspace.
 
 ## How it works
 
@@ -364,7 +357,7 @@ npx skills add kaarizhussain/open-loops
 Ask Claude to set up Open Loops with its connected Slack tools. See the
 [Claude Slack workflow](SLACK.md) for the setup and daily run instructions.
 
-### Run the code and demo
+### Run the code
 
 No dependencies, no install, no API keys.
 
@@ -372,26 +365,10 @@ No dependencies, no install, no API keys.
 git clone https://github.com/kaarizhussain/open-loops.git
 cd open-loops
 npm test              # every suite
-node build.js         # rebuilds index.html (downloads fonts on first run)
 ```
-
-`index.html` is committed, so you can also just open it in a browser. `npm test` fails if
-it has drifted behind `src/`, because a demo that silently ships an old detector is worse
-than no demo — that happened, and it is the page most people see.
-
-The screenshot at the top is the same page, captured headless. It goes stale the same way
-and nothing checks it, so re-run this when the layout changes:
-
-```bash
-chrome --headless --hide-scrollbars --force-device-scale-factor=2 \
-  --window-size=1440,900 --screenshot=docs/screenshot.png \
-  "file://$PWD/index.html#present"
-```
-
-`#present` suppresses the guided tour, which otherwise covers the app it is touring.
 
 The tests live in `test/` and are the documentation for how each part is meant to fail:
-`test.js` for the detector against the demo fixture, `test_slack.js` and `test_store.js`
+`test.js` for the detector against the invented fixture, `test_slack.js` and `test_store.js`
 for the adapters, `test_ledger.js` for what the digest remembers between runs,
 `test_digest.js` for the rendering, `test_slack_run.js` for the whole Slack path end to
 end, `test_channel.js` for a channel with several people in it, and `test_replay.js` and
@@ -447,5 +424,4 @@ its threshold is right.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Embedded fonts are SIL OFL 1.1; see
-[fonts/NOTICE.md](fonts/NOTICE.md).
+MIT — see [LICENSE](LICENSE).

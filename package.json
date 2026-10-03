@@ -3,8 +3,7 @@
   "version": "1.0.0",
   "description": "Finds the commitments nobody is chasing in Slack and the calendar, and tells an assistant which is closest to falling over.",
   "scripts": {
-    "test": "node test/run.js",
-    "build": "node build.js"
+    "test": "node test/run.js"
   },
   "keywords": ["executive-assistant", "email", "calendar", "commitment-tracking", "productivity"],
   "license": "MIT",

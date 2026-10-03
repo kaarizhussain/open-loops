@@ -324,10 +324,7 @@ function meta(l, nm, ctx) {
  * Not every item gets one. A promise of your own that is not yet late needs doing, not
  * announcing, and an agenda needs writing rather than mentioning — offering a draft
  * there would be suggesting a message instead of the work.
- *
- * ponytail: the demo page carries its own richer variant with a subject line and
- * formatted dates, because it renders into a copy button rather than one digest line.
- * Two implementations, and they will drift; fold them together if a third appears. */
+ */
 function draft(l) {
   var late = l.status === 'overdue' || l.status === 'due_today';
   /* The type says who wrote the message; the owner says who owes. "Dana will review the
