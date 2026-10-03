@@ -128,12 +128,20 @@ function mainInner(argv, err) {
     return st.schedule && st.schedule.state !== 'deleted' ? st.schedule.taskId : 'NONE';
   }
   if (has('show')) {
-    var cfg = loadConfig(fs, configPath);
+    /* The status record lives beside the config and does not depend on it: this is the view people open when something is
+     * wrong, so a config that cannot be read is reported in it rather than hiding the delivery history. */
+    var cfg = null, configProblem = null;
+    try { cfg = loadConfig(fs, configPath); }
+    catch (e) {
+      if (e.exitCode !== 3) throw e;
+      configProblem = e.message.replace(/\s*Fix it rather than deleting it[\s\S]*$/, '').replace(/\.$/, '');
+    }
     if (!has('read-only')) S.repair(dir, now);
     var sched = has('paused') ? { paused: true } : flag('next') ? { next: flag('next') } : null;
     /* What the scheduler says is what the task is: record a pause or a resume the reader made in the app, so the days it
      * was off are not counted as missed. Nothing is recorded when the scheduler could not be read. */
     if (!has('read-only') && sched && S.load(dir).schedule) S.setScheduleState(dir, sched.paused ? 'paused' : 'resumed', now);
+    if (configProblem) return S.view(dir, {}, sched, now, { readOnly: has('read-only'), configProblem: configProblem });
     return S.view(dir, cfg, sched, now, { alerts: !!alerts.consent(cfg), diagnostics: !!diag.consent(cfg), readOnly: has('read-only'), channelProblems: channelProblems(cfg) });
   }
   throw new Error('usage: see the top of tools/status.js');

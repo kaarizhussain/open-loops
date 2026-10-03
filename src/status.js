@@ -561,7 +561,10 @@ function view(dir, cfg, sched, now, scope) {
   /* Channel settings that cannot be read are reported, every one of them, and the rest of the status is still shown: this is the view people open when
    * something is wrong, so it must not be the thing that breaks on it. */
   var problems = (scope && scope.channelProblems) || [];
-  if (problems.length) {
+  if (scope && scope.configProblem) {
+    L('Tracking', 'the configuration cannot be read: ' + scope.configProblem + '. Fix it rather than deleting it.');
+    L('Direct messages', 'your own DM (the digest and your replies)');
+  } else if (problems.length) {
     L('Tracking', 'the channel settings in your config cannot be read: ' + problems.join('.\n') + '.');
     L('Direct messages', 'your own DM (the digest and your replies)');
   } else {
@@ -573,7 +576,8 @@ function view(dir, cfg, sched, now, scope) {
     L('Direct messages', 'your own DM (the digest and your replies)' +
       (dms.length ? '; also ' + dms.join(', ') + ' (named in your config)' : '; no others are named in your config, so none are read'));
   }
-  var extra = [scope && scope.alerts ? 'Midday alerts on' : 'Midday alerts off',
+  var extra = scope && scope.configProblem ? ['Midday alerts unknown', 'Diagnostic reports unknown'] :
+              [scope && scope.alerts ? 'Midday alerts on' : 'Midday alerts off',
                scope && scope.diagnostics ? 'Diagnostic reports on' : 'Diagnostic reports off'];
   out.push(extra.join(' · '));
   out.push('');

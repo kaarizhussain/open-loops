@@ -194,7 +194,7 @@ var ok = show({ channels: { include: ['#ops', 'DM with Lena H'], exclude: ['#soc
 assert.ok(/Tracking {16}#ops\n/.test(ok) && /Not tracking {12}#social \(excluded\)/.test(ok) && /also DM with Lena H \(named in your config\)/.test(ok), ok);
 assert.ok(!/cannot be read/.test(ok));
 assert.ok(/every channel it is handed/.test(show({})), 'and no include list is still said so');
-// A config that is not an object is still exit 3, from the same loader as the run.
-assert.throws(function () { show(null, 'null'); }, function (e) { return e.exitCode === 3 && /must hold a JSON object/.test(e.message); });
+// A config that is not an object is refused by the same loader as the run; the view names it and still shows the history (test_status_bad_config.js).
+assert.ok(/the configuration cannot be read: the config file must hold a JSON object, got null\. Fix it/.test(show(null, 'null')));
 
 console.log('set aside and status: OK');
