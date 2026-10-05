@@ -14,4 +14,18 @@ function retry(fn) {
   }
 }
 
-module.exports = { retry: retry };
+/* Write a file so that a reader, or a crash, sees the old content or the new, whole: into a file of its own beside it, then renamed over. A plain
+ * writeFileSync truncates first, so a run killed midway leaves the user's config, or the report queue, half written. */
+function writeAtomic(f, text) {
+  var fs = require('fs');
+  var tmp = f + '.' + process.pid + '.' + require('crypto').randomBytes(3).toString('hex') + '.tmp';
+  try {
+    fs.writeFileSync(tmp, text);
+    retry(function () { fs.renameSync(tmp, f); });
+  } catch (e) {
+    try { fs.unlinkSync(tmp); } catch (ignore) { /* only this write's own file */ }
+    throw e;
+  }
+}
+
+module.exports = { retry: retry, writeAtomic: writeAtomic };

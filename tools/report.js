@@ -19,6 +19,7 @@ var crypto = require('crypto');
 var D = require('../src/diagnostics.js');
 var outbox = require('../src/outbox.js');
 var { loadConfig } = require('../src/config.js');
+var { writeAtomic } = require('../src/busy.js');
 var { fileStore } = require('../src/store.js');
 var L = require('../src/ledger.js');
 
@@ -90,7 +91,7 @@ function consent(configPath, host) {
     install: crypto.randomUUID(), salt: crypto.randomBytes(32).toString('hex'),
     consentedAt: new Date().toISOString(), host: host === 'codex' ? 'codex' : 'claude'
   };
-  fs.writeFileSync(configPath, JSON.stringify(raw, null, 2) + '\n');
+  writeAtomic(configPath, JSON.stringify(raw, null, 2) + '\n');
   return raw.diagnostics.install;
 }
 
@@ -119,7 +120,7 @@ function draftExample(dir, cfg, ledgerPath, n) {
              text: scrub(text).slice(0, 800) };
   ex = fitExample(ex);
   if (!D.exact(ex)) return { error: 'Item ' + n + ' cannot be sent as an example.' };
-  fs.writeFileSync(path.join(dir, 'example-draft.json'), JSON.stringify(ex, null, 2) + '\n');
+  writeAtomic(path.join(dir, 'example-draft.json'), JSON.stringify(ex, null, 2) + '\n');
   return { example: ex };
 }
 

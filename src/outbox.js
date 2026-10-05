@@ -12,6 +12,7 @@ var path = require('path');
 var crypto = require('crypto');
 var cp = require('child_process');
 var D = require('./diagnostics.js');
+var { writeAtomic } = require('./busy.js');
 
 var MAX = 20, MAX_AGE_DAYS = 14, MAX_TRIES = 7;
 
@@ -28,7 +29,7 @@ function read(dir) {
 
 function write(dir, entries) {
   var f = files(dir).outbox;
-  if (entries.length) fs.writeFileSync(f, JSON.stringify(entries, null, 2) + '\n');
+  if (entries.length) writeAtomic(f, JSON.stringify(entries, null, 2) + '\n');
   else if (fs.existsSync(f)) fs.unlinkSync(f);
 }
 

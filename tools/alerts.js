@@ -18,6 +18,7 @@ var fs = require('fs');
 var path = require('path');
 var A = require('../src/alerts.js');
 var { loadConfig } = require('../src/config.js');
+var { writeAtomic } = require('../src/busy.js');
 
 /* The question, exactly as SKILL.md words it — one copy, so this cannot drift from it. */
 function consentText() {
@@ -35,7 +36,7 @@ function consentText() {
 function writeConfig(configPath, alerts) {
   var raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   raw.alerts = alerts;
-  fs.writeFileSync(configPath, JSON.stringify(raw, null, 2) + '\n');
+  writeAtomic(configPath, JSON.stringify(raw, null, 2) + '\n');
 }
 
 function main(argv) {
