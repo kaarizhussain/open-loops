@@ -503,7 +503,12 @@ function mainInner(argv) {
       var ts = m.id;
       tag(m, c.channel);
       byId[m.id] = m;
-      if (m.hasThread) roots[slot(c.channel, ts)] = c.channel;   // has replies a channel read omits
+      if (m.hasThread) roots[slot(c.channel, ts)] = { channel: c.channel, count: m.replyCount || 0 };   // has replies a channel read omits
+    });
+    /* A root with nothing detectable in it (a mention, a bot post, a deleted file) is not a commitment, but its replies may hold one. Its text
+     * is not proof that its replies are empty, so the thread is owed a fetch like any other (the digest says so if it was never fetched). */
+    (got.dropped || []).forEach(function (x) {
+      if (x.hasThread) roots[slot(c.channel, x.id)] = { channel: c.channel, count: x.replyCount || 0 };
     });
   });
 
@@ -533,7 +538,15 @@ function mainInner(argv) {
     if (repliesRead.suspect) orderSuspect.push(t.channel + ' thread ' + t.root);
     var read = recordCoverage(t, t.root + '@' + t.channel, repliesRead, t.channel,
       t.channel + ' thread ' + t.root);
-    if (repliesRead.length) delete roots[slot(t.channel, t.root)];
+    /* A thread read repeats its root, so a read that holds only the root has not read the replies. The replies accounted for are every other message
+     * in it, including ones with nothing detectable in them, against the count the channel read gave for the root; a thread read that falls short
+     * stays unread, and the digest says so. (No count known: any reply at all.) */
+    var seenTs = {};
+    repliesRead.forEach(function (m) { seenTs[m.ts] = 1; });
+    (repliesRead.dropped || []).forEach(function (x) { seenTs[x.id] = 1; });
+    delete seenTs[t.root];
+    var accounted = Object.keys(seenTs).length, owed = roots[slot(t.channel, t.root)];
+    if (accounted > 0 && accounted >= ((owed && owed.count) || 1)) delete roots[slot(t.channel, t.root)];
     if (!repliesRead.length) unread.push(t.channel + ' thread ' + t.root);
   });
 

@@ -93,7 +93,7 @@ var SYSTEM = /\b(?:has joined the channel|has left the channel|set the channel (
 function parseChannel(text, opts) {
   opts = opts || {};
   var lines = String(text || '').split(/\r?\n/);
-  var out = [], cur = null, unparsed = 0;
+  var out = [], cur = null, unparsed = 0, dropped = [];
 
   /* The email on a banner is optional — Slack only returns one when the token holds
    * users:read.email and the account has an address set, so guests, app messages and
@@ -130,6 +130,10 @@ function parseChannel(text, opts) {
     /* A message with something to say and no usable timestamp is a message lost, not an empty one. Counted, so the
      * read that dropped it cannot claim to be complete: one good greeting beside it used to make the read look whole. */
     if (!tsOk && body && !SYSTEM.test(body)) unparsed++;
+    /* A message with a timestamp and nothing detectable in it is not content, but it can still be the root of a thread: dropping it whole made a
+     * mention-only or bot root's replies invisible, and the digest said "Nothing outstanding" without ever listing the thread as unread. What was
+     * dropped is kept, with its reply count, for the caller to account for. */
+    if (tsOk && !(body && !SYSTEM.test(body))) dropped.push({ id: cur.ts, hasThread: !!cur.hasThread, replyCount: cur.replyCount || 0 });
     if (tsOk && body && !SYSTEM.test(body)) {
       out.push({
         id: cur.ts,
@@ -147,6 +151,7 @@ function parseChannel(text, opts) {
         // Marks a root whose replies a channel read does not include — fetching them
         // is a separate call the caller has to make.
         hasThread: !!cur.hasThread,
+        replyCount: cur.replyCount || 0,
         subject: opts.channel || 'Slack',
         // The display name, only so that "Lena — can you…" can be tied to Lena's address.
         fromName: cur.name || null,
@@ -185,7 +190,7 @@ function parseChannel(text, opts) {
 
     var t = line.match(TS_LINE);
     if (t && !cur.ts) { cur.ts = t[1]; return; }
-    if (THREAD_NOTE.test(line)) { cur.hasThread = true; return; }
+    if (THREAD_NOTE.test(line)) { cur.hasThread = true; cur.replyCount = parseInt(line.match(/\d+/)[0], 10); return; }
     if (SENT_VIA.test(line)) return;                  // the app's own footer, not content
     if (ATTACH_LINE.test(line)) { cur.attach = true; cur.files = line; return; }
 
@@ -214,6 +219,7 @@ function parseChannel(text, opts) {
   // Not enumerable: the result stays a plain list of messages to anything comparing it.
   Object.defineProperty(result, "suspect", { value: same > 0 || (down > 0 && up > 0) });
   Object.defineProperty(result, "unparsed", { value: unparsed });
+  Object.defineProperty(result, "dropped", { value: dropped });
   return result;
 }
 

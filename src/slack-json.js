@@ -8,7 +8,7 @@ function parseMessages(messages, opts) {
   opts = opts || {};
   if (!Array.isArray(messages)) throw new Error('Slack messages must be an array');
   var users = opts.users || {};
-  return messages.map(function (m, i) {
+  var all = messages.map(function (m, i) {
     /* Two shapes Slack really sends that are not a truncated read: a bot posts with a bot_id and no
      * user, and a bot or a file share can carry no text at all. A user's message with no text is still
      * refused — that one can only be a cut-off fetch. */
@@ -42,7 +42,9 @@ function parseMessages(messages, opts) {
       id: m.ts,
       threadId: thread || opts.channel || 'slack',
       stream: !thread,
-      hasThread: Number(m.reply_count) > 0,
+      /* Slack puts thread_ts on a parent once it has replies, whether or not this read carries the count. */
+      hasThread: Number(m.reply_count) > 0 || (m.reply_count === undefined && !opts.threadId && m.thread_ts === m.ts),
+      replyCount: Number(m.reply_count) > 0 ? Number(m.reply_count) : 0,
       subject: opts.channel || 'Slack',
       fromName: profile.name || null,
       from: String(profile.email || (user === opts.selfUid && opts.self) || (user + '@slack.local')).toLowerCase(),
@@ -51,8 +53,15 @@ function parseMessages(messages, opts) {
       body: body,
       attach: !!(files && files.length)
     };
-  }).filter(function (m) { return m.body && !slack.SYSTEM.test(m.body); })   // the text path drops join/leave notices too
+  });
+  var usable = function (m) { return m.body && !slack.SYSTEM.test(m.body); };
+  var result = all.filter(usable)   // the text path drops join/leave notices too
     .sort(function (a, b) { return Number(a.id) - Number(b.id); });
+  /* What was dropped, with whether it heads a thread: see the same note in slack.js. */
+  Object.defineProperty(result, 'dropped', { value: all.filter(function (m) { return !usable(m); }).map(function (m) {
+    return { id: m.id, hasThread: m.hasThread, replyCount: m.replyCount };
+  }) });
+  return result;
 }
 
 function readConversation(conversation, opts) {
@@ -60,7 +69,7 @@ function readConversation(conversation, opts) {
     if (!Array.isArray(conversation.pages) || 'text' in conversation || 'messages' in conversation) {
       throw new Error('Supply pages, messages or text for a Slack conversation, not a mixture');
     }
-    var byId = {}, suspect = false, unparsed = 0;
+    var byId = {}, suspect = false, unparsed = 0, dropped = [];
     conversation.pages.forEach(function (page) {
       if (!page || typeof page !== 'object' || 'pages' in page ||
           (!('text' in page) && !('messages' in page))) {
@@ -69,12 +78,14 @@ function readConversation(conversation, opts) {
       var got = readConversation(page, opts);
       if (got.suspect) suspect = true;
       unparsed += got.unparsed || 0;
+      dropped = dropped.concat(got.dropped || []);
       got.forEach(function (m) { byId[m.id] = m; });
     });
     var merged = Object.keys(byId).map(function (id) { return byId[id]; })
       .sort(function (a, b) { return Number(a.id) - Number(b.id); });
     Object.defineProperty(merged, "suspect", { value: suspect });
     Object.defineProperty(merged, "unparsed", { value: unparsed });
+    Object.defineProperty(merged, "dropped", { value: dropped });
     return merged;
   }
   if (Object.prototype.hasOwnProperty.call(conversation, 'messages')) {
