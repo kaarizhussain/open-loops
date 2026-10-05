@@ -837,9 +837,7 @@ function mainInner(argv) {
   var SLACK_LIMIT = 4000, FENCE = 8;      // the ``` wrapper the digest is posted inside
   var text, listCap = 12;
   // Two messages now — the brief and its thread reply — so each has to fit on its own.
-  var longest = function (t) {
-    return Math.max.apply(null, t.split(digest.SPLIT).map(function (x) { return x.trim().length; }));
-  };
+  var longest = longestPart;
   do {
     text = renderAt(listCap);
     listCap = listCap > 4 ? listCap - 4 : listCap - 1;
@@ -986,4 +984,11 @@ if (require.main === module) {
   }
 }
 
-module.exports = { queueCrash: queueCrash, main: main, marksFromDm: marksFromDm, inScope: inScope, nameMatches: nameMatches, DIGEST_HEADER: DIGEST_HEADER };
+/* The longest of the digest's posted parts, which are separated by a line holding only digest.SPLIT. A commitment may quote that text mid-sentence,
+ * so it is the line that separates, never the substring: splitting on the substring cut a long part into short fragments and measured it as short. */
+function longestPart(t) {
+  var line = new RegExp('^' + digest.SPLIT + '$', 'm');    // the marker is plain text with no regex metacharacters
+  return Math.max.apply(null, String(t).split(line).map(function (x) { return x.trim().length; }));
+}
+
+module.exports = { longestPart: longestPart, queueCrash: queueCrash, main: main, marksFromDm: marksFromDm, inScope: inScope, nameMatches: nameMatches, DIGEST_HEADER: DIGEST_HEADER };
