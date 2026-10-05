@@ -43,8 +43,10 @@ var TS_LINE = /^Message TS:\s*([\d.]+)\s*$/;
  * A thread root carries "Thread: 2 replies (latest: …)" — a count, not an id, and
  * the replies themselves are not in a channel read at all. So it marks that a thread
  * exists and nothing more; fetching it is a separate call. */
-var SENT_VIA = /^\s*\*?Sent (?:using|via)\*?\s/i;
-var THREAD_NOTE = /^\s*Thread:\s*\d+\s+repl/i;
+/* Only the connector's own shape: the bold marker and ONE app after it (a mention, or a name). A line somebody typed that happens to begin "Sent using" is text, and
+ * dropping it dropped the whole message when it was the only thing of substance (adversarial review 2026-10-05, A4). */
+var SENT_VIA = /^\s*\*Sent (?:using|via)\*\s+(?:<@[A-Z0-9]+(?:\|[^>]*)?>|\S+)\s*$/i;
+var THREAD_NOTE = /^\s*Thread:\s*\d+\s+repl(?:y|ies)\s*\(latest:[^)]*\)\s*$/i;    // "Thread: 2 replies (latest: …)", whole line: "Thread: 3 replies are due Friday" is a sentence
 var ATTACH_LINE = /^(?:Files?|Attachments?)\s*:/i;
 
 /* Slack writes links, mentions and channel refs as angle-bracket spans. Left in
@@ -79,7 +81,9 @@ function stamp(ts, offsetMinutes) {
  * body — which is what this did — it also matched a sentence that merely mentions one,
  * and the match discards the message whole: "Sana has joined the channel, so I'll send
  * her the onboarding pack Thursday" is a commitment that was disappearing entirely. */
-var SYSTEM = /\b(?:has joined the channel|has left the channel|set the channel (?:purpose|topic)|pinned a message|added an integration)\s*[.!]?$/i;
+/* The notice must be the WHOLE message: who it is about (a mention, or up to three words) and then the notice. An end-anchored phrase still matched a real sentence that
+ * merely ends with one ("I will send the contract tomorrow after Sana has joined the channel"), and a match discards the message whole (adversarial review 2026-10-05, A2). */
+var SYSTEM = /^(?:(?:<@[A-Z0-9]+(?:\|[^>]*)?>|[^\s<>]+(?: [^\s<>]+){0,2})\s+)?(?:(?:has joined|has left) the channel\s*[.!]?|(?:set the channel (?:purpose|topic)|pinned a message|added an integration)\b.*)$/i;
 
 /* Parse one channel or DM read.
  *
@@ -192,7 +196,9 @@ function parseChannel(text, opts) {
     if (t && !cur.ts) { cur.ts = t[1]; return; }
     if (THREAD_NOTE.test(line)) { cur.hasThread = true; cur.replyCount = parseInt(line.match(/\d+/)[0], 10); return; }
     if (SENT_VIA.test(line)) return;                  // the app's own footer, not content
-    if (ATTACH_LINE.test(line)) { cur.attach = true; cur.files = line; return; }
+    /* A "Files:" line is the upload marker only when nothing has been said yet in the message. After other text it is more text: a sentence that begins "Files:" and follows a
+     * greeting was being consumed as an attachment and lost from the body (adversarial review 2026-10-05, A4). */
+    if (ATTACH_LINE.test(line) && !cur.body.some(function (b) { return b.trim(); })) { cur.attach = true; cur.files = line; return; }
 
     cur.body.push(line);
   });

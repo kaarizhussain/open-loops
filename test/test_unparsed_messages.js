@@ -40,7 +40,9 @@ assert.ok(out.indexOf('#deals: 2 messages could not be parsed') > -1, 'two lost 
 // A clean read, and a join notice with no timestamp, are unchanged.
 out = run({ conversations: [{ channel: '#deals', text: good, complete: true }] });
 assert.ok(out.indexOf('could not be parsed') === -1 && out.indexOf('INCOMPLETE') === -1, 'a clean read says nothing');
-out = run({ conversations: [{ channel: '#deals', text: good + NL + msg('invalid', '<@U0EXAMPLE002|Lena H> has joined the channel'), complete: true }] });
+// (a notice with no timestamp line at all: with a broken one, the junk line is part of the body and it is no longer the whole message)
+var noTs = '=== Message from Alex Rivera <' + ME + '> (U0EXAMPLE001) at now ===' + NL + '<@U0EXAMPLE002|Lena H> has joined the channel';
+out = run({ conversations: [{ channel: '#deals', text: good + NL + noTs, complete: true }] });
 assert.ok(out.indexOf('could not be parsed') === -1, 'a housekeeping notice is not a lost message');
 
 /* ------------------------------ a DM read that lost a message is a correction not read ------------------------------ */

@@ -4,8 +4,31 @@
  */
 var slack = require('./slack.js');
 
+/* Slack's own housekeeping messages say what they are in `subtype`. That, and a body that is only the notice (slack.SYSTEM), is what marks one: a phrase
+ * inside an ordinary message does not (adversarial review 2026-10-05, A2). */
+var NOTICE_SUBTYPES = { channel_join: 1, channel_leave: 1, channel_purpose: 1, channel_topic: 1, channel_name: 1, channel_archive: 1, channel_unarchive: 1,
+  pinned_item: 1, unpinned_item: 1, bot_add: 1, bot_remove: 1 };
+
+/* Everything a message says in places other than `text`: attachments (a bot's whole message is often one) and rich-text blocks. Collected, never edited. */
+function otherText(m) {
+  var out = [];
+  var walk = function (x, depth) {
+    if (!x || depth > 8) return;
+    if (Array.isArray(x)) { x.forEach(function (y) { walk(y, depth + 1); }); return; }
+    if (typeof x !== 'object') return;
+    Object.keys(x).forEach(function (k) {
+      if (typeof x[k] === 'string' && /^(?:text|fallback|pretext|title)$/.test(k) && x[k].trim()) out.push(x[k]);
+      else if (x[k] && typeof x[k] === 'object') walk(x[k], depth + 1);
+    });
+  };
+  walk(m.attachments, 0);
+  walk(m.blocks, 0);
+  return out;
+}
+
 function parseMessages(messages, opts) {
   opts = opts || {};
+  var unparsed = 0;
   if (!Array.isArray(messages)) throw new Error('Slack messages must be an array');
   var users = opts.users || {};
   var all = messages.map(function (m, i) {
@@ -37,6 +60,13 @@ function parseMessages(messages, opts) {
       throw new Error('Invalid email for Slack user ' + user);
     }
     var body = slack.cleanText(text) || slack.cleanText((files || []).map(function (f) { return f.name; }).join('\n'));
+    /* No text and no file: what it says may be in its attachments or blocks. A message that has them and yields nothing could not be read, and is counted
+     * so the read does not claim to be whole; one with no such structure at all is simply empty. */
+    if (!body && (m.attachments || m.blocks)) {
+      body = slack.cleanText(otherText(m).join(String.fromCharCode(10)));
+      if (!body && [].concat(m.attachments || [], m.blocks || []).length > 0) unparsed++;
+    }
+    if (NOTICE_SUBTYPES[m.subtype]) body = '';
     var thread = opts.threadId || m.thread_ts;
     return {
       id: m.ts,
@@ -58,6 +88,7 @@ function parseMessages(messages, opts) {
   var result = all.filter(usable)   // the text path drops join/leave notices too
     .sort(function (a, b) { return Number(a.id) - Number(b.id); });
   /* What was dropped, with whether it heads a thread: see the same note in slack.js. */
+  Object.defineProperty(result, 'unparsed', { value: unparsed });
   Object.defineProperty(result, 'dropped', { value: all.filter(function (m) { return !usable(m); }).map(function (m) {
     return { id: m.id, hasThread: m.hasThread, replyCount: m.replyCount };
   }) });
