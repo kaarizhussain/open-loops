@@ -23,6 +23,19 @@ var { fileStore } = require('../src/store.js');
 var L = require('../src/ledger.js');
 
 var TIMEOUT_MS = 5000;
+// The report server refuses a request longer than this (MAX_BYTES in report-worker/worker.mjs; test_example_size.js keeps them equal).
+var MAX_REQUEST = 1024;
+
+/* The server limit is on the request as sent, JSON-escaped, so 800 characters of quotes or newlines (1800 sent) were accepted into a draft the
+ * server then refused with 413, and re-sending the unchanged draft refused it again. The sentence is trimmed until the whole request fits. */
+function fitExample(ex) {
+  var t = ex.text;
+  while (t.length && JSON.stringify(Object.assign({}, ex, { text: t })).length > MAX_REQUEST) {
+    t = t.slice(0, -1);
+    if (/[\uD800-\uDBFF]$/.test(t)) t = t.slice(0, -1);    // never end on half a surrogate pair
+  }
+  return Object.assign({}, ex, { text: t });
+}
 
 // Tests point this at a local server, or set it empty to mean "no server" — never the real one.
 function endpoint() {
@@ -104,6 +117,7 @@ function draftExample(dir, cfg, ledgerPath, n) {
              version: outbox.version(), date: new Date().toISOString().slice(0, 10),
              signal: key.split('|')[0], first_seen: L.cell(row[L.COL.first_seen]),
              text: scrub(text).slice(0, 800) };
+  ex = fitExample(ex);
   if (!D.exact(ex)) return { error: 'Item ' + n + ' cannot be sent as an example.' };
   fs.writeFileSync(path.join(dir, 'example-draft.json'), JSON.stringify(ex, null, 2) + '\n');
   return { example: ex };
@@ -114,6 +128,7 @@ async function sendExample(dir, cfg) {
   var ex = JSON.parse(fs.readFileSync(f, 'utf8'));
   var c = D.consent(cfg);
   if (!c || ex.install !== c.install || !D.exact(ex)) return 'Not sent: the draft is invalid or from an earlier consent.';
+  if (JSON.stringify(ex).length > MAX_REQUEST) return 'Not sent: the draft is larger than the server accepts once escaped. Draft it again with --example <n>.';
   if (!endpoint()) return 'Not sent: no report server set yet.';
   var status = await post('/example', ex).catch(function () { return 0; });
   if (status >= 200 && status < 300) {
@@ -167,4 +182,4 @@ if (require.main === module) {
     function (e) { console.error('report: ' + e.message); if (e && e.usage) process.exitCode = 1; });    // a refused argument is a mistake in the call; a report that cannot go still never fails the run
 }
 
-module.exports = { consentText: consentText, main: main, send: send, consent: consent, scrub: scrub, draftExample: draftExample };
+module.exports = { fitExample: fitExample, MAX_REQUEST: MAX_REQUEST, consentText: consentText, main: main, send: send, consent: consent, scrub: scrub, draftExample: draftExample };

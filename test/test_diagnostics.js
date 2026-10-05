@@ -240,6 +240,25 @@ var server = http.createServer(function (req, res) {
   assert.strictEqual(bodies[0].url, '/example');
   assert.strictEqual(report.scrub('mail a.b@c.co or <@U0ABCDEFGH>, U0C1JCK7B6X, CONTRACTS'), 'mail person@example.com or @someone, SLACK_ID, CONTRACTS');
 
+  /* The server's limit is on the request as sent, JSON-escaped (adversarial review 2026-10-05). 800 quote characters are valid, and sent they are 1800: the server
+   * answered 413 and the unchanged draft was refused again on every retry. The draft is now trimmed until the request fits, and an oversized draft is not sent. */
+  var workerLimit = Number(/MAX_BYTES = (\d+)/.exec(fs.readFileSync(path.join(__dirname, '..', 'report-worker', 'worker.mjs'), 'utf8'))[1]);
+  assert.strictEqual(report.MAX_REQUEST, workerLimit, 'the sender and the server agree on the limit');
+  var Lg = require('../src/ledger.js'), saved = JSON.parse(fs.readFileSync(ledger, 'utf8'));
+  saved.rows.forEach(function (r) { r[Lg.COL.what] = '"'.repeat(900); });
+  fs.writeFileSync(ledger, JSON.stringify(saved));
+  await report.main(['--example', '1', '--config', cfgPath]);
+  var heavy = JSON.parse(fs.readFileSync(path.join(dir, 'example-draft.json'), 'utf8'));
+  assert.ok(D.exact(heavy) && heavy.text.length > 0, 'a quote-heavy sentence still makes a draft');
+  assert.ok(JSON.stringify(heavy).length <= report.MAX_REQUEST, 'whose request fits the server limit once escaped (' + JSON.stringify(heavy).length + ')');
+  bodies = [];
+  assert.strictEqual(await report.main(['--send-example', '--config', cfgPath]), 'Sent.', 'and it is accepted');
+  var tooBig = Object.assign({}, heavy, { text: '"'.repeat(800) });
+  fs.writeFileSync(path.join(dir, 'example-draft.json'), JSON.stringify(tooBig));
+  bodies = [];
+  assert.ok(/larger than the server accepts/.test(await report.main(['--send-example', '--config', cfgPath])), 'a draft over the limit says so');
+  assert.strictEqual(bodies.length, 0, 'and is not sent to be refused');
+
   // --consent alone asks; only --yes records.
   writeCfg();
   var shownQ = await report.main(['--consent', '--config', cfgPath]);
