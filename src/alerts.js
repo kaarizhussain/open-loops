@@ -91,7 +91,7 @@ function stagedFile(dir) { return path.join(dir, 'alerts-baseline.next.json'); }
 
 /* The other task may have this file open or be renaming over it at this moment. On Windows that
  * fails with EPERM/EBUSY/EACCES instead of waiting, so those are retried briefly (src/busy.js). */
-var retry = require('./busy.js').retry;
+var retry = require('./busy.js').retry, preserveDamaged = require('./busy.js').preserveDamaged;
 
 // A missing or torn file reads as "nothing there", never as half a record.
 function readJson(f) {
@@ -104,6 +104,7 @@ function writeJson(f, o) {
   var tmp = f + '.' + process.pid + '.' + crypto.randomBytes(3).toString('hex') + '.tmp';   // one name per write: two sessions never share one
   try {
     fs.writeFileSync(tmp, JSON.stringify(o, null, 1));
+    preserveDamaged(f, 'object');    // a file this replaces that could not be read is kept, not lost (busy.js)
     retry(function () { fs.renameSync(tmp, f); });
   } catch (e) {
     try { fs.unlinkSync(tmp); } catch (ignore) { /* only this write's own file */ }

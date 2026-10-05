@@ -12,7 +12,7 @@ var path = require('path');
 var crypto = require('crypto');
 var cp = require('child_process');
 var D = require('./diagnostics.js');
-var { writeAtomic } = require('./busy.js');
+var { writeAtomic, preserveDamaged } = require('./busy.js');
 
 var MAX = 20, MAX_AGE_DAYS = 14, MAX_TRIES = 7;
 
@@ -29,8 +29,16 @@ function read(dir) {
 
 function write(dir, entries) {
   var f = files(dir).outbox;
-  if (entries.length) writeAtomic(f, JSON.stringify(entries, null, 2) + '\n');
-  else if (fs.existsSync(f)) fs.unlinkSync(f);
+  if (entries.length) {
+    var kept = writeAtomic(f, JSON.stringify(entries, null, 2) + '\n', { preserveDamaged: true, shape: 'array' });
+    if (kept) log(dir, 'the report queue could not be read; kept as ' + path.basename(kept));
+  }
+  else if (fs.existsSync(f)) {
+    // Emptying the queue removes the file; one that could not be read is kept first, as a write over it would have.
+    var saved = preserveDamaged(f, 'array');
+    if (saved) log(dir, 'the report queue could not be read; kept as ' + path.basename(saved));
+    fs.unlinkSync(f);
+  }
 }
 
 function log(dir, line) {
