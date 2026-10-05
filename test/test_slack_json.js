@@ -64,16 +64,17 @@ var reply={ts:'1790000010.000001',user:'U123',thread_ts:ts,text:'Contract attach
 var threaded={...data,threads:[{channel:'#deals',root:ts,messages:[raw,reply]}]};
 assert.ok(/0 open/.test(run(threaded,true)),'thread deliveries close the promise without duplicating its root');
 
-var target = path.join(dir,'installed');
-install(target);
+var target = path.join(dir,'installed'), backups = path.join(dir,'skill-backups');
+install(target, { backupDir: backups });
 assert.strictEqual(JSON.parse(fs.readFileSync(path.join(target,'local.json'),'utf8')).checkout,path.resolve(__dirname,'..'));
 assert.ok(fs.existsSync(path.join(target,'references','codex.md')),'installed skill includes host workflow');
 fs.writeFileSync(path.join(target,'keep.txt'),'user customization');
 assert.throws(function () { install(target); },/already exists/);
-// Updating replaces the installed copy as a whole and keeps the old one beside it.
-var updated = install(target, { update: true });
-assert.strictEqual(updated, target);
+// Updating replaces the installed copy as a whole and keeps the old one outside the skills directory (a copy beside it would be a second skill of the same name).
+var updated = install(target, { update: true, backupDir: backups });
+assert.strictEqual(updated.target, target);
 assert.ok(!fs.existsSync(path.join(target, 'keep.txt')), 'the new copy is a fresh one, never merged into the old');
-assert.ok(fs.readdirSync(path.dirname(target)).some(function (n) { return /^installed.bak-/.test(n); }), 'and the old copy is kept');
+assert.deepStrictEqual(fs.readdirSync(path.dirname(target)).filter(function (n) { return /installed/.test(n); }), ['installed'], 'nothing else of that name is left beside it');
+assert.ok(fs.readFileSync(path.join(updated.backup, 'keep.txt'), 'utf8') === 'user customization', 'and the old copy is kept in the backup directory');
 assert.strictEqual(JSON.parse(fs.readFileSync(path.join(target, 'local.json'), 'utf8')).checkout, path.resolve(__dirname, '..'));
 console.log('slack-json and Codex installation: OK');

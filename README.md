@@ -317,7 +317,7 @@ that folder in place. Restart Codex if the skill does not appear.
 
 To pick up a new version, pull the checkout and run `node tools/install-codex.js --update`.
 It replaces the installed copy as a whole, so the instructions and the runner stay the
-same version, and keeps the old copy beside it as `open-loops.bak-<time>`.
+same version, and keeps the old copy in a `skill-backups` folder next to your `skills` folder (never beside the install: a second copy of the skill in the skills folder would be picked up too).
 
 **2. Connect Slack in Codex.** Claude's Slack authorization does not carry over.
 Google Calendar is optional and needs its own connection for meeting coverage.
