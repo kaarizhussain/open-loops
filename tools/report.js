@@ -18,7 +18,7 @@ var path = require('path');
 var crypto = require('crypto');
 var D = require('../src/diagnostics.js');
 var outbox = require('../src/outbox.js');
-var { loadConfig } = require('../src/config.js');
+var { loadConfig, ledgerFor } = require('../src/config.js');
 var { writeAtomic } = require('../src/busy.js');
 var { fileStore } = require('../src/store.js');
 var L = require('../src/ledger.js');
@@ -156,7 +156,7 @@ async function main(argv) {
       '\n\nLog:\n' + (log.trim().split('\n').slice(-20).join('\n') || '(empty)');
   }
   if (flag('example')) {
-    var d = draftExample(dir, cfg, flag('ledger') || cfg.ledger || 'ledger.json', parseInt(flag('example'), 10));
+    var d = draftExample(dir, cfg, ledgerFor(fs, flag('ledger') || cfg.ledger || 'ledger.json', configPath, !!flag('ledger')), parseInt(flag('example'), 10));
     return d.error || 'This would be sent, exactly as written (' + path.join(dir, 'example-draft.json') + '):\n\n' +
       '  signal     ' + d.example.signal + ' · first seen ' + d.example.first_seen + '\n' +
       '  sentence   "' + d.example.text + '"';

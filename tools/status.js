@@ -26,7 +26,7 @@ var path = require('path');
 var S = require('../src/status.js');
 var alerts = require('../src/alerts.js');
 var diag = require('../src/diagnostics.js');
-var { loadConfig, channelProblems } = require('../src/config.js');
+var { loadConfig, channelProblems, guardState } = require('../src/config.js');
 
 var PREVIEW = 'PREVIEW — nothing is recorded, and no failure notice is posted for a preview.';
 
@@ -66,6 +66,8 @@ function mainInner(argv, err) {
     throw new Error('--read-only is only supported with --show or --task');
   }
 
+  // Everything below that writes status.json refuses first if the config names it as the ledger (src/config.js, guardState).
+  if (['begin', 'end', 'notice-result', 'schedule', 'schedule-state'].some(has) && !has('dry')) guardState(fs, configPath);
   if (has('begin')) {
     if (has('dry')) return PREVIEW + '\nATTEMPT PREVIEW';
     var started = 'STARTED ' + Math.floor(now.getTime() / 1000), began;

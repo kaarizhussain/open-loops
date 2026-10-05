@@ -21,7 +21,7 @@ var minimal = settings(fs, write('a.json', { you: 'ea@company.com' }), {});
 assert.strictEqual(minimal.you, 'ea@company.com');
 assert.strictEqual(minimal.lookbackDays, 21, 'everything else takes a working default');
 assert.deepStrictEqual(minimal.supporting, [], 'supporting nobody is the common case');
-assert.strictEqual(minimal.ledger, 'ledger.json');
+assert.strictEqual(minimal.ledger, path.join(dir, 'ledger.json'), 'the default ledger is beside the config (a relative path means that, not the working directory: test_ledger_path.js)');
 
 /* The one thing with no sensible default. Every signal depends on telling inbound from
    outbound, and that needs an address. */

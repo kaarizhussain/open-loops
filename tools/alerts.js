@@ -17,7 +17,7 @@
 var fs = require('fs');
 var path = require('path');
 var A = require('../src/alerts.js');
-var { loadConfig } = require('../src/config.js');
+var { loadConfig, guardState } = require('../src/config.js');
 var { writeAtomic } = require('../src/busy.js');
 
 /* The question, exactly as SKILL.md words it — one copy, so this cannot drift from it. */
@@ -44,6 +44,8 @@ function main(argv) {
   var configPath = flag('config') || 'openloops.config.json';
   var dir = path.dirname(path.resolve(configPath));
   var has = function (k) { return argv.indexOf('--' + k) > -1; };
+  // The baseline and alerts files are this tool's: refuse first if the config names one as the ledger (src/config.js, guardState).
+  if (['baseline', 'confirm', 'consent', 'decline', 'off'].some(has)) guardState(fs, configPath);
 
   if (has('consent')) {
     if (!has('yes')) return consentText() + '\n\n(Nothing recorded. On a yes: add --yes.)';

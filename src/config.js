@@ -132,6 +132,56 @@ function channelProblems(file) {
   return out;
 }
 
+/* Files Open Loops writes beside the config. A ledger given any of these names would be rewritten by the tool that owns the name, and the
+ * ledger's rows and verdicts would be gone: a run overwrote a ledger named status.staged.json with delivery metadata, and the status and
+ * alerts tools did the same to one named status.json or alerts-baseline.json (adversarial review 2026-10-05). */
+var RESERVED = ['status.json', 'status.staged.json', 'alerts.json', 'alerts-baseline.json', 'alerts-baseline.next.json', 'restores.json',
+  'reports-outbox.json', 'reports-sent.log', 'example-draft.json'];
+
+/* A path in the form that two spellings of the same file share: absolute, symlinks and short names resolved where the file or its folder exists,
+ * and lower-case on Windows, where "Status.JSON" and "STATUS~1.JSON" are the same file. */
+function canonical(fs, p) {
+  var abs = require('path').resolve(p), path = require('path'), real = abs;
+  try { real = fs.realpathSync.native(abs); }
+  catch (e) { try { real = path.join(fs.realpathSync.native(path.dirname(abs)), path.basename(abs)); } catch (e2) { real = abs; } }
+  return process.platform === 'win32' ? real.toLowerCase() : real;
+}
+
+/* Where the ledger is. A relative path in the config means beside the config, the same as every other state file: it used to resolve against the
+ * working directory, so the same config run from another folder silently started a new, empty ledger beside the wrong place. A path given on the
+ * command line (`fromFlag`) is relative to where it was typed. Refuses a ledger that is the same file as the config or a state file. */
+function ledgerFor(fs, value, configPath, fromFlag) {
+  var path = require('path');
+  var dir = configPath ? path.dirname(path.resolve(configPath)) : process.cwd();
+  var abs = fromFlag ? path.resolve(value) : path.resolve(dir, value);
+  var names = RESERVED.concat(configPath ? [path.basename(configPath)] : []);
+  var mine = canonical(fs, abs);
+  names.forEach(function (n) {
+    if (mine === canonical(fs, path.join(dir, n))) {
+      throw configError('Config is unusable: "ledger" (' + value + ') is the same file as the ' + n + ' file Open Loops also writes. Choose another ledger file name.');
+    }
+  });
+  /* A relative ledger that used to be found in the working directory is not found beside the config: say so, rather than start an empty ledger and
+   * drop every verdict in the old one. */
+  if (!fromFlag && !path.isAbsolute(value) && !fs.existsSync(abs)) {
+    var old = path.resolve(value);
+    if (old !== abs && fs.existsSync(old)) {
+      throw configError('Config is unusable: "ledger" (' + value + ') now means the file beside the config (' + dir + '), and there is none there, but there is one in the working directory (' +
+        process.cwd() + '). Move it next to the config, or set "ledger" to its full path.');
+    }
+  }
+  return abs;
+}
+
+/* The tools that write state files (status.js, alerts.js) run before the runner's own config check does — `status.js --begin` is the first step of a run —
+ * so a ledger named like one of their files would already be overwritten when the check refused it. They call this first. A config that cannot be read
+ * is that check's to report, not theirs. */
+function guardState(fs, configPath) {
+  var raw;
+  try { raw = loadConfig(fs, configPath); } catch (e) { return; }
+  ledgerFor(fs, typeof raw.ledger === 'string' && raw.ledger.trim() ? raw.ledger : DEFAULTS.ledger, configPath, false);
+}
+
 /* Everything the run needs, in one object, with the reasons a setup is unusable
  * reported together rather than one per attempt. */
 function settings(fs, configPath, run) {
@@ -167,8 +217,9 @@ function settings(fs, configPath, run) {
       JSON.stringify(s.tzOffset));
   }
   if (missing.length) throw configError('Config is incomplete:\n  ' + missing.join('\n  '));
+  s.ledger = ledgerFor(fs, s.ledger, configPath, false);
   s.you = String(s.you).toLowerCase();
   return s;
 }
 
-module.exports = { configError: configError, DEFAULTS: DEFAULTS, merge: merge, loadConfig: loadConfig, settings: settings, scopeProblems: scopeProblems, channelProblems: channelProblems };
+module.exports = { guardState: guardState, ledgerFor: ledgerFor, RESERVED: RESERVED, configError: configError, DEFAULTS: DEFAULTS, merge: merge, loadConfig: loadConfig, settings: settings, scopeProblems: scopeProblems, channelProblems: channelProblems };

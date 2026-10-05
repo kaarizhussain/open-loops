@@ -41,7 +41,7 @@ var { fileStore } = require('./src/store.js');
 var restoreLib = require('./src/restore.js');
 var identity = require('./src/identity.js');
 var { parseEvents } = require('./src/calendar.js');
-var { settings, loadConfig, scopeProblems, configError } = require('./src/config.js');
+var { settings, loadConfig, scopeProblems, configError, ledgerFor } = require('./src/config.js');
 var outbox = require('./src/outbox.js');
 var alerts = require('./src/alerts.js');
 var status = require('./src/status.js');
@@ -343,7 +343,7 @@ function report(ledgerPath) {
 function checkConfig(configPath) {
   try { settings(fs, configPath, {}); }
   catch (e) {
-    var why = String(e.message).replace(/^Config is incomplete:\s*/, '').split(String.fromCharCode(10)).map(function (x) { return x.trim(); }).filter(Boolean).join('; ');
+    var why = String(e.message).replace(/^Config is (?:incomplete|unusable):\s*/, '').split(String.fromCharCode(10)).map(function (x) { return x.trim(); }).filter(Boolean).join('; ');
     throw configError('Config is unusable: ' + why.replace(/[.]$/, '') + '. Fix the configuration before fetching or running a digest.');
   }
   return 'Config OK.';
@@ -383,7 +383,7 @@ function mainInner(argv) {
   if (argv[0] === '--check-ledger') return checkLedger(argv[1]);
   if (argv[0] === '--report') {
     var rc = settings(fs, configPath, { you: 'report@localhost' });
-    return report(flag('ledger', rc.ledger));
+    return report(flag('ledger') ? ledgerFor(fs, flag('ledger'), configPath, true) : rc.ledger);
   }
   var inputPath = argv[0];
   if (!inputPath) {
@@ -428,7 +428,8 @@ function mainInner(argv) {
   if (argv.indexOf('--dry') === -1) outbox.prune(reportDir, cfg);
   var today = flag('today', input.today || new Date().toISOString().slice(0, 10));
   if (!status.validDate(today)) throw new Error('--today must be a real date like 2026-09-30, got "' + today + '".');
-  var store = fileStore(flag('ledger', cfg.ledger), { noSalt: argv.indexOf('--check') > -1 });
+  // --ledger is a path as typed, relative to where it was typed; the config's own is beside the config (ledgerFor).
+  var store = fileStore(flag('ledger') ? ledgerFor(fs, flag('ledger'), configPath, true) : cfg.ledger, { noSalt: argv.indexOf('--check') > -1 });
   store.beginRun(today);    // a second run today starts from before the first
   if (cfg.storeText === false) store.dropText();
 
