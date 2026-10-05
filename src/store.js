@@ -36,6 +36,25 @@ function checked(x, name, ok, scalar) {
   return x;
 }
 
+/* The shape of a ledger body, for the live state and for the same-day snapshot inside it. Absent optional parts are fine; present
+ * ones must be usable. Throws the reason; load() puts it in the ledger error. */
+function shape(s, lead, snapshot) {
+  var bad = function (what) { throw new Error(lead + ': ' + what); };
+  if (!s || typeof s !== 'object' || Array.isArray(s)) bad('it must be an object');
+  if (!Array.isArray(s.rows) || !s.rows.every(function (r) { return Array.isArray(r); })) bad('"rows" must be a list of rows');
+  var obj = function (x) { return x && typeof x === 'object' && !Array.isArray(x); };
+  // A snapshot is made from a whole state, so it always has these; a null or missing one is damage, and a re-run would index into it.
+  if (snapshot && (!obj(s.digests) || !obj(s.refs))) bad('"digests" and "refs" must be present');
+  if (s.digests != null) {
+    if (!obj(s.digests) || !Object.keys(s.digests).every(function (d) { return Array.isArray(s.digests[d]); })) bad('"digests" must map each date to a list of keys');
+  }
+  if (s.refs != null) {
+    if (!obj(s.refs) || !Object.keys(s.refs).every(function (r) { return obj(s.refs[r]) && Array.isArray(s.refs[r].keys); })) bad('"refs" must map each reference to an entry with a list of keys');
+  }
+  if (s.seen != null && !Array.isArray(s.seen)) bad('"seen" must be a list');
+  if (s.learned != null && (!Array.isArray(s.learned) || !s.learned.every(obj))) bad('"learned" must be a list of entries');
+}
+
 function load(file) {
   try {
     var raw = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));   // a byte-order mark is an editor's, not damage
@@ -45,6 +64,14 @@ function load(file) {
     if (!raw || typeof raw !== 'object' || !Array.isArray(raw.rows) ||
         !raw.rows.every(function (r) { return Array.isArray(r); })) {
       throw new Error('it is JSON but not a ledger: "rows" must be a list of rows');
+    }
+    /* The parts the run indexes into must have the shape it indexes them with: a field that parses but is the wrong type
+     * used to pass --check-ledger and then crash the real run (exit 1) instead of being reported as a damaged ledger (exit 4).
+     * The same-day snapshot is a saved ledger too, and a re-run starts from it, so it is held to the same shape. */
+    shape(raw, 'it is JSON but not a ledger');
+    if (raw.before && raw.before.date && raw.before.state) {
+      if (typeof raw.before.date !== 'string') throw new Error('its same-day snapshot ("before") has no date');
+      shape(raw.before.state, 'its same-day snapshot ("before") is not a ledger', true);
     }
     return {
       rows: Array.isArray(raw.rows) ? raw.rows : [],
