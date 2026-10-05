@@ -370,6 +370,20 @@ function checkLedger(file) {
   return 'Ledger OK.';
 }
 
+/* Whether a posted message, read back from Slack, is one code block: the text has to open and close with a fence and hold no other, because a fence anywhere inside it ends the block
+ * early and the rest renders as plain text. The first-line check in SKILL.md is separate (it compares the header); this is about the whole message, which the digest's own text
+ * can no longer break (digest.fenceSafe) but a post made some other way, or edited, can. */
+function checkPost(file) {
+  if (!file) throw new Error('--check-post needs the path of a file holding the message text read back from Slack.');
+  if (!fs.existsSync(file) || !fs.statSync(file).isFile()) throw new Error('--check-post: ' + file + ' does not exist.');
+  var t = fs.readFileSync(file, 'utf8').replace(/^﻿/, '').trim();
+  var count = t.split('```').length - 1;
+  if (count !== 2 || t.slice(0, 3) !== '```' || t.slice(-3) !== '```') {
+    throw new Error('Post BROKEN — the message must be one code block: opening and closing fence and no other (found ' + count + '). Repost it from the runner output, unchanged, and say so in the notes.');
+  }
+  return 'Post OK.';
+}
+
 /* The identity resolver is set for one run and cleared after it, even when the run throws: a later run in the same process must not inherit it. */
 function main(argv) {
   try { return mainInner(argv); } finally { loops.setIdentityResolver(null); }
@@ -392,6 +406,7 @@ function mainInner(argv) {
 
   if (argv[0] === '--check-config') return checkConfig(configPath);
   if (argv[0] === '--check-ledger') return checkLedger(argv[1]);
+  if (argv[0] === '--check-post') return checkPost(argv[1]);
   if (argv[0] === '--report') {
     var rc = settings(fs, configPath, { you: 'report@localhost' });
     return report(flag('ledger') ? ledgerFor(fs, flag('ledger'), configPath, true) : rc.ledger);
@@ -1018,4 +1033,4 @@ function longestPart(t) {
   return Math.max.apply(null, String(t).split(line).map(function (x) { return x.trim().length; }));
 }
 
-module.exports = { longestPart: longestPart, queueCrash: queueCrash, main: main, marksFromDm: marksFromDm, inScope: inScope, nameMatches: nameMatches, DIGEST_HEADER: DIGEST_HEADER };
+module.exports = { checkPost: checkPost, longestPart: longestPart, queueCrash: queueCrash, main: main, marksFromDm: marksFromDm, inScope: inScope, nameMatches: nameMatches, DIGEST_HEADER: DIGEST_HEADER };

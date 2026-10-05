@@ -908,14 +908,21 @@ function renderDetails(s) {
   return L.join('\n');
 }
 
+/* Each part is posted inside one code fence, so a run of three backticks anywhere in it ends the block early and the rest of the message renders as plain text: a commitment
+ * that quotes one ("I will send ``` contract tomorrow"), a name, a title. A zero-width space between the backticks of such a run leaves it looking the same and stops it
+ * closing anything. Only what is rendered changes: the sentences in the ledger, and the connector's text, are not touched. */
+function fenceSafe(s) {
+  return String(s).replace(/`{3,}/g, function (run) { return run.split('').join(String.fromCharCode(0x200b)); });
+}
+
 /* Both parts, split by SPLIT: the brief is the message, the details go in its thread. */
 function render(b) {
   var s = prep(b);
-  return renderBrief(s) + '\n\n' + SPLIT + '\n\n' + renderDetails(s);
+  return fenceSafe(renderBrief(s) + '\n\n' + SPLIT + '\n\n' + renderDetails(s));
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { render: render, headline: headline, digestOrder: digestOrder, rank: rank,
+  module.exports = { fenceSafe: fenceSafe, render: render, headline: headline, digestOrder: digestOrder, rank: rank,
                      ownerTitle: ownerTitle, draft: draft, firstName: firstName, nameBook: nameBook,
                      OWNER_ORDER: OWNER_ORDER, SPLIT: SPLIT };
 }

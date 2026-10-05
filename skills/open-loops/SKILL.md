@@ -460,7 +460,10 @@ slack_send_message(channel_id=<selfDm>, thread_ts=<the ts that call returned>,
 call returned — not simply the newest message, which may be your notes or something
 newer. It must open with exactly one code fence, and the first line inside that fence
 must equal the first line of the runner's output character for character. The runner's
-output is the authority; don't check it against a remembered format. If it differs — a
+output is the authority; don't check it against a remembered format. Then check the whole message, not only its opening: save the text you read back to a file and run
+`node <checkout>/slack-run.js --check-post <file>`, which must print `Post OK.` (one code block, no fence inside it); do the same for the details, read back from the brief's thread
+with `slack_read_thread`. A quoted sentence with three backticks in it would otherwise end the block early, so the digest writes those with a zero-width space between them and
+this confirms nothing else broke the block. `Post BROKEN` is handled as a differing first line is. If it differs — a
 dropped header, a doubled fence — and you know the first post landed, post the brief and its details again from the runner output you already have in this run,
 unchanged, and say in the notes that the first post was wrong and stays in the DM. Never edit
 the posted text to fix it. **Then read the replacement back**, by its own timestamp, with the same check: from here on the
