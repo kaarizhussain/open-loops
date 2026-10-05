@@ -104,8 +104,11 @@ function inScope(name, scope) {
  * forever, and re-applying it against a later, shorter list marks different items. */
 function marksFromDm(messages, store, rows, restore) {
   var seen = store.seenReplies(), known = {}, marked = 0, wrong = 0, knew = 0, cur = null;
-  var misses = [], checked = 0, ignored = [], unread = [], badRange = [], rangesWrong = [], rangesKnew = [], rejected = [], spot = [], counted = {}, foreign = [], dates = [], byRoot = {}, mass = [], applied = [], orphans = [];
+  var misses = [], checked = 0, ignored = [], unread = [], badRange = [], rangesWrong = [], rangesKnew = [], rejected = [], spot = [], foreign = [], dates = [], byRoot = {}, mass = [], applied = [], orphans = [];
   var since = store.refsSince ? store.refsSince() : null;
+  /* Which digests' spot checks are already answered, and the letters those answers named: the ledger's record, copied, and added to as replies are read. A sample is counted
+   * once, when it is first answered; a later reply under the same digest adds only the letters it names that were not named before. */
+  var answeredSamples = JSON.parse(JSON.stringify((store.audit && store.audit().answered) || {})), badMissReplies = [];
   /* A restored item is fenced: a reply typed before the request cannot reject it again, however it comes to be read again (a same-day re-run, a
    * reply the ledger no longer remembers). `hashes` tells an edited reply from one already processed. */
   var fences = (restore && restore.fences) || {}, hashes = (restore && restore.hashes) || {}, rejectedAt = {}, fencedKeys = {}, fencedReplies = [];
@@ -149,7 +152,7 @@ function marksFromDm(messages, store, rows, restore) {
     known[m.id] = 1;
     seen.push(m.id);
 
-    var marks = L.parseMarks(m.body, keys.length);
+    var marks = L.parseMarks(m.body, keys.length, asked.length);
     var typedAt = parseFloat(m.id) * 1000, hash = restoreLib.hashOf(m.body), before = hashes[m.id];
     /* One reply rejecting most of the list is almost certainly something pasted into the DM,
      * not a correction: a real one is a handful of numbers, and a wrong rejection hides the
@@ -211,7 +214,7 @@ function marksFromDm(messages, store, rows, restore) {
      * the same evening instead of retyping it all week. */
     ignored = ignored.concat(marks.ignored || []);
     /* Lines that looked like a correction but could not be read as one ("all", "1/3", a range that runs past the list): reported, never applied. */
-    unread = unread.concat(marks.unread || []); badRange = badRange.concat(marks.badRange || []);
+    unread = unread.concat(marks.unread || []); badRange = badRange.concat(marks.badRange || []); badMissReplies = badMissReplies.concat(marks.badMiss || []);
     rangesWrong = rangesWrong.concat(marks.ranges.wrong); rangesKnew = rangesKnew.concat(marks.ranges.knew);
 
     /* A reply that names no misses still counts everything asked as checked-and-clean,
@@ -230,19 +233,27 @@ function marksFromDm(messages, store, rows, restore) {
      * Once per digest, not once per reply. The sample belongs to the digest, and two
      * messages under one digest are two replies to the same question — counting it
      * twice inflates the denominator and flatters the rate. */
-    if (asked.length && marks.answered && !counted[memo.id]) {
-      counted[memo.id] = 1;
-      checked += asked.length;
-      spot.push({ ref: memo.id, on: forDate, sampled: asked.length,
-                  missed: marks.missed.filter(function (l) { return asked[l.charCodeAt(0) - 97]; }).length });
+    if (asked.length && marks.answered) {
+      var prior = answeredSamples[memo.id], entry = null;
+      if (!prior) {
+        prior = answeredSamples[memo.id] = { sampled: asked.length, letters: [] };
+        checked += asked.length;
+        entry = { ref: memo.id, on: forDate, sampled: asked.length, missed: 0 };
+        spot.push(entry);
+      } else {
+        entry = spot.filter(function (x) { return x.ref === memo.id; })[0] || null;
+      }
       marks.missed.forEach(function (letter) {
         var at = letter.charCodeAt(0) - 97;
-        if (asked[at]) misses.push({ id: asked[at], on: forDate });
+        if (!asked[at] || prior.letters.indexOf(letter) > -1) return;    // not in the sample, or already named by an earlier answer
+        prior.letters.push(letter);
+        misses.push({ id: asked[at], on: forDate });
+        if (entry) entry.missed++;
       });
     }
   });
 
-  return { marked: marked, wrong: wrong, knew: knew, seen: seen, misses: misses, checked: checked,
+  return { answered: answeredSamples, unreadMiss: badMissReplies, marked: marked, wrong: wrong, knew: knew, seen: seen, misses: misses, checked: checked,
            fencedReplies: fencedReplies, fencedKeys: fencedKeys, rejectedAt: rejectedAt,
            ignored: ignored, unread: unread, badRange: badRange, rangesWrong: rangesWrong, rangesKnew: rangesKnew, foreign: foreign, dates: dates, mass: mass, rejected: rejected, spot: spot, applied: applied, orphaned: orphans };
 }
@@ -881,7 +892,7 @@ function mainInner(argv) {
     principals: cfg.supporting,
     muted: muted, mutes: L.suggestMutes(rows).filter(function (s) { return !already[s.phrase]; }),
     learnedNow: fresh, learnedAll: learned,
-    spotCheck: sample, recall: score, dark: result.dark, ignoredReplies: replies.ignored, restoreNotes: restoreNotes, restoreNotesMore: restoreNotes.more || 0, restoreDamaged: !!(queuedRestores && queuedRestores.damaged), fencedReplies: replies.fencedReplies, unreadReplies: replies.unread, unreadRangeReplies: replies.badRange, markedRanges: { wrong: replies.rangesWrong, knew: replies.rangesKnew },
+    spotCheck: sample, recall: score, dark: result.dark, ignoredReplies: replies.ignored, restoreNotes: restoreNotes, restoreNotesMore: restoreNotes.more || 0, restoreDamaged: !!(queuedRestores && queuedRestores.damaged), fencedReplies: replies.fencedReplies, unreadReplies: replies.unread, unreadRangeReplies: replies.badRange, unreadMissReplies: replies.unreadMiss, markedRanges: { wrong: replies.rangesWrong, knew: replies.rangesKnew },
     replyKey: replyKey, gapLine: status.gapLine(prevGap), dmLookup: lookup, unmatchedReplies: unmatchedReplies, ownerUnknown: ownerUnknown, inertReplies: inertReplies, dmUnreadable: dmUnreadable,
     /* Conversations skipped, not threads. One counter served both, and only the
        conversation count was reduced by it — so skipping a thread under-reported how
@@ -915,7 +926,7 @@ function mainInner(argv) {
     }
     if (fresh.length) store.remember(fresh);
     if (replies.checked || replies.misses.length) {
-      store.recordMisses(replies.misses, replies.checked);
+      store.recordMisses(replies.misses, replies.checked, replies.answered);
     }
     queueReports(reportDir, cfg, replies, rows);
     if (sample.length) {

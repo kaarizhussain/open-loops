@@ -22,7 +22,7 @@ var path = require('path');
 var L = require('./ledger.js');
 var retry = require('./busy.js').retry;
 
-var EMPTY = { rows: [], digests: {}, refs: {}, refsSince: null, seen: [], learned: [], restoreRefs: {}, restoreLog: {}, replyHashes: {}, audit: { checked: 0, missed: [], asked: {}, quiet: 0, found: 0 } };
+var EMPTY = { rows: [], digests: {}, refs: {}, refsSince: null, seen: [], learned: [], restoreRefs: {}, restoreLog: {}, replyHashes: {}, audit: { checked: 0, missed: [], asked: {}, answered: {}, quiet: 0, found: 0 } };
 
 /* A ledger that cannot be used carries exit code 4: it was read after Slack was fetched, and only its owner can repair it. */
 function ledgerError(msg) { var e = new Error(msg); e.exitCode = 4; return e; }
@@ -52,6 +52,10 @@ function shape(s, lead, snapshot) {
     if (!obj(s.refs) || !Object.keys(s.refs).every(function (r) { return obj(s.refs[r]) && Array.isArray(s.refs[r].keys); })) bad('"refs" must map each reference to an entry with a list of keys');
   }
   if (s.seen != null && !Array.isArray(s.seen)) bad('"seen" must be a list');
+  if (s.audit != null && s.audit.answered != null) {
+    var an = s.audit.answered;
+    if (!obj(an) || !Object.keys(an).every(function (r) { return obj(an[r]) && Number.isInteger(an[r].sampled) && an[r].sampled >= 0 && Array.isArray(an[r].letters) && an[r].letters.length <= an[r].sampled && an[r].letters.every(function (l) { return typeof l === 'string' && /^[a-z]$/.test(l) && l.charCodeAt(0) - 97 < an[r].sampled; }); })) bad('"audit.answered" must map each digest to its sample size and the letters named');
+  }
   if (s.learned != null && (!Array.isArray(s.learned) || !s.learned.every(obj))) bad('"learned" must be a list of entries');
 }
 
@@ -84,8 +88,10 @@ function load(file) {
         ? { checked: raw.audit.checked || 0, quiet: raw.audit.quiet || 0,
             found: raw.audit.found || 0,
             missed: Array.isArray(raw.audit.missed) ? raw.audit.missed : [],
-            asked: raw.audit.asked || {} }
-        : { checked: 0, missed: [], asked: {} },
+            asked: raw.audit.asked || {},
+            /* Which digests' spot checks have been answered, and which misses each answer named: what keeps a sample from being counted twice. */
+            answered: raw.audit.answered || {} }
+        : { checked: 0, missed: [], asked: {}, answered: {} },
       before: raw.before && raw.before.date && raw.before.state ? raw.before : null,
       identitySalt: typeof raw.identitySalt === 'string' && raw.identitySalt ? raw.identitySalt : undefined,
       /* Restoring a rejected item (src/restore.js). Kept outside a same-day rollback, like the digest memos. */
@@ -325,9 +331,14 @@ function fileStore(file, sopts) {
       flush();
     },
 
-    recordMisses: function (entries, checkedDelta) {
-      state.audit.missed = state.audit.missed.concat(entries);
-      state.audit.checked += checkedDelta || 0;
+    /* `answered` is the per-digest record marksFromDm built: { <digest ref>: { sampled, letters } }. A digest's sample is counted once, when it is first answered, and
+     * a miss is recorded once; a message already recorded missed on that date is not added again. So misses cannot outnumber the messages checked. */
+    recordMisses: function (entries, checkedDelta, answered) {
+      var have = {};
+      state.audit.missed.forEach(function (m) { have[m.id + '|' + m.on] = 1; });
+      state.audit.missed = state.audit.missed.concat((entries || []).filter(function (m) { var k = m.id + '|' + m.on; if (have[k]) return false; have[k] = 1; return true; }));
+      state.audit.checked += Math.max(0, checkedDelta || 0);
+      if (answered) state.audit.answered = Object.assign(state.audit.answered || {}, JSON.parse(JSON.stringify(answered)));
       flush();
     }
   };

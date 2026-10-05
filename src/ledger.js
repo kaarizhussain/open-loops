@@ -443,6 +443,9 @@ function sampleQuiet(messages, loops, n, salt) {
  * not enough to put a confidence interval on. Treat it as an order of magnitude. */
 function recall(found, quiet, checked, missed) {
   if (!checked || !found) return null;
+  /* More misses than messages checked cannot be true of any sample. The counts are kept right where they are made (the store counts a digest's sample once and
+   * a named miss once), so this is only a guard on what is shown. */
+  missed = Math.min(missed, checked);
   var estimatedMisses = quiet * (missed / checked);
   return {
     checked: checked, missed: missed, quiet: quiet, found: found,
@@ -504,7 +507,8 @@ function junkSeparated(line, max) {
   return bad;
 }
 
-function parseMarks(text, max) {
+function parseMarks(text, max, sampled) {
+  var badMiss = [];
   var wrong = [], knew = [], missed = [], ignored = [], unread = [], badRange = [], rangesWrong = [], rangesKnew = [], seen = {}, seenLetter = {};
   /* Whether the spot check was answered at all, which is not the same as whether it
    * named a miss. A bare `miss` means "none of these" and is the answer that makes the
@@ -517,7 +521,6 @@ function parseMarks(text, max) {
      * Those are lettered rather than numbered precisely so the two cannot be
      * confused: "3" is always a rejection, "c" is always a miss. */
     if (/^\s*(m|miss|missed)\b/i.test(line)) {
-      answered = true;
       /* Letters are read only as a run straight after the keyword ("miss b d", "miss b and d"). Every standalone letter in the line
        * used to count, so "miss none, a clean sample" named a miss and lowered the recall. A lone "a" or "I" followed by prose is a word. */
       var toks = line.replace(/^\s*\w+/, '').split(/[\s,;:]+/).filter(Boolean), run = [], ti = 0;
@@ -527,6 +530,13 @@ function parseMarks(text, max) {
         if (/^[a-z]$/i.test(tk)) run.push(tk.toLowerCase()); else break;
       }
       if (ti < toks.length && run.length === 1 && (run[0] === 'a' || run[0] === 'i')) run = [];
+      /* An answer is: nothing after the keyword (none missed), "none", or the letters of the entries it missed, every one of them in the sample. Anything else
+       * is not an answer: "miss z" names no entry, "miss the meeting tomorrow" and "m is the middle initial" are notes. They used to count the whole sample as
+       * reviewed with nothing missed, which inflates recall (adversarial review 2026-10-05). The line is reported unread and nothing on it is applied. */
+      var inSample = function (L) { return sampled == null || L.charCodeAt(0) - 97 < sampled; };
+      var valid = toks.length === 0 || (run.length ? run.every(inSample) : /^(none|nothing|no)$/i.test(toks[0].replace(/[.!?]+$/, '')));
+      if (!valid) { badMiss.push(line.trim()); unread.push(line.trim()); return; }
+      answered = true;
       run.forEach(function (L) { if (!seenLetter[L]) { seenLetter[L] = 1; missed.push(L); } });
       return;
     }
@@ -604,7 +614,7 @@ function parseMarks(text, max) {
   });
   /* `ignored` is every line that named an item number but did not lead with one.
      Reported rather than acted on, so a reply that was not read never fails silently. */
-  return { wrong: wrong, knew: knew, missed: missed, ignored: ignored, unread: unread, badRange: badRange, ranges: { wrong: rangesWrong, knew: rangesKnew }, answered: answered };
+  return { wrong: wrong, knew: knew, missed: missed, badMiss: badMiss, ignored: ignored, unread: unread, badRange: badRange, ranges: { wrong: rangesWrong, knew: rangesKnew }, answered: answered };
 }
 
 /* Resolve those numbers against the list as it was sent, not as it stands now —

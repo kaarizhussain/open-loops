@@ -657,8 +657,11 @@ function renderBrief(s) {
    * such a line was applied, and the reader is told, so they do not wait for a change that was never made. */
   if ((b.unreadReplies || []).length > 3) p('+ ' + ((b.unreadReplies || []).length - 3) + ((b.unreadReplies || []).length - 3 === 1 ? ' more reply was' : ' more replies were') + ' not read as corrections.');
   (b.unreadReplies || []).slice(0, 3).forEach(function (line) {
-    p('NOT READ AS A CORRECTION — "' + String(line).slice(0, 56) + '".' + ((b.unreadRangeReplies || []).indexOf(line) > -1 ? ' Nothing on that line was applied.' : '') +
-      ' Reply with the numbers that are not real, like "3 7", or a range like "1-3".');
+    // An answer to the spot check that names no entry of the sample: nothing on it was applied, and the way to answer is shown.
+    var asMiss = (b.unreadMissReplies || []).indexOf(line) > -1;
+    p('NOT READ AS A CORRECTION — "' + String(line).slice(0, 56) + '".' + (asMiss || (b.unreadRangeReplies || []).indexOf(line) > -1 ? ' Nothing on that line was applied.' : '') +
+      (asMiss ? ' To report a message the spot check missed, reply "miss" with its letter, like "miss b".'
+              : ' Reply with the numbers that are not real, like "3 7", or a range like "1-3".'));
   });
   var w = warnings(s).length;
   if (w) p(w + (w === 1 ? ' read warning' : ' read warnings') + ' — in the thread.');

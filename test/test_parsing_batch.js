@@ -87,7 +87,8 @@ assert.deepStrictEqual(miss('m c'), { missed: ['c'], answered: true });
 assert.deepStrictEqual(miss('miss a'), { missed: ['a'], answered: true }, 'a real "a" is still a letter');
 assert.deepStrictEqual(miss('miss b d because both had dates'), { missed: ['b', 'd'], answered: true }, 'prose after the letters is prose');
 assert.deepStrictEqual(miss('miss none, a clean sample'), { missed: [], answered: true }, '"a" in a sentence is not a miss');
-assert.deepStrictEqual(miss('missed a couple? no, none'), { missed: [], answered: true });
-assert.deepStrictEqual(miss('miss I think so'), { missed: [], answered: true }, '"I" in a sentence is not a miss');
+// These two used to count as a clean answer. Neither names a letter, and neither is "none": they are prose, which is not evidence (test_miss_accounting.js).
+assert.deepStrictEqual(miss('missed a couple? no, none'), { missed: [], answered: false }, 'prose after "a" is not an answer');
+assert.deepStrictEqual(miss('miss I think so'), { missed: [], answered: false }, '"I" in a sentence is not a miss, and not an answer either');
 
 console.log('parsing batch: OK');
