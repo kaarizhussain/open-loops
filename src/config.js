@@ -43,7 +43,7 @@ var DEFAULTS = {
   keepLedgerDays: 90,
   storeText: true,            // false keeps keys and verdicts but not the words
 
-  tzOffset: 0                 // minutes from UTC, for turning Slack timestamps into days
+  tzOffset: 0                 // minutes from UTC, for turning Slack timestamps and calendar times into days, and for the digest's date when none is given
 };
 
 /* Later sources win. Config beats the built-in defaults; whatever the run supplies

@@ -437,7 +437,9 @@ function mainInner(argv) {
   var reportDir = path.dirname(path.resolve(configPath));
   // diagnostics off: anything still queued is discarded, never sent. A preview leaves the outbox as it found it.
   if (argv.indexOf('--dry') === -1) outbox.prune(reportDir, cfg);
-  var today = flag('today', input.today || new Date().toISOString().slice(0, 10));
+  /* The date the digest is for is the reader's, not UTC's: at 21:30 in New York on Monday it is already Tuesday in UTC, and the digest was headed Tuesday, with "tomorrow" and
+   * "Friday" counted from the wrong day while the messages' own dates used the reader's offset. The scheduled run passes the date; this is for the runs that do not. */
+  var today = flag('today', input.today || new Date(Date.now() + (Number(cfg.tzOffset) || 0) * 60000).toISOString().slice(0, 10));
   if (!status.validDate(today)) throw new Error('--today must be a real date like 2026-09-30, got "' + today + '".');
   // --ledger is a path as typed, relative to where it was typed; the config's own is beside the config (ledgerFor).
   var store = fileStore(flag('ledger') ? ledgerFor(fs, flag('ledger'), configPath, true) : cfg.ledger, { noSalt: argv.indexOf('--check') > -1 });
@@ -657,7 +659,7 @@ function mainInner(argv) {
    * error sentence, not JSON — and parsing it threw and took the whole run with it.
    * SKILL.md says to run without the calendar and say so; now the runner actually does. */
   var events, calendarError = null;
-  try { events = parseEvents(input.events); }
+  try { events = parseEvents(input.events, { tzOffset: Number(cfg.tzOffset) || 0 }); }
   catch (e) { events = []; calendarError = e.message; }
 
   var opts = { exec: self, today: today, contacts: cfg.contacts || null,

@@ -21,11 +21,20 @@
  * A dateTime carries its own offset ("2026-09-03T14:00:00-04:00"), and the first
  * sixteen characters are already the local wall-clock time — which is what a deadline
  * is judged against. An all-day event has no time, so it starts when the day does. */
-function startOf(when) {
+function startOf(when, tzOffset) {
   if (!when) return null;
   var raw = when.dateTime || when.date;
   if (!raw) return null;
-  return when.dateTime ? String(raw).slice(0, 16) : String(raw).slice(0, 10) + 'T00:00';
+  if (!when.dateTime) return String(raw).slice(0, 10) + 'T00:00';
+  /* The same instant is written differently depending on where the provider anchors it: "2026-10-05T21:00:00-04:00" and "2026-10-06T01:00:00Z" are one meeting, and
+   * slicing the text put them on different days (a different priority, a day apart; adversarial review 2026-10-05). When the run's offset is known, a time that
+   * carries its own offset is converted to the reader's wall clock, so the day and hour are the reader's whichever way it was written. A time with no offset is
+   * already wall-clock and is left as it is; an all-day date has no time to convert. */
+  if (typeof tzOffset === 'number' && isFinite(tzOffset) && /(?:Z|[+-]\d{2}:?\d{2})$/i.test(String(raw).trim())) {
+    var ms = Date.parse(String(raw).trim());
+    if (!isNaN(ms)) return new Date(ms + tzOffset * 60000).toISOString().slice(0, 16);
+  }
+  return String(raw).slice(0, 16);
 }
 
 /* Everyone on it, as addresses.
@@ -42,8 +51,9 @@ function guests(e) {
     out.push(a);
   };
   (e.attendees || []).forEach(function (a) {
-    // A declined attendee is not attending, and should not make a meeting external.
-    if (a.responseStatus !== 'declined') add(a.email);
+    // A declined attendee is not attending, and should not make a meeting external. Nor is a room: Google lists a booked conference room as an attendee
+    // with resource: true, and a meeting whose only "external party" is a room has no one to send an agenda to.
+    if (a.responseStatus !== 'declined' && !a.resource) add(a.email);
   });
   if (e.organizer) add(e.organizer.email);
   return out;
@@ -53,7 +63,8 @@ function guests(e) {
  *
  * Takes the object or the raw JSON string. `events` is itself absent when the window
  * is empty, which is the same absent-not-empty habit as everything else here. */
-function parseEvents(response) {
+function parseEvents(response, opts) {
+  var tz = opts && typeof opts.tzOffset === 'number' ? opts.tzOffset : undefined;
   var data = typeof response === 'string' ? JSON.parse(response || '{}') : (response || {});
   /* An error envelope is not an empty calendar. `events` is absent when the window is empty,
    * so absence proves nothing — but an error marker, or events that are not a list, is a
@@ -77,12 +88,12 @@ function parseEvents(response) {
     // A start that is not a date cannot be placed, and one malformed event used to throw
     // inside the detector and take every other signal down with it.
     return e.status !== 'cancelled' && !(mine && mine.responseStatus === 'declined') &&
-      /^\d{4}-\d{2}-\d{2}/.test(startOf(e.start) || '');
+      /^\d{4}-\d{2}-\d{2}/.test(startOf(e.start, tz) || '');
   }).map(function (e) {
     return {
       id: e.id,
       title: e.summary || '(no title)',
-      start: startOf(e.start),
+      start: startOf(e.start, tz),
       attendees: guests(e),
       /* Google expands a recurring series into one event per occurrence, each with its
        * own id and all of them carrying the series id. Without this the detector cannot
