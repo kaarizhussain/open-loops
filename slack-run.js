@@ -370,16 +370,36 @@ function checkLedger(file) {
   return 'Ledger OK.';
 }
 
-/* Whether a posted message, read back from Slack, is one code block: the text has to open and close with a fence and hold no other, because a fence anywhere inside it ends the block
- * early and the rest renders as plain text. The first-line check in SKILL.md is separate (it compares the header); this is about the whole message, which the digest's own text
- * can no longer break (digest.fenceSafe) but a post made some other way, or edited, can. */
-function checkPost(file) {
+/* Whether a posted message, read back from Slack, is what was meant to be posted. Two checks on the text that actually came back:
+ *   - it is one code block: the text opens and closes with a fence and holds no other, because a fence anywhere inside it ends the block early and the rest renders as
+ *     plain text (the digest's own text can no longer do that, digest.fenceSafe, but a post made some other way, or edited, can);
+ *   - with --expect <the runner output you saved> --part brief|details, its text is exactly that part of the runner output. The part is cut from the saved output at the line
+ *     that is only digest.SPLIT; the fences and the newline after the opening one are not part of the text. Compared character for character, so a header lost, a line
+ *     dropped, a reply typed in, or the zero-width spaces that protect a quoted fence gone, are all caught. Whitespace outside the text is not compared.
+ * The file given must hold the message as the connector returned it, never the runner output the poster built the message from: a check of your own copy proves nothing. */
+function checkPost(file, opts) {
+  opts = opts || {};
   if (!file) throw new Error('--check-post needs the path of a file holding the message text read back from Slack.');
   if (!fs.existsSync(file) || !fs.statSync(file).isFile()) throw new Error('--check-post: ' + file + ' does not exist.');
-  var t = fs.readFileSync(file, 'utf8').replace(/^﻿/, '').trim();
+  if (!!opts.expect !== !!opts.part) throw new Error('--check-post: --expect <runner output file> and --part brief|details go together.');
+  if (opts.part && opts.part !== 'brief' && opts.part !== 'details') throw new Error('--check-post: --part is brief or details, got "' + opts.part + '".');
+  var t = fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').trim();
   var count = t.split('```').length - 1;
   if (count !== 2 || t.slice(0, 3) !== '```' || t.slice(-3) !== '```') {
     throw new Error('Post BROKEN — the message must be one code block: opening and closing fence and no other (found ' + count + '). Repost it from the runner output, unchanged, and say so in the notes.');
+  }
+  if (opts.expect) {
+    if (!fs.existsSync(opts.expect) || !fs.statSync(opts.expect).isFile()) throw new Error('--check-post: --expect ' + opts.expect + ' does not exist.');
+    var out = fs.readFileSync(opts.expect, 'utf8').replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
+    var marker = new RegExp('^' + digest.SPLIT + '$', 'm'), parts = out.split(marker);
+    if (parts.length !== 2) throw new Error('--check-post: the runner output in ' + opts.expect + ' has ' + parts.length + ' part(s), not a brief and its details.');
+    var expected = parts[opts.part === 'brief' ? 0 : 1].trim();
+    var body = t.slice(3, -3).replace(/^\n/, '').trim();
+    if (body !== expected) {
+      var k = 0; while (k < body.length && k < expected.length && body[k] === expected[k]) k++;
+      var show = function (x) { return JSON.stringify(x.slice(Math.max(0, k - 20), k + 30)); };
+      throw new Error('Post DIFFERS — the ' + opts.part + ' read back is not the runner output\'s ' + opts.part + ' (first difference at character ' + (k + 1) + ': read back ' + show(body) + ', expected ' + show(expected) + '). Repost it from the runner output, unchanged, and say so in the notes.');
+    }
   }
   return 'Post OK.';
 }
@@ -406,7 +426,7 @@ function mainInner(argv) {
 
   if (argv[0] === '--check-config') return checkConfig(configPath);
   if (argv[0] === '--check-ledger') return checkLedger(argv[1]);
-  if (argv[0] === '--check-post') return checkPost(argv[1]);
+  if (argv[0] === '--check-post') return checkPost(argv[1], { expect: flag('expect'), part: flag('part') });
   if (argv[0] === '--report') {
     var rc = settings(fs, configPath, { you: 'report@localhost' });
     return report(flag('ledger') ? ledgerFor(fs, flag('ledger'), configPath, true) : rc.ledger);

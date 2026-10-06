@@ -251,9 +251,13 @@ the user's setup/run request authorizes Slack delivery. If posting fails, retain
 rendered digest and report failure; do not claim it was delivered or retry blindly.
 After posting, read the brief back by its returned timestamp and apply SKILL.md's "Read
 the brief back" check: exactly one opening fence, and the first line inside it equal to
-the runner output's first line. Also run `node "<checkout>/slack-run.js" --check-post <file>`
-on the text read back (the details too, from the thread): it must print `Post OK.`, meaning
-one code block with no fence inside it.
+the runner output's first line. Also check each part against the saved runner output: write the
+message text as the connector returned it (fence to fence, no banner or footer) to a file, for
+the brief and for the details read back from the thread, and run
+`node "<checkout>/slack-run.js" --check-post <read-back file> --expect <runner output file> --part brief`
+(then `--part details`). Each must print `Post OK.`: one code block with no fence inside it,
+and text identical to that part of the runner output. Build the file from the Slack read-back,
+never from the output you posted.
 Only after this check succeeds, promote the staged baseline with
 `node "<checkout>/tools/alerts.js" --baseline --ref <ref> --config "<config>"`, using
 the reference from that digest. Never promote a preview or an unverified post. This
