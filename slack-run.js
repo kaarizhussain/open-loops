@@ -36,7 +36,7 @@ global.loopKey = loops.loopKey;
 
 var digest = require('./src/digest.js');
 var { readConversation } = require('./src/slack-json.js');
-var { coverage, emptyResponse } = require('./src/slack-coverage.js');
+var { coverage, emptyResponse, withoutHeader } = require('./src/slack-coverage.js');
 var { fileStore } = require('./src/store.js');
 var restoreLib = require('./src/restore.js');
 var identity = require('./src/identity.js');
@@ -607,13 +607,12 @@ function mainInner(argv) {
   /* A read with nothing new in it comes back as the channel's header and no messages: "Channel: DM (D0…)" and a blank line (seen on the first real run on this code). That is
    * an empty read, which is valid. Only a line that is exactly such a header counts: anything else left over (a header without an id, extra words, other text) is still
    * text with no message in it, and is still reported. The input itself is never edited. */
-  var DM_HEADER_LINE = /^[ \t]*Channel: [^\r\n()]*\([A-Z][A-Z0-9]{4,}\)[ \t]*$/gm;
   var dmTextOf = function (src) { return [].concat(src && src.text != null ? [src.text] : [], ((src && src.pages) || []).map(function (p) { return p && p.text; })).filter(function (x) { return typeof x === 'string'; }).join('\n'); };
   var readDm = function (src, opts) {
     try {
       var got = readConversation(src, opts);
       var txt = dmTextOf(src);
-      if (!got.length && txt.replace(DM_HEADER_LINE, '').trim() && !/Message TS:/.test(txt)) dmUnreadable = true;   // text, and nothing in it that is a message
+      if (!got.length && withoutHeader(txt).trim() && !/Message TS:/.test(txt)) dmUnreadable = true;   // text, and nothing in it that is a message
       /* A "Message TS:" line is not a message: one whose timestamp cannot be read is a correction that was not read. */
       if (got.unparsed) dmUnreadable = true;
       return got;

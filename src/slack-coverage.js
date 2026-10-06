@@ -39,13 +39,20 @@ function coverage(source, windowStart, tzOffset) {
   return { state: state, reason: reason };
 }
 
+/* A read with nothing in it comes back as the channel's header and no messages: "Channel: #name (C0…)" and a blank line, with the connector's "There are no more messages" as its
+ * pagination note (seen on a real run for a channel whose messages were all older than the window, and earlier for the self-DM). Only a line that is exactly such a header is the
+ * connector's: a header with no id, extra words, or anything else left over is text with no message in it, and is still reported. Nothing is edited; this only decides what
+ * counts as empty. Whether the read was COMPLETE is the pagination note's to say (coverage), not the header's. */
+var HEADER_LINE = /^[ \t]*Channel: [^\r\n()]*\([A-Z][A-Z0-9]{4,}\)[ \t]*$/gm;
+function withoutHeader(text) { return String(text).replace(HEADER_LINE, ''); }
+
 // A successful empty response is different from nonempty text we could not parse.
 function emptyResponse(source) {
   if (Array.isArray(source.pages)) {
     return source.pages.length > 0 && source.pages.every(emptyResponse);
   }
   if (Array.isArray(source.messages)) return source.messages.length === 0;
-  return typeof source.text === 'string' && source.text.trim() === '';
+  return typeof source.text === 'string' && withoutHeader(source.text).trim() === '';
 }
 
-module.exports = { coverage: coverage, emptyResponse: emptyResponse };
+module.exports = { coverage: coverage, emptyResponse: emptyResponse, withoutHeader: withoutHeader };
