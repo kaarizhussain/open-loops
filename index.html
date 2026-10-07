@@ -213,16 +213,17 @@ Reply  3 7 not real · k 1 4 already knew · miss b answers the spot check</span
     <div class="card key"><div class="d">Sep 2</div><p>Shipped as an installable skill, for someone who isn't me.</p></div>
     <div class="card"><div class="d">Sep 14</div><p>Seed test with two test accounts and 13 scripted messages.</p></div>
     <div class="card"><div class="d">Sep 29</div><p>Launch video from a real run.</p></div>
+    <div class="card key"><div class="d">Oct 5</div><p>Adversarial review. Twelve fixes, each with a regression test.</p></div>
   </div>
 </section>
 
 <!-- 5 -->
 <section class="slide" data-title="Rules">
   <p class="eyebrow r">The founding decision</p>
-  <h2 class="display lg r" style="--i:1">Plain rules find the promises. <span class="hot">Nothing guesses.</span></h2>
-  <p class="body r" style="--i:2">An assistant can't act on a list they can't trust. So the detector is regular expressions and plain comparisons. A model only fetches messages and posts the result. If it flags something, it can show you exactly why.</p>
+  <h2 class="display lg r" style="--i:1">Rules-based detection. <span class="hot">Follow-ups stay in your hands.</span></h2>
+  <p class="body r" style="--i:2">An assistant can't act on a list they can't trust. So the detector is regular expressions and plain comparisons. A model only fetches messages and posts the result. It drafts the nudge but never sends it. If it flags something, it can show you exactly why.</p>
   <div class="grid r" style="--i:3">
-    <div class="card"><div class="k">Deterministic</div><h3>Same input, same digest</h3><p>No model judges anything. Every bug is reproducible and gets a test that fails without the fix.</p></div>
+    <div class="card"><div class="k">Deterministic</div><h3>Reproducible results</h3><p>The same messages, settings, tracking history and date always produce the same digest. No model judges anything, so every bug can be reproduced and gets a test that fails without the fix.</p></div>
     <div class="card"><div class="k">No app, no token</div><h3>Uses what you already have</h3><p>Reads Slack through the connector you've already approved. Nothing new to install in your workspace.</p></div>
     <div class="card"><div class="k">Evidence first</div><h3>Quotes its source</h3><p>Every item carries the sentence, who said it, where, and why it's dated.</p></div>
   </div>
@@ -256,7 +257,7 @@ Reply  3 7 not real · k 1 4 already knew · miss b answers the spot check</span
       <p class="eyebrow r">What the data said</p>
       <div class="big hot r" style="--i:1"><span data-count="35.8">35.8</span></div>
       <p class="md r" style="--i:2">items per 100 messages.</p>
-      <p class="body r" style="--i:3">I ran it over 3,725 real emails from the public Enron corpus. More than one message in three produced something, so a real mailbox came out as a list of 178. The detector was mostly right. <b style="color:var(--ink)">The problem was selection, not detection.</b></p>
+      <p class="body r" style="--i:3">I ran it over 3,725 real emails from the public Enron corpus. More than one message in three produced something, so a real mailbox came out as a list of 178. The corpus has no labels, so that's a rate, not an accuracy. But it showed a problem accuracy alone wouldn't fix: <b style="color:var(--ink)">a list that long doesn't get read. Choosing what goes at the top mattered as much as detecting.</b></p>
     </div>
     <div class="card stack r" style="--i:2">
       <p class="eyebrow">What moved the top eight items</p>
@@ -279,7 +280,7 @@ Reply  3 7 not real · k 1 4 already knew · miss b answers the spot check</span
     <div class="stack">
       <p class="eyebrow r">Before building more</p>
       <h2 class="display lg r" style="--i:1">Is an "open loop" even a well-defined thing?</h2>
-      <p class="body r" style="--i:2">Two labellers graded the same 79 items blind, against a written rubric. They agreed far more than chance would explain (Cohen's kappa 0.76). The interesting part was where they disagreed.</p>
+      <p class="body r" style="--i:2">Two labellers graded the same 79 items blind, against a written rubric. They agreed far more than chance would explain (Cohen's kappa 0.76), which says the idea is worth pursuing, not that the detector is right. The interesting part was where they disagreed.</p>
       <p class="hint r" style="--i:3">Both labellers were language models, so they may share blind spots. Two working assistants are the real test.</p>
     </div>
     <div class="card stack r" style="--i:2">
@@ -288,8 +289,8 @@ Reply  3 7 not real · k 1 4 already knew · miss b answers the spot check</span
         <div class="bar"><span>Labeller A only</span><span class="t"><span class="f" data-w="100"></span></span><b>7</b></div>
         <div class="bar"><span>Labeller B only</span><span class="t"><span class="f" data-w="0"></span></span><b>0</b></div>
       </div>
-      <p class="md" style="font-size:clamp(20px,2vw,28px)">They agreed on what a commitment is. They set the bar in different places.</p>
-      <p class="body" style="font-size:16px">So strictness can't be a constant I pick. It belongs to the reader, who adjusts it by replying to the digest.</p>
+      <p class="md" style="font-size:clamp(20px,2vw,28px)">Every disagreement ran the same way.</p>
+      <p class="body" style="font-size:16px">That hints at a difference in strictness more than in definition. It's a lead, not a finding. It was enough to steer the design toward letting the reader tune it: items they reject teach it which phrasings to stop flagging.</p>
     </div>
   </div>
 </section>
@@ -362,7 +363,7 @@ Reply  3 7 not real · k 1 4 already knew · miss b answers the spot check</span
   <div class="grid r" style="--i:2">
     <div class="card"><div class="k">Two messages</div><h3>A brief, then the details</h3><p>The DM shows today's three items and a short "also open" list. Everything else (every item, drafts, evidence, what was read) goes in the thread underneath.</p></div>
     <div class="card"><div class="k">Ranking</div><h3>Urgency fades differently</h3><p>Sam's overdue ask slid from #1 to #6 as it aged. The fix: when someone is waiting on you, their item never ages out of Today. Your own overdue items still do.</p></div>
-    <div class="card"><div class="k">Corrections</div><h3>Reply to fix it</h3><p>Type "3 7" to say items 3 and 7 aren't real, or "miss" if it missed something. Rejections count as evidence about phrasing, not just about one item.</p></div>
+    <div class="card"><div class="k">Corrections</div><h3>Reply to fix it</h3><p>Type "3 7" to say items 3 and 7 aren't real. Each digest also shows a few messages it found nothing in: "miss b" flags one it walked past, and a bare "miss" says none of them held a commitment. Rejections count as evidence about phrasing, not just about one item.</p></div>
   </div>
 </section>
 
@@ -378,6 +379,20 @@ Reply  3 7 not real · k 1 4 already knew · miss b answers the spot check</span
 </section>
 
 <!-- 14 -->
+<section class="slide" data-title="Adversarial review">
+  <p class="eyebrow r">October · Asking others to break it</p>
+  <h2 class="display lg r" style="--i:1">Then I had it attacked on purpose.</h2>
+  <p class="body r" style="--i:2">An independent review (Codex) went after the deployed code looking for ways it fails. Every finding was reproduced on the live version before anything changed, then worked in isolation, one area at a time: message parsing, the ledger, corrections, the calendar and tooling. Twelve fixes shipped the same day, each with a test that fails without it. Several were silent: the digest looked fine and was quietly wrong.</p>
+  <div class="grid r" style="--i:3">
+    <div class="card"><div class="k">Fixed</div><p style="color:var(--ink)">A thread root with nothing in it no longer hides its replies.</p></div>
+    <div class="card"><div class="k">Fixed</div><p style="color:var(--ink)">Real messages are not discarded for looking like connector furniture.</p></div>
+    <div class="card"><div class="k">Fixed</div><p style="color:var(--ink)">Each digest's spot check is counted once, and only a real answer counts.</p></div>
+    <div class="card"><div class="k">Fixed</div><p style="color:var(--ink)">Calendar times and the digest's date are the reader's, not the provider's or UTC's.</p></div>
+  </div>
+  <p class="hint r" style="--i:4">Commit titles, verbatim. The next evening's real run turned up one more: an empty channel reported as unreadable. Fixed with a test the same night.</p>
+</section>
+
+<!-- 15 -->
 <section class="slide" data-title="Where it stands">
   <div class="split">
     <div class="stack">
@@ -386,16 +401,16 @@ Reply  3 7 not real · k 1 4 already knew · miss b answers the spot check</span
       <p class="body r" style="--i:2">It runs every evening on my own workspace. Nobody else has used it for two weeks and marked what it got wrong, so every claim so far is about the code, not the results. That's the next step: an assistant who isn't me.</p>
     </div>
     <div class="stack r" style="--i:2">
-      <div class="card"><div class="k">The method, in one line</div><p style="font-size:clamp(17px,1.6vw,22px);color:var(--ink);line-height:1.4">Build the smallest thing, run it on real messages, stop changing it until a real run shows a real problem, then fix only that.</p></div>
+      <div class="card"><div class="k">The method, in one line</div><p style="font-size:clamp(17px,1.6vw,22px);color:var(--ink);line-height:1.4">Build the smallest thing, run it on real messages, invite others to break it, reproduce every finding, and change only what the evidence shows.</p></div>
       <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">
-        <div class="card"><div class="big" style="font-size:clamp(40px,4.5vw,64px)">201</div><p>commits, each one explaining why</p></div>
-        <div class="card"><div class="big" style="font-size:clamp(40px,4.5vw,64px)">8</div><p>weeks from first commit to now</p></div>
+        <div class="card"><div class="big" style="font-size:clamp(40px,4.5vw,64px)">219</div><p>commits, each one explaining why</p></div>
+        <div class="card"><div class="big" style="font-size:clamp(40px,4.5vw,64px)">64</div><p>test suites, run on every push</p></div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- 15 -->
+<!-- 16 -->
 <section class="slide center" data-title="End">
   <h1 class="display xl r">Open Loops</h1>
   <p class="md r" style="--i:1;color:var(--soft);font-weight:500">Finds the things nobody is chasing.</p>
