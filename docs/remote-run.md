@@ -1,7 +1,7 @@
 # Remote daily run: scope
 
-Status: **planned, not started.** The current product is frozen until the EA-facing demo
-is recorded and shared. This is the next milestone after that, not something the demo
+Status: **planned, not started.** The current product is frozen until the EA-facing demo video
+is recorded and shared. This is the next milestone after that, not something the demo video
 depends on.
 
 ## Why
@@ -43,7 +43,7 @@ What these don't cover:
 So the remote version needs light request identification and one-writer protection on
 the server, not an elaborate new retry system.
 
-## Step 1, after the demo: feasibility spike
+## Step 1, after the demo video: feasibility spike
 
 No refactor, and the real ledger stays where it is until this is done.
 

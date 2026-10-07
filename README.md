@@ -14,6 +14,7 @@ local detector and deliver the results to Slack.
 
 - [ChatGPT / Codex setup](#chatgpt-integration-via-the-codex-app)
 - [Claude setup](#claude-setup)
+- **[How it was built](https://kaarizhussain.github.io/open-loops/)**: a short, clickable case study covering the decisions, the data, and the mistakes that became rules.
 
 **That is the whole product: a skill.** There is no app and nothing to log into. It reads
 your channels and your calendar, posts a ranked list to your own Slack DM each evening,
@@ -165,12 +166,6 @@ The same fifteen items every morning is a list nobody reads by Thursday — not 
 is inaccurate, but because it is identical. So what changed rides on the counts line, on
 a day with old and new items mixed each item says `NEW` or how long it has sat, and
 anything that dropped off is reported once as cleared.
-
-### How it was built
-
-**[▶ The case study](https://kaarizhussain.github.io/open-loops/)** — a short, clickable
-walk through the decisions, the data, and the mistakes that became rules. The screens in it
-are re-created from a real run on a test workspace.
 
 ## How it works
 
@@ -395,13 +390,13 @@ privacy limits that matter more than the shapes do.
 
 | What it ran on | Size | Labelled? | What it establishes |
 |---|---|---|---|
-| Demo fixture (`src/fixture.js`) | 25 messages, 5 events | yes, by assertion | that a change has not broken known behaviour |
+| Test fixture (`src/fixture.js`) | 25 messages, 5 events | yes, by assertion | that a change has not broken known behaviour |
 | A live Slack workspace | 17 messages, one member | 1 rejection, 1 spot check | that the whole path runs unattended |
 | The same workspace, three people (`test/replay/2026-09-14/`) | 31 messages, two test accounts | yes, 13 scripted items | that attribution holds with more than one person — 10 of 13 right before the fix, 13 after |
 | Enron corpus (`tools/benchmark.js`) | 3,725 emails, 16 mailboxes | **no** | how often it fires — 35.8 items per 100 |
 | Top-of-digest, hand-graded | 79 items, two labellers | yes | that the task is well-posed — kappa 0.76 |
 
-**Read the third row carefully.** 35.8 per 100 is a *firing rate*, not an accuracy. That
+**Read the Enron row carefully.** 35.8 per 100 is a *firing rate*, not an accuracy. That
 corpus has no ground truth, so nothing in it says how many of those were real. It is an
 honest answer to "how noisy is this" and no answer at all to "how right is it".
 

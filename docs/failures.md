@@ -15,7 +15,7 @@ deadline"* carries no date — the date was in the message being replied to. The
 back up the thread to find it, which is the difference between that item showing as *due
 Aug 8* and showing as undated at the bottom of the list.
 
-**A tracker that needs maintaining is worse than no tracker.** Three commitments in the demo
+**A tracker that needs maintaining is worse than no tracker.** Three commitments in the test fixture
 clear themselves, because a later message in the same thread carried an attachment or
 delivery wording. Without automatic closure you've built a second to-do list that someone
 has to tick off, which is the thing this was supposed to replace.

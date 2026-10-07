@@ -951,7 +951,7 @@ look further back or rank differently rather than to add anything.
 
 Nobody has yet run it against their own correspondence for a fortnight and marked what
 it got wrong, so its precision for them is unknown. Say that if they ask how accurate it
-is, rather than quoting the demo.
+is, rather than quoting results from the invented test data, which is right by construction.
 
 What is known is a firing rate, from the Enron benchmark (3,725 real emails in 16 mailboxes; see `docs/evaluation.md`): about 36 items per 100 messages. That is how often it fires, not how often it is right — that corpus has no labels — and it is a figure about those mailboxes, not a prediction for theirs. It does mean the list can be long before it is wrong, and the reader's problem on a busy mailbox may be volume rather than error. Worth saying up front to anyone whose inbox is heavy.
 
