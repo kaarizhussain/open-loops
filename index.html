@@ -25,7 +25,8 @@ html,body{height:100%;background:var(--bg);color:var(--ink)}
 body{font-family:var(--display);overflow:hidden;-webkit-font-smoothing:antialiased}
 #glow{position:fixed;inset:0;pointer-events:none;background:radial-gradient(1200px 620px at 50% 125%,rgba(255,80,60,.24),rgba(0,0,0,0) 70%)}
 .deck{position:relative;height:100%}
-.slide{position:absolute;inset:0;overflow-y:auto;padding:clamp(28px,6vh,72px) max(16px,6vw) 110px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:clamp(18px,3vh,32px)}
+.slide{position:absolute;inset:0;overflow-y:auto;padding:clamp(28px,6vh,72px) max(16px,6vw) 110px;box-sizing:border-box;display:flex;flex-direction:column;gap:clamp(18px,3vh,32px)}
+.slide>:first-child{margin-top:auto}.slide>:last-child{margin-bottom:auto}
 .slide[hidden]{display:none!important}
 .split{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:clamp(24px,4vw,64px);align-items:center}
 .split>*{min-width:0}
@@ -60,7 +61,7 @@ h1,h2,p{margin:0}
 .comp .typed{color:var(--slack)}
 .caret{display:inline-block;width:2px;height:1em;background:var(--slack);vertical-align:-2px;animation:blink 1s steps(1) infinite}
 @keyframes blink{50%{opacity:0}}
-.code{font-family:var(--mono);background:var(--code);border:1px solid #3b3d40;border-radius:8px;padding:14px 16px;font-size:clamp(11px,1vw,13.5px);line-height:1.65;color:var(--slack);white-space:pre-wrap;overflow-x:auto}
+.code{font-family:var(--mono);background:var(--code);border:1px solid #3b3d40;border-radius:8px;padding:14px 16px;font-size:clamp(12px,1vw,13.5px);line-height:1.65;color:var(--slack);white-space:pre-wrap;overflow-x:auto}
 .code .row{display:block;border-radius:4px;transition:background-color .35s,opacity .35s;cursor:pointer}
 .code.focus .row:not(.on),.code.focus .meta{opacity:.3}
 .code .row.on.a{background:rgba(255,159,10,.28)}
@@ -118,7 +119,7 @@ h1,h2,p{margin:0}
 .prog i{display:block;height:100%;background:var(--hot);transition:width .4s}
 .count{font-family:var(--mono);font-size:13px;color:var(--dim);font-variant-numeric:tabular-nums;min-width:4.5em;text-align:right}
 .hint{font-size:12px;color:var(--dim)}
-@media (max-width:600px){.hint{display:none}}
+@media (max-width:600px){.nav .hint{display:none}.nav{background:linear-gradient(0deg,rgba(0,0,0,.96) 70%,rgba(0,0,0,0))}}
 
 /* entrance: plays when a slide opens; the resting state is fully visible */
 .slide.in .r{animation:rise .7s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i,0)*110ms)}
@@ -546,7 +547,8 @@ Reply  3 7 not real · k 1 4 already knew · miss b answers the spot check</span
   }
   $('fixBefore').onclick=()=>setFix(false); $('fixAfter').onclick=()=>setFix(true); setFix(false);
 
-  const m=/^#s(\d+)$/.exec(location.hash); show(m?(+m[1]-1):0);
+  const fromHash=()=>{const m=/^#s(\d+)$/.exec(location.hash); show(m?(+m[1]-1):0);};
+  addEventListener('hashchange',fromHash); fromHash();
 })();
 </script>
 
