@@ -204,13 +204,13 @@ Reply  3 7 not real · k 1 4 already knew · miss b answers the spot check</span
 <!-- 4 -->
 <section class="slide" data-title="Origin">
   <p class="eyebrow r">Where it came from</p>
-  <h2 class="display lg r" style="--i:1">It started as a portfolio piece. <span class="hot">Then it outgrew that.</span></h2>
-  <p class="body r" style="--i:2">I built the first version in a day for a job application. The application didn't work out, but the problem was still there. A month in, I stopped building it for me and started building it for other assistants.</p>
+  <h2 class="display lg r" style="--i:1">It started as a portfolio piece <span class="hot">for a job application.</span></h2>
+  <p class="body r" style="--i:2">The first version took a day: an explainer page and a demo inbox. The application didn't work out, but the problem was a real one, so I kept going. It became a longer exercise in building something that works on real messages, testing it honestly, and fixing what broke.</p>
   <div class="tl r" style="--i:3">
     <div class="card"><div class="d">Aug 6</div><p>First version: an explainer page with a demo inbox.</p></div>
     <div class="card"><div class="d">Aug 13</div><p>The same detector, running on a schedule.</p></div>
     <div class="card key"><div class="d">Sep 1</div><p>Moved onto Slack. Real messages broke it within ten minutes.</p></div>
-    <div class="card key"><div class="d">Sep 2</div><p>Shipped as an installable skill, for someone who isn't me.</p></div>
+    <div class="card key"><div class="d">Sep 2</div><p>Packaged as an installable skill, with setup written down step by step.</p></div>
     <div class="card"><div class="d">Sep 14</div><p>Seed test with two test accounts and 13 scripted messages.</p></div>
     <div class="card"><div class="d">Sep 29</div><p>Launch video from a real run.</p></div>
     <div class="card key"><div class="d">Oct 5</div><p>Adversarial review. Twelve fixes, each with a regression test.</p></div>
@@ -398,10 +398,15 @@ Reply  3 7 not real · k 1 4 already knew · miss b answers the spot check</span
     <div class="stack">
       <p class="eyebrow r">Where it stands</p>
       <h2 class="display lg r" style="--i:1">A working prototype. <span class="hot">Not yet proven.</span></h2>
-      <p class="body r" style="--i:2">It runs every evening on my own workspace. Nobody else has used it for two weeks and marked what it got wrong, so every claim so far is about the code, not the results. That's the next step: an assistant who isn't me.</p>
+      <p class="body r" style="--i:2">It runs every evening on my own workspace and posts a real digest. It hasn't been tested by independent users, so every claim here is about how the code behaves, not about how much it helps.</p>
     </div>
     <div class="stack r" style="--i:2">
-      <div class="card"><div class="k">The method, in one line</div><p style="font-size:clamp(17px,1.6vw,22px);color:var(--ink);line-height:1.4">Build the smallest thing, run it on real messages, invite others to break it, reproduce every finding, and change only what the evidence shows.</p></div>
+      <div class="card"><div class="k">What this project shows</div><ul style="margin:0;padding-left:1.1em;display:flex;flex-direction:column;gap:10px;font-size:clamp(15px,1.3vw,18px);color:var(--ink);line-height:1.45">
+        <li>Finding a practical problem: promises made in passing that nobody tracks.</li>
+        <li>Making design decisions and holding to them: plain rules, no app, every item quoting its source.</li>
+        <li>Testing against real messages and independently reproducing review findings.</li>
+        <li>Investigating failures until I understood them, then writing the rule and the test that keep them fixed.</li>
+      </ul></div>
       <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">
         <div class="card"><div class="big" style="font-size:clamp(40px,4.5vw,64px)">219</div><p>commits, each one explaining why</p></div>
         <div class="card"><div class="big" style="font-size:clamp(40px,4.5vw,64px)">64</div><p>test suites, run on every push</p></div>
@@ -414,7 +419,7 @@ Reply  3 7 not real · k 1 4 already knew · miss b answers the spot check</span
 <section class="slide center" data-title="End">
   <h1 class="display xl r">Open Loops</h1>
   <p class="md r" style="--i:1;color:var(--soft);font-weight:500">Finds the things nobody is chasing.</p>
-  <p class="body r" style="--i:2">A working prototype for Slack. Feedback from assistants welcome.</p>
+  <p class="body r" style="--i:2">A working prototype for Slack, built as a portfolio project.</p>
   <div class="row-btns r" style="--i:3;justify-content:center">
     <a class="btn primary" href="https://github.com/kaarizhussain/open-loops" target="_blank" rel="noopener" style="text-decoration:none">View on GitHub</a>  </div>
   <p class="hint r" style="--i:4">Kaariz Hussain · me.kaarizmatic.com</p>
