@@ -263,12 +263,14 @@ node <checkout>/tools/status.js --begin --today <date> --config <working dir>/op
 ```
 
 which prints `ATTEMPT <id>` and `STARTED <epoch seconds>`: keep both for "End the attempt", below. It never reads the configuration, so it works
-when the configuration is what is broken. A preview (`--dry`) adds `--dry` and gets `ATTEMPT PREVIEW`; carry that through unchanged, and
+when the configuration is what is broken. Run it as a call of its own and wait for its result before doing anything else; never in the same
+message as `--check-config`, a fetch, or any other call. A preview (`--dry`) adds `--dry` and gets `ATTEMPT PREVIEW`; carry that through unchanged, and
 nothing is recorded or posted for it.
 
 If `--begin` exits 5 it could not save the record (the message says whether it could not read it, could not write it, or may or may not have written it). It still prints `ATTEMPT UNRECORDED` and `STARTED <epoch seconds>`, and the run goes on: a failure is still reported. Carry `UNRECORDED` as the attempt id, and end it with `--attempt UNRECORDED --today <date>` plus the same facts; the notice is made from what the run did, and nothing is recorded for it.
 
-**Check the configuration.** Before anything is fetched, run
+**Check the configuration.** Only after `--begin` has returned and you have read its result, and before anything is fetched, run the next command as
+a separate call. Never run the two together, in one message or in parallel:
 
 ```bash
 node <checkout>/slack-run.js --check-config --config <working dir>/openloops.config.json
@@ -673,11 +675,15 @@ prompt names where things are and points back here:
 ```
 Run the Open Loops digest and post it to the user's own Slack DM.
 Working directory: <working dir>   config: <working dir>/openloops.config.json
-1. git -C <working dir>/checkout pull --ff-only   (if it fails, say so and carry on)
+1. git -C "<working dir>/checkout" pull --ff-only   (if it fails, say so and carry on)
 2. Read <working dir>/checkout/skills/open-loops/SKILL.md and follow "Running the
    digest" exactly, with that config. Excluded channels are not fetched at all.
 Connector responses are immutable: fetch more and run again, never edit fetched text.
 ```
+
+On Windows, write the working directory in that prompt with forward slashes and quote the path, for example
+`git -C "C:/Users/you/open-loops-data/checkout" pull --ff-only`. An unquoted path with backslashes loses them in the shell the run uses, the pull
+fails, and the run starts on whatever checkout it already had.
 
 Tell them two things. Scheduled tasks only fire while the app is open. And Slack tool approvals
 are stored on the task only when a run uses the tools, so without a test run the first
@@ -765,7 +771,7 @@ the procedure:
 ```
 Run the Open Loops midday check for the user's own Slack DM.
 Working directory: <working dir>   config: <working dir>/openloops.config.json
-1. git -C <working dir>/checkout pull --ff-only   (if it fails, say so and carry on)
+1. git -C "<working dir>/checkout" pull --ff-only   (if it fails, say so and carry on)
 2. Run: node <working dir>/checkout/tools/alerts.js --which --config <working dir>/openloops.config.json
    It prints CHECK <slot> <date>, SKIP — <reason>, or OFF — <reason>.
 3. Read <working dir>/checkout/skills/open-loops/SKILL.md and follow "Midday check" exactly,

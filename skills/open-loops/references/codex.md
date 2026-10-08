@@ -107,7 +107,8 @@ Continue the authorized run; end it with `--attempt UNRECORDED --today <local-da
 and its actual facts so failure handling still works without a saved attempt.
 Do not report an uncertain write as proof that no record exists.
 
-Then validate the config with `slack-run.js --check-config --config "<config>"`
+Then, in a call of its own after `--begin` has returned (a preview has no `--begin`; never run the two
+together), validate the config with `slack-run.js --check-config --config "<config>"`
 before each run's history fetch, including previews. Stop on an error; do not
 fetch with invalid retention or paths: invalid `keepLedgerDays`, `lookbackDays`
 over 3650, and an invalid `ledger` path are configuration errors (exit 3). Do not
