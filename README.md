@@ -391,7 +391,7 @@ privacy limits that matter more than the shapes do.
 | What it ran on | Size | Labelled? | What it establishes |
 |---|---|---|---|
 | Test fixture (`src/fixture.js`) | 25 messages, 5 events | yes, by assertion | that a change has not broken known behaviour |
-| A live Slack workspace | 17 messages, one member | 1 rejection, 1 spot check | that the whole path runs unattended |
+| My own test workspace, Sep 4 – Nov 10 (one member, then two scripted test accounts) | 32 tracked items | 1 rejection, 5 spot-check items (1 miss) | that the whole path can run unattended — 25 of 55 scheduled runs delivered, the rest stalled on permission prompts. No real correspondence, no independent user |
 | The same workspace, three people (`test/replay/2026-09-14/`) | 31 messages, two test accounts | yes, 13 scripted items | that attribution holds with more than one person — 10 of 13 right before the fix, 13 after |
 | Enron corpus (`tools/benchmark.js`) | 3,725 emails, 16 mailboxes | **no** | how often it fires — 35.8 items per 100 |
 | Top-of-digest, hand-graded | 79 items, two labellers | yes | that the task is well-posed — kappa 0.76 |
