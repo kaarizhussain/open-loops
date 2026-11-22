@@ -350,6 +350,10 @@ it *meeting unprepped* cannot fire and *agreed but not booked* can never be sett
 list_events(startTime=<14 days ago>, endTime=<7 days ahead>, orderBy="startTime")
 ```
 
+If the connector answers that the result exceeded the maximum and saved it to a file, **do not copy that file into the input**: it is
+too large to retype without a mistake, and it must stay unedited. Put the file's absolute path in `eventsFile` (below) and leave
+`events` out; the runner reads the file itself. Never fetch the calendar again in smaller pieces to get around the limit.
+
 And their own DM, which is where corrections come back — but only what came after the
 last digest before today. Everything older is old digests, which the runner never needs,
 and retyping them was most of every input file and where the copying errors were. Reads:
@@ -426,7 +430,7 @@ nothing.
   "tzOffset": <minutes from UTC, negative west>,
   "conversations": [ { "channel": "#name", "members": [], "oldest": "<requested bound>", "pages": [ { "text": "<verbatim>", "pagination_info": "<verbatim>" } ] } ],
   "threads":       [ { "channel": "#name", "root": "<parent Message TS>", "pages": [ { "text": "<verbatim>", "pagination_info": "<verbatim>" } ] } ],
-  "events":        <the list_events response>,
+  "events":        <the list_events response — or, when it was saved to a file, leave this out and give "eventsFile": "<that file's absolute path>">,
   "dmThread":      [ { "root": "<digest Message TS>", "text": "<verbatim thread read under it>" } ],
   "dm":            { "channel": "<selfDm>", "text": "<verbatim read since that digest>" },
   "dmLookup":      "<found | searched_none | capped | cannot_page | failed — from tools/dm-lookup.js>"

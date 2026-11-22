@@ -118,6 +118,15 @@ wrong for a channel, where who an item is with has to come from the messages.
 `list_events(startTime=<14 days ago>, endTime=<7 days ahead>, orderBy="startTime")` and
 pass the response straight through.
 
+A busy calendar's response can be too large for the connector to return at all: it says the result exceeded the limit and
+names a file it saved it to. Do not copy that into the input. Put the file's absolute path in `eventsFile` instead
+and leave `events` out; the runner reads the file itself, unchanged. It reads only a file in a folder named
+`tool-results` or beside the config, no larger than 5 MB, and anything else is reported as `CALENDAR NOT READ`.
+
+Write `"useCalendar": true` in the config if you have a calendar. A run that then brings none says
+`CALENDAR NOT READ` and marks the read incomplete, instead of printing "0 meetings", which reads as a quiet diary.
+Left out of the config, a missing calendar is not reported.
+
 The self-DM is read whatever the scope rules say — it is where the digest went and
 where corrections come back, not a source of commitments. It is never scanned for
 promises; only for replies to a digest.

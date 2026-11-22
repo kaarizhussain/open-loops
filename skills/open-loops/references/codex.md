@@ -218,7 +218,8 @@ Never omit `root` or infer a reply's digest from its time or the newest list. In
 the actual parent digest in the thread read. If its identity or parent cannot be
 retrieved, report the limitation instead of guessing which numbered item it corrects.
 
-Calendar input uses the existing `{ "events": [...] }` response shape described in
+A calendar response too large to return inline is saved to a file by the connector: pass that file's absolute path as `eventsFile` instead of copying it
+(see SKILL.md). Calendar input uses the existing `{ "events": [...] }` response shape described in
 `src/calendar.js`: id, summary, start.dateTime or start.date, attendees, organizer,
 description, status and recurringEventId. Fetch from 14 days ago through 7 days ahead,
 including pagination. If a provider uses a different envelope, map its actual fields

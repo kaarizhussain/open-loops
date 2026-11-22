@@ -216,7 +216,13 @@ function settings(fs, configPath, run) {
       'New York in summer, -300 in winter, 60 for London in summer. Got ' +
       JSON.stringify(s.tzOffset));
   }
+  if (s.useCalendar != null && typeof s.useCalendar !== 'boolean') {
+    missing.push('"useCalendar" must be true or false, got ' + JSON.stringify(s.useCalendar));
+  }
   if (missing.length) throw configError('Config is incomplete:\n  ' + missing.join('\n  '));
+  /* A calendar is EXPECTED only when the config says so in as many words. The default is true, but a default is not a claim: setups and fixtures that
+   * never mention it have never had a missing calendar reported, and still do not. Written as `"useCalendar": true`, it means a run without one says so. */
+  s.calendarExpected = file.useCalendar === true && s.useCalendar !== false;
   s.ledger = ledgerFor(fs, s.ledger, configPath, false);
   s.you = String(s.you).toLowerCase();
   return s;

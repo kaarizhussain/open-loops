@@ -61,6 +61,30 @@ var GENERATED_HEADER = /^\s*(?:```)?\s*OPEN LOOPS (?:DETAILS|NOTES|ALERT|NOT RUN
  * rejecting those items. Recognised by what it says rather than by what it opens with. */
 var DIGEST_BODY = /^TODAY — highest priority\s*$|^Reply {2}3 7 not real|^Every open item with the sentence it came from, who said it/m;
 
+/* The calendar response, from the file the connector saved it to (input.eventsFile).
+ *
+ * A path written into an input by a model is an input like any other, so it is held to what it is for: a connector result, which is saved in a
+ * folder named tool-results, or a file beside the config. Nothing else is read, however it is named. The text is returned as it is on disk;
+ * parseEvents reads it exactly as it would the same response given inline, and anything that is not a calendar response is "could not be parsed".
+ * Every refusal is a phrase that finishes the sentence "CALENDAR NOT READ — …, so unprepped meetings and unbooked calls were not checked". */
+var MAX_EVENTS_FILE = 5 * 1024 * 1024;
+function readEventsFile(file, inline, workDir) {
+  if (inline != null) throw new Error('the input gave both events and eventsFile');
+  if (typeof file !== 'string' || !path.isAbsolute(file)) throw new Error('eventsFile is not an absolute path');
+  var real, work;
+  try { real = fs.realpathSync(file); } catch (e) { throw new Error('the calendar file does not exist'); }
+  try { work = fs.realpathSync(workDir); } catch (e) { work = path.resolve(workDir); }
+  var rel = path.relative(work, real);
+  var inWork = !!rel && rel.split(path.sep)[0] !== '..' && !path.isAbsolute(rel);
+  if (real.split(path.sep).indexOf('tool-results') < 0 && !inWork) {
+    throw new Error('the calendar file is not in a tool-results folder or beside the config, so it is not a saved connector result');
+  }
+  var st = fs.statSync(real);
+  if (!st.isFile()) throw new Error('the calendar file is not a file');
+  if (st.size > MAX_EVENTS_FILE) throw new Error('the calendar file is larger than ' + (MAX_EVENTS_FILE / 1048576) + ' MB');
+  return fs.readFileSync(real, 'utf8').replace(/^﻿/, '');
+}
+
 /* Names match exactly, or by prefix with a trailing star: "deals-*". Deliberately not
  * a general pattern language — a scope rule nobody can read at a glance is a scope
  * rule nobody checks. */
@@ -692,9 +716,21 @@ function mainInner(argv) {
   /* A calendar that failed to fetch arrives as whatever the connector said instead — an
    * error sentence, not JSON — and parsing it threw and took the whole run with it.
    * SKILL.md says to run without the calendar and say so; now the runner actually does. */
-  var events, calendarError = null;
-  try { events = parseEvents(input.events, { tzOffset: Number(cfg.tzOffset) || 0 }); }
-  catch (e) { events = []; calendarError = e.message; }
+  /* Where the calendar came from. `events` is the connector's response, inline. A large one is not returned to the model at all: the connector saves it
+   * to a file and says where, and retyping a hundred kilobytes of it into the input is exactly the copying the immutability rule forbids. So the input
+   * may name that file instead (`eventsFile`) and the runner reads it itself, unchanged. */
+  var events = [], calendarError = null, calendarWhy = null, calendarSource = input.events;
+  if (input.eventsFile != null) {
+    try { calendarSource = readEventsFile(input.eventsFile, input.events, reportDir); }
+    catch (e) { calendarError = calendarWhy = e.message; }
+  } else if (cfg.calendarExpected && input.events == null) {
+    /* The config says there is a calendar, and the run brought none. "0 meetings" would read as a quiet diary, which is the one thing it is not. */
+    calendarError = calendarWhy = 'this run\'s input held no calendar';
+  }
+  if (!calendarError) {
+    try { events = parseEvents(calendarSource, { tzOffset: Number(cfg.tzOffset) || 0 }); }
+    catch (e) { events = []; calendarError = e.message; }
+  }
 
   var opts = { exec: self, today: today, contacts: cfg.contacts || null,
                // Absent means the historical single unnamed executive; [] means you
@@ -817,7 +853,7 @@ function mainInner(argv) {
                                windowStart: cut, closedKeys: closedKeys,
                                availableThreads: availableThreads,
                                keepKeys: rec.deferred,
-                               calendarRead: input.events != null && !calendarError });
+                               calendarRead: calendarSource != null && !calendarError });
   result.open = ledger.shown;
   L.pruneLedger(rows, today, cfg.keepLedgerDays);
   // Retention deletion is not completion, and expired rows no longer remain in the ledger.
@@ -835,7 +871,7 @@ function mainInner(argv) {
   /* What this run read, once: the digest renders it, and the status record stages it. */
   var readInfo = { orderSuspect: orderSuspect, widenedStore: widenedStore, threads: convs.length - skipped, confirmedEmpty: confirmedEmpty,
           capped: shortRead.length > 0, shortRead: shortRead, unread: unread, failed: failed,
-          calendarError: calendarError,
+          calendarError: calendarError, calendarWhy: calendarWhy,
           windowStart: cut,
           unfetchedThreads: unfetched.length,
           skipped: skipped + skippedThreads, windowDays: window };

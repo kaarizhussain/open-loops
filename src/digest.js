@@ -431,7 +431,7 @@ function warnings(s) {
    * gap between messages and meetings, so both are off for this run — and "0 meetings"
    * would otherwise read as a quiet diary. */
   if (read.calendarError) {
-    out.push('CALENDAR NOT READ — the calendar response could not be parsed, so unprepped' +
+    out.push('CALENDAR NOT READ — ' + (read.calendarWhy || 'the calendar response could not be parsed') + ', so unprepped' +
       ' meetings and unbooked calls were not checked this run.');
   }
   /* Replies under a digest this ledger did not produce — another setup posting into the
