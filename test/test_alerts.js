@@ -5,6 +5,7 @@
  * shaped like the detector's; the integration half runs the real runner over connector text.
  * Dates are fixed: 2026-10-01 is a Thursday, 2026-10-03 a Saturday.
  */
+require('./fixed-clock.js');   // the state prunes against the real clock; these dates are fixed
 var assert = require('assert');
 var fs = require('fs');
 var os = require('os');

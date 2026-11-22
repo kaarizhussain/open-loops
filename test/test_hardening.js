@@ -1,5 +1,6 @@
 /* Regression tests for the 2026-09-30 review: silent loss, silent privacy failures, alert
  * state, and the live-robustness gaps. Each block failed before its fix. */
+require('./fixed-clock.js');   // alert state prunes against the real clock; these dates are fixed
 var assert = require('assert');
 var fs = require('fs');
 var os = require('os');
