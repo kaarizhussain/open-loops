@@ -292,7 +292,8 @@ slack_read_channel(channel_id=…, oldest=<window start>, limit=100,
 
 **Fetch and preserve pagination evidence.** For each in-scope work channel, request
 history with `oldest` at the start of the lookback window (local midnight, expressed
-as Slack epoch seconds), then follow cursors until no more pages remain. If you omit
+as Slack epoch seconds; `node <checkout>/tools/window.js --today <date> --days <lookbackDays> --tz <tzOffset>`
+prints it, so there is nothing to work out by hand), then follow cursors until no more pages remain. If you omit
 `oldest`, fetch the whole history. A quiet first day is not evidence of a partial read.
 Fetch every page of each required thread's replies as well.
 
